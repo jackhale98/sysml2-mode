@@ -1,0 +1,7 @@
+# -*- mode: snippet; require-final-newline: nil -*-
+# name: Viewpoint Definition
+# key: vpd
+# --
+viewpoint def ${1:Name} {
+    $0
+}

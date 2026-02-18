@@ -1,0 +1,5 @@
+# -*- mode: snippet; require-final-newline: nil -*-
+# name: Port Usage
+# key: pt
+# --
+port ${1:name} : ${2:PortType};

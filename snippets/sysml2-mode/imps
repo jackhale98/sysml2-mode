@@ -1,0 +1,5 @@
+# -*- mode: snippet; require-final-newline: nil -*-
+# name: Import Specific
+# key: imps
+# --
+import ${1:Package}::${2:Element};

@@ -1,0 +1,5 @@
+# -*- mode: snippet; require-final-newline: nil -*-
+# name: State Usage
+# key: s
+# --
+state ${1:name} : ${2:StateType};

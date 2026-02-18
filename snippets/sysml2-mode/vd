@@ -1,0 +1,7 @@
+# -*- mode: snippet; require-final-newline: nil -*-
+# name: View Definition
+# key: vd
+# --
+view def ${1:Name} {
+    $0
+}

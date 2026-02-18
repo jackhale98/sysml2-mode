@@ -1,0 +1,9 @@
+# -*- mode: snippet; require-final-newline: nil -*-
+# name: Use Case Definition
+# key: ucd
+# --
+use case def ${1:Name} {
+    subject ${2:system} : ${3:SystemType};
+    actor ${4:user} : ${5:ActorType};
+    $0
+}

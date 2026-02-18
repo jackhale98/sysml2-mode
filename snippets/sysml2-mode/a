@@ -1,0 +1,5 @@
+# -*- mode: snippet; require-final-newline: nil -*-
+# name: Action Usage
+# key: a
+# --
+action ${1:name} : ${2:ActionType};

@@ -1,0 +1,7 @@
+# -*- mode: snippet; require-final-newline: nil -*-
+# name: Constraint Usage
+# key: cn
+# --
+constraint ${1:name} : ${2:ConstrType} {
+    $0
+}

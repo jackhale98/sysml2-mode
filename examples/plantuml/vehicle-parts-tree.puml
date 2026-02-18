@@ -1,0 +1,68 @@
+@startuml
+
+skinparam class {
+  BackgroundColor<<block>> LightBlue
+  BackgroundColor<<port>> LightGreen
+  BackgroundColor<<interface>> LightYellow
+  BackgroundColor<<item>> WhiteSmoke
+  BackgroundColor<<action>> LightCoral
+  BackgroundColor<<constraint>> Wheat
+  BackgroundColor<<enumeration>> Plum
+}
+
+abstract class PowerSource <<block>>
+class PowerSource {
+  maxPower
+}
+class Engine <<block>>
+class Engine {
+  displacement
+  fuelType
+}
+class ElectricMotor <<block>>
+class ElectricMotor {
+  efficiency
+}
+class Transmission <<block>>
+class Transmission {
+  gearCount
+  isAutomatic
+}
+class Wheel <<block>>
+class Wheel {
+  diameter
+}
+class Chassis <<block>>
+class Chassis {
+  mass
+}
+class Vehicle <<block>>
+class Vehicle {
+  mass
+  topSpeed
+}
+
+class FuelPort <<port>>
+class ElectricalPort <<port>>
+class StartEngine <<action>>
+class Accelerate <<action>>
+class Brake <<action>>
+class Drive <<action>>
+class MassConstraint <<constraint>>
+
+enum FuelType <<enumeration>>
+enum FuelType {
+  gasoline
+  diesel
+  electric
+}
+
+PowerSource <|-- Engine
+PowerSource <|-- ElectricMotor
+
+Vehicle *-- Engine
+Vehicle *-- Transmission
+Vehicle *-- "4" Wheel
+Vehicle *-- Chassis
+
+@enduml

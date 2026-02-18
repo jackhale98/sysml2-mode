@@ -1,0 +1,5 @@
+# -*- mode: snippet; require-final-newline: nil -*-
+# name: Documentation
+# key: doc
+# --
+doc /* ${1:description} */

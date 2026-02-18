@@ -1,0 +1,7 @@
+# -*- mode: snippet; require-final-newline: nil -*-
+# name: Requirement Usage
+# key: r
+# --
+requirement ${1:name} : ${2:ReqType} {
+    $0
+}

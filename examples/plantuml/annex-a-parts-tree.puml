@@ -1,0 +1,234 @@
+@startuml
+
+skinparam class {
+  BackgroundColor<<block>> LightBlue
+  BackgroundColor<<port>> LightGreen
+  BackgroundColor<<interface>> LightYellow
+  BackgroundColor<<item>> WhiteSmoke
+  BackgroundColor<<action>> LightCoral
+  BackgroundColor<<constraint>> Wheat
+  BackgroundColor<<enumeration>> Plum
+}
+
+class Vehicle <<block>>
+class Vehicle {
+  mass
+  dryMass
+  cargoMass
+  position
+  velocity
+  acceleration
+  electricalPower
+  Tmax
+  maintenanceTime
+  brakePedalDepressed
+}
+class Engine <<block>>
+class Engine {
+  mass
+  peakHorsePower
+  fuelEfficiency
+  cost
+  displacement
+}
+class StarterMotor <<block>>
+class Cylinder <<block>>
+class Cylinder {
+  gearRatio
+}
+class Transmission <<block>>
+class Transmission {
+  gearRatio
+}
+class Driveshaft <<block>>
+class AxleAssembly <<block>>
+class AxleAssembly {
+  mass
+}
+class Axle <<block>>
+class Axle {
+  mass
+}
+class FrontAxle <<block>>
+class FrontAxle {
+  steeringAngle
+}
+class HalfAxle <<block>>
+class Differential <<block>>
+class Differential {
+  diameter
+}
+class Wheel <<block>>
+class Wheel {
+  diameter
+}
+class Hub <<block>>
+abstract class Software <<block>>
+class VehicleSoftware <<block>>
+class VehicleController <<block>>
+class CruiseController <<block>>
+class SpeedSensor <<block>>
+class FuelTank <<block>>
+class FuelTank {
+  mass
+  fuelKind
+  fuelMassMax
+}
+class BodyAssy <<block>>
+class BodyAssy {
+  color
+}
+class Body <<block>>
+class Body {
+  color
+}
+class Thermostat <<block>>
+class WaterHose <<block>>
+class WaterHose {
+  incline
+  friction
+}
+class Road <<block>>
+class Road {
+  incline
+  friction
+}
+class Engine4Cyl <<block>>
+class Engine6Cyl <<block>>
+class TransmissionChoices <<block>>
+class TransmissionAutomatic <<block>>
+class TransmissionManual <<block>>
+class Sunroof <<block>>
+class ElectricalGenerator <<block>>
+class TorqueGenerator <<block>>
+class SteeringSubsystem <<block>>
+class BrakingSubsystem <<block>>
+class Context <<block>>
+class Context {
+  time
+  spatialCF
+  velocityCF
+  accelarationCF
+}
+class Driver <<block>>
+class MissionContext <<block>>
+class Road <<block>>
+class Driver <<block>>
+class Passenger <<block>>
+class TransmissionChoices <<block>>
+class SafetyEngineer <<block>>
+
+class IgnitionCmdPort <<port>>
+class StatusPort <<port>>
+class GearPort <<port>>
+class PwrCmdPort <<port>>
+class FuelCmdPort <<port>>
+class FuelPort <<port>>
+class DrivePwrPort <<port>>
+class ShaftPort_a <<port>>
+class ShaftPort_b <<port>>
+class ShaftPort_c <<port>>
+class ShaftPort_d <<port>>
+class DiffPort <<port>>
+class AxlePort <<port>>
+class AxleToWheelPort <<port>>
+class WheelToAxlePort <<port>>
+class WheelToRoadPort <<port>>
+class LugNutCompositePort <<port>>
+class ShankCompositePort <<port>>
+class LugNutPort <<port>>
+class LugNutPort {
+  threadDia
+  threadPitch
+}
+class ShankPort <<port>>
+class ShankPort {
+  threadDia
+  threadPitch
+  shaftLength
+}
+class VehicleToRoadPort <<port>>
+class ControlPort <<port>>
+class CruiseControlPort <<port>>
+class SpeedSensorPort <<port>>
+class SetSpeedPort <<port>>
+class DriverCmdPort <<port>>
+class HandPort <<port>>
+class EngineToTransmissionInterface <<interface>>
+class FuelInterface <<interface>>
+class WheelFastenerInterface <<interface>>
+class WheelFastenerInterface {
+  maxTorque
+}
+class WheelHubInterface <<interface>>
+class PwrCmd <<item>>
+class PwrCmd {
+  throttleLevel
+}
+class FuelCmd <<item>>
+class FuelCmd {
+  fuelMass
+}
+class Fuel <<item>>
+class Fuel {
+  fuelMass
+}
+class SensedSpeed <<item>>
+class SensedSpeed {
+  speed
+}
+class Cmd <<item>>
+class DriverCmd <<item>>
+class DriverCmd {
+  ignitionOnOff
+}
+class IgnitionCmd <<item>>
+class IgnitionCmd {
+  ignitionOnOff
+}
+class EngineStatus <<item>>
+class VehicleOnSignal <<item>>
+class ProvidePower <<action>>
+class GenerateTorque <<action>>
+class AmplifyTorque <<action>>
+class TransferTorque <<action>>
+class DistributeTorque <<action>>
+class PerformSelfTest <<action>>
+class ApplyParkingBrake <<action>>
+class SenseTemperature <<action>>
+
+enum Colors <<enumeration>>
+enum Colors {
+  black
+  grey
+  red
+}
+enum DiameterChoices <<enumeration>>
+enum IgnitionOnOff <<enumeration>>
+enum IgnitionOnOff {
+  on
+  off
+}
+enum FuelKind <<enumeration>>
+enum FuelKind {
+  gas
+  diesel
+}
+
+Axle <|-- FrontAxle
+Software <|-- VehicleSoftware
+Software <|-- VehicleController
+Software <|-- CruiseController
+GenericContext::Context <|-- MissionContext
+Transmission <|-- TransmissionChoices
+PwrCmdPort <|-- FuelCmdPort
+ControlPort <|-- CruiseControlPort
+DriverCmdPort <|-- HandPort
+PwrCmd <|-- FuelCmd
+DriverCmd <|-- IgnitionCmd
+ISQ::LengthValue <|-- DiameterChoices
+
+TransmissionChoices *-- TransmissionAutomatic
+TransmissionChoices *-- TransmissionManual
+
+@enduml

@@ -1,0 +1,5 @@
+# -*- mode: snippet; require-final-newline: nil -*-
+# name: Attribute Usage
+# key: at
+# --
+attribute ${1:name} : ${2:Type};

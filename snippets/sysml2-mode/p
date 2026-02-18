@@ -1,0 +1,5 @@
+# -*- mode: snippet; require-final-newline: nil -*-
+# name: Part Usage
+# key: p
+# --
+part ${1:name} : ${2:Type};

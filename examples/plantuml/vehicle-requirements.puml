@@ -1,0 +1,13 @@
+@startuml
+
+class VehicleMassReq <<requirement>> {
+  text = "The vehicle mass shall not exceed 2000 kg"
+}
+class TopSpeedReq <<requirement>> {
+  text = "The vehicle shall achieve a top speed of at least 180 km/h"
+}
+
+Vehicle ..> VehicleMassReq : <<satisfy>>
+Vehicle ..> TopSpeedReq : <<satisfy>>
+
+@enduml

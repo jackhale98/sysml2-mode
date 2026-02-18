@@ -1,0 +1,5 @@
+# -*- mode: snippet; require-final-newline: nil -*-
+# name: Attribute Definition
+# key: atd
+# --
+attribute def ${1:Name} :> ScalarValues::${2:Real};

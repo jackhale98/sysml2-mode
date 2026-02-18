@@ -1,0 +1,8 @@
+# -*- mode: snippet; require-final-newline: nil -*-
+# name: Constraint Definition
+# key: cnd
+# --
+constraint def ${1:Name} {
+    in ${2:param} : ${3:Type};
+    ${2:param} ${4:<=} ${5:limit}
+}

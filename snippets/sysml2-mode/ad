@@ -1,0 +1,9 @@
+# -*- mode: snippet; require-final-newline: nil -*-
+# name: Action Definition
+# key: ad
+# --
+action def ${1:Name} {
+    in ${2:input} : ${3:InputType};
+    out ${4:output} : ${5:OutputType};
+    $0
+}

@@ -1,0 +1,11 @@
+# -*- mode: snippet; require-final-newline: nil -*-
+# name: Requirement Definition
+# key: rd
+# --
+requirement def ${1:Name} {
+    subject ${2:system} : ${3:SystemType};
+    doc /* ${4:description} */
+    require constraint {
+        $0
+    }
+}

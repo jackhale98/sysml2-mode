@@ -1,0 +1,5 @@
+# -*- mode: snippet; require-final-newline: nil -*-
+# name: Connection Usage
+# key: c
+# --
+connection : ${1:ConnType} connect ${2:source} to ${3:target};

@@ -1,0 +1,5 @@
+# -*- mode: snippet; require-final-newline: nil -*-
+# name: Satisfy
+# key: sat
+# --
+satisfy requirement ${1:ReqName} by ${2:partName};

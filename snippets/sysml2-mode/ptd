@@ -1,0 +1,8 @@
+# -*- mode: snippet; require-final-newline: nil -*-
+# name: Port Definition
+# key: ptd
+# --
+port def ${1:Name} {
+    in item ${2:inItem} : ${3:InType};
+    out item ${4:outItem} : ${5:OutType};
+}

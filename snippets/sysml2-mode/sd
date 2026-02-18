@@ -1,0 +1,14 @@
+# -*- mode: snippet; require-final-newline: nil -*-
+# name: State Definition
+# key: sd
+# --
+state def ${1:Name} {
+    entry; then ${2:initialState};
+
+    state ${2:initialState};
+    state ${3:otherState};
+
+    transition ${2:initialState}_to_${3:otherState}
+        first ${2:initialState}
+        then ${3:otherState};
+}

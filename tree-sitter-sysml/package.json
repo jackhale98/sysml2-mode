@@ -1,0 +1,49 @@
+{
+  "name": "tree-sitter-sysml",
+  "version": "0.1.0",
+  "description": "Tree-sitter grammar for SysML v2 / KerML textual notation",
+  "license": "GPL-3.0-or-later",
+  "main": "bindings/node",
+  "keywords": [
+    "tree-sitter",
+    "sysml",
+    "kerml",
+    "systems-engineering"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/sysml2-mode/sysml2-mode"
+  },
+  "files": [
+    "grammar.js",
+    "binding.gyp",
+    "prebuilds/**",
+    "bindings/node/*",
+    "queries/*",
+    "src/**"
+  ],
+  "dependencies": {
+    "nan": "^2.18.0"
+  },
+  "devDependencies": {
+    "tree-sitter-cli": "^0.22.0"
+  },
+  "scripts": {
+    "generate": "tree-sitter generate",
+    "parse": "tree-sitter parse",
+    "test": "tree-sitter test"
+  },
+  "tree-sitter": [
+    {
+      "scope": "source.sysml",
+      "injection-regex": "^sysml$",
+      "file-types": [
+        "sysml",
+        "kerml"
+      ],
+      "highlights": "queries/highlights.scm",
+      "indents": "queries/indents.scm",
+      "folds": "queries/folds.scm"
+    }
+  ]
+}

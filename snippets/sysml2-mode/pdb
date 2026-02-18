@@ -1,0 +1,8 @@
+# -*- mode: snippet; require-final-newline: nil -*-
+# name: Part Definition with Block
+# key: pdb
+# --
+part def ${1:Name} {
+    attribute ${2:attr} : ${3:Type};
+    $0
+}

@@ -1,0 +1,12 @@
+@startuml
+
+component "Flashlight" as Flashlight {
+  component "battery : Battery" as battery
+  component "bulb : Bulb" as bulb
+  component "switch : Switch" as switch
+  component "case : FlashlightCase" as case
+}
+
+battery -- bulb : batteryToBulb
+
+@enduml

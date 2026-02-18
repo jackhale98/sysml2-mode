@@ -1,0 +1,21 @@
+@startuml
+
+class MassRequirement <<requirement>> {
+  text = "The actual mass shall be less than the required mass"
+}
+class ReliabilityRequirement <<requirement>> {
+  text = "The actual reliability shall be greater than the required reliability"
+}
+class TorqueGenerationRequirement <<requirement>> {
+  text = "The engine shall generate torque as a function of RPM as shown in Table 1."
+}
+class DrivePowerOutputRequirement <<requirement>> {
+  text = "The engine shall provide a connection point to transfer torque to the transmission."
+}
+class FuelEconomyRequirement <<requirement>> {
+  text = "The vehicle shall maintain an average fuel economomy of at least x miles per gallon for the nominal 
+                driving scenario"
+}
+
+
+@enduml

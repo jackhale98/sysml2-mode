@@ -1,0 +1,15 @@
+@startuml
+
+start
+
+:start;
+:accelerate;
+:brake;
+
+:nil;
+-->
+:nil;
+
+stop
+
+@enduml

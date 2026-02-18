@@ -1,0 +1,14 @@
+@startuml
+
+start
+
+:turnOn;
+:turnOff;
+
+:nil;
+-->
+:nil;
+
+stop
+
+@enduml

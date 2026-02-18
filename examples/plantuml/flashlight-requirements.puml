@@ -1,0 +1,13 @@
+@startuml
+
+class BatteryLifeReq <<requirement>> {
+  text = "Battery shall last at least 4 hours of continuous use"
+}
+class WeightReq <<requirement>> {
+  text = "Flashlight shall weigh no more than 500 grams"
+}
+
+Flashlight ..> BatteryLifeReq : <<satisfy>>
+Flashlight ..> WeightReq : <<satisfy>>
+
+@enduml

@@ -1,0 +1,15 @@
+@startuml
+
+[*] --> off
+
+state off
+state starting
+state running
+state stopping
+
+off --> starting : startCmd
+starting --> running : stopCmd
+running --> stopping : stopCmd
+stopping --> off
+
+@enduml
