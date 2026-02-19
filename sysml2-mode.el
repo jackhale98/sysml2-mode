@@ -43,7 +43,10 @@
 (require 'sysml2-plantuml)
 (require 'sysml2-diagram)
 (require 'sysml2-api)
+(require 'sysml2-fmi)
+(require 'sysml2-cosim)
 (require 'sysml2-evil)
+(require 'sysml2-outline)
 
 ;; --- Version ---
 
@@ -97,6 +100,7 @@
   (let ((map (make-sparse-keymap)))
     ;; Navigation
     (define-key map (kbd "C-c C-n o") #'imenu)
+    (define-key map (kbd "C-c C-n t") #'sysml2-outline-toggle)
     ;; LSP
     (define-key map (kbd "C-c C-l s") #'sysml2-lsp-ensure)
     (define-key map (kbd "C-c C-l r") #'sysml2-lsp-restart)
@@ -111,6 +115,15 @@
     ;; API
     (define-key map (kbd "C-c C-a l") #'sysml2-api-list-projects)
     (define-key map (kbd "C-c C-a q") #'sysml2-api-query)
+    ;; Simulation / FMI
+    (define-key map (kbd "C-c C-s i") #'sysml2-fmi-inspect-fmu)
+    (define-key map (kbd "C-c C-s e") #'sysml2-fmi-extract-interfaces)
+    (define-key map (kbd "C-c C-s m") #'sysml2-fmi-generate-modelica)
+    (define-key map (kbd "C-c C-s v") #'sysml2-fmi-validate-interfaces)
+    (define-key map (kbd "C-c C-s g") #'sysml2-cosim-generate-ssp)
+    (define-key map (kbd "C-c C-s r") #'sysml2-cosim-run)
+    (define-key map (kbd "C-c C-s p") #'sysml2-cosim-results)
+    (define-key map (kbd "C-c C-s c") #'sysml2-cosim-verify-requirements)
     map)
   "Keymap for `sysml2-mode'.")
 

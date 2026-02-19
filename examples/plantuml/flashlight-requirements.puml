@@ -7,6 +7,11 @@ class WeightReq <<requirement>> {
   text = "Flashlight shall weigh no more than 500 grams"
 }
 
+class BatteryLifeReq <<requirement>> {
+}
+
+
+
 Flashlight ..> BatteryLifeReq : <<satisfy>>
 Flashlight ..> WeightReq : <<satisfy>>
 

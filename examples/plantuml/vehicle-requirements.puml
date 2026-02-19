@@ -7,6 +7,9 @@ class TopSpeedReq <<requirement>> {
   text = "The vehicle shall achieve a top speed of at least 180 km/h"
 }
 
+
+
+
 Vehicle ..> VehicleMassReq : <<satisfy>>
 Vehicle ..> TopSpeedReq : <<satisfy>>
 

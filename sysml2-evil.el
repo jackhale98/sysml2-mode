@@ -39,6 +39,7 @@
   (evil-define-key* 'normal sysml2-mode-map
     ;; Navigation
     (kbd ", n o") #'imenu
+    (kbd ", n t") #'sysml2-outline-toggle
     ;; Diagram
     (kbd ", d p") #'sysml2-diagram-preview
     (kbd ", d b") #'sysml2-diagram-preview-buffer
@@ -52,7 +53,16 @@
     (kbd ", a q") #'sysml2-api-query
     ;; LSP
     (kbd ", l s") #'sysml2-lsp-ensure
-    (kbd ", l r") #'sysml2-lsp-restart)
+    (kbd ", l r") #'sysml2-lsp-restart
+    ;; Simulation / FMI
+    (kbd ", s i") #'sysml2-fmi-inspect-fmu
+    (kbd ", s e") #'sysml2-fmi-extract-interfaces
+    (kbd ", s m") #'sysml2-fmi-generate-modelica
+    (kbd ", s v") #'sysml2-fmi-validate-interfaces
+    (kbd ", s g") #'sysml2-cosim-generate-ssp
+    (kbd ", s r") #'sysml2-cosim-run
+    (kbd ", s p") #'sysml2-cosim-results
+    (kbd ", s c") #'sysml2-cosim-verify-requirements)
 
   ;; general.el SPC m bindings (Doom/Spacemacs style)
   (with-eval-after-load 'general
@@ -61,7 +71,9 @@
      :keymaps 'sysml2-mode-map
      :prefix "SPC m"
      ;; Navigation
+     "n"   '(:ignore t :which-key "navigate")
      "n o" '(imenu :which-key "outline (imenu)")
+     "n t" '(sysml2-outline-toggle :which-key "toggle outline panel")
      ;; Diagram
      "d"   '(:ignore t :which-key "diagram")
      "d p" '(sysml2-diagram-preview :which-key "preview at point")
@@ -78,7 +90,17 @@
      ;; LSP
      "l"   '(:ignore t :which-key "lsp")
      "l s" '(sysml2-lsp-ensure :which-key "start")
-     "l r" '(sysml2-lsp-restart :which-key "restart"))))
+     "l r" '(sysml2-lsp-restart :which-key "restart")
+     ;; Simulation / FMI
+     "s"   '(:ignore t :which-key "simulation")
+     "s i" '(sysml2-fmi-inspect-fmu :which-key "inspect FMU")
+     "s e" '(sysml2-fmi-extract-interfaces :which-key "extract interfaces")
+     "s m" '(sysml2-fmi-generate-modelica :which-key "generate Modelica")
+     "s v" '(sysml2-fmi-validate-interfaces :which-key "validate interfaces")
+     "s g" '(sysml2-cosim-generate-ssp :which-key "generate SSP")
+     "s r" '(sysml2-cosim-run :which-key "run simulation")
+     "s p" '(sysml2-cosim-results :which-key "plot results")
+     "s c" '(sysml2-cosim-verify-requirements :which-key "verify requirements"))))
 
 (provide 'sysml2-evil)
 ;;; sysml2-evil.el ends here

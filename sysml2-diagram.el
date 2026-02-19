@@ -356,7 +356,11 @@ Works both interactively and in batch mode:
      :output "drive-action-flow.puml")
     (:fixture "simple-vehicle.sysml" :type requirement-tree :scope nil
      :output "vehicle-requirements.puml")
+    (:fixture "simple-vehicle.sysml" :type use-case :scope nil
+     :output "vehicle-use-case.puml")
     ;; flashlight.sysml
+    (:fixture "flashlight.sysml" :type tree :scope nil
+     :output "flashlight-parts-tree.puml")
     (:fixture "flashlight.sysml" :type interconnection :scope "Flashlight"
      :output "flashlight-ibd.puml")
     (:fixture "flashlight.sysml" :type state-machine :scope "FlashlightStates"
@@ -369,7 +373,11 @@ Works both interactively and in batch mode:
     (:fixture "annex-a-simple-vehicle-model.sysml" :type tree :scope nil
      :output "annex-a-parts-tree.puml")
     (:fixture "annex-a-simple-vehicle-model.sysml" :type requirement-tree :scope nil
-     :output "annex-a-requirements.puml"))
+     :output "annex-a-requirements.puml")
+    (:fixture "annex-a-simple-vehicle-model.sysml" :type use-case :scope nil
+     :output "annex-a-use-case.puml")
+    (:fixture "annex-a-simple-vehicle-model.sysml" :type package :scope nil
+     :output "annex-a-packages.puml"))
   "Specifications for example PlantUML generation.
 Each entry maps a fixture file and diagram type to an output file.")
 

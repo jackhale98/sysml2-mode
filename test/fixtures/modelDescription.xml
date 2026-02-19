@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<fmiModelDescription fmiVersion="3.0" modelName="TestEngine"
+    instantiationToken="{8c4e810f-3df3-4a00-8276-176fa3c9f000}">
+  <ModelVariables>
+    <Float64 name="fuelIn" causality="input" variability="continuous" start="0.0"/>
+    <Float64 name="torqueOut" causality="output" variability="continuous"/>
+    <Float64 name="displacement" causality="parameter" variability="fixed" start="2.0"/>
+    <Int32 name="gearCount" causality="parameter" variability="fixed" start="6"/>
+    <Boolean name="isRunning" causality="output" variability="discrete"/>
+  </ModelVariables>
+  <ModelStructure>
+    <Output valueReference="1"/>
+    <Output valueReference="4"/>
+  </ModelStructure>
+</fmiModelDescription>

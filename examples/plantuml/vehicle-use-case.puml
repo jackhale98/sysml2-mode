@@ -1,0 +1,14 @@
+@startuml
+
+left to right direction
+
+actor "driver" as driver
+
+rectangle "Vehicle" {
+  usecase "DriveVehicle" as DriveVehicle
+}
+
+driver --> DriveVehicle
+DriveVehicle ..> startEngine : <<include>>
+
+@enduml

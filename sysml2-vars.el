@@ -38,6 +38,16 @@
 ;;   `sysml2-graphviz-dot-path' -- Path to GraphViz dot
 ;;   `sysml2-fmi-openmodelica-path' -- Path to OpenModelica
 ;;   `sysml2-fmi-fmpy-executable' -- Path to FMPy
+;;   `sysml2-fmi-default-fmi-version' -- Default FMI version
+;;   `sysml2-fmi-modelica-output-dir' -- Modelica output directory
+;;   `sysml2-fmi-type-mapping-alist' -- SysML→FMI type mapping
+;;   `sysml2-cosim-tool' -- Co-simulation tool selection
+;;   `sysml2-cosim-omsimulator-path' -- OMSimulator executable
+;;   `sysml2-cosim-gnuplot-path' -- Gnuplot executable
+;;   `sysml2-cosim-step-size' -- Simulation step size
+;;   `sysml2-cosim-stop-time' -- Simulation stop time
+;;   `sysml2-cosim-output-dir' -- Simulation output directory
+;;   `sysml2-cosim-results-format' -- Results format (csv/mat)
 
 ;; --- Customization Groups ---
 
@@ -62,7 +72,7 @@
   :prefix "sysml2-lsp-")
 
 (defgroup sysml2-fmi nil
-  "FMI/FMU co-simulation settings."
+  "FMI/FMU and co-simulation settings."
   :group 'sysml2
   :prefix "sysml2-fmi-")
 
@@ -205,6 +215,63 @@ When nil, searches `exec-path'."
                  (file :tag "FMPy path"))
   :group 'sysml2-fmi)
 
+(defcustom sysml2-fmi-default-fmi-version "3.0"
+  "Default FMI version for generated interfaces."
+  :type 'string
+  :group 'sysml2-fmi)
+
+(defcustom sysml2-fmi-modelica-output-dir nil
+  "Default directory for generated Modelica stub files."
+  :type '(choice (const :tag "Prompt each time" nil)
+                 (directory :tag "Output directory"))
+  :group 'sysml2-fmi)
+
+(defcustom sysml2-fmi-type-mapping-alist nil
+  "User-defined SysML type to FMI type mapping.
+Each entry maps a SysML type name to an FMI type name.
+These override the built-in default mapping."
+  :type '(alist :key-type string :value-type string)
+  :group 'sysml2-fmi)
+
+(defcustom sysml2-cosim-tool 'fmpy
+  "Which co-simulation tool to invoke."
+  :type '(choice (const :tag "FMPy" fmpy)
+                 (const :tag "OMSimulator" omsimulator))
+  :group 'sysml2-fmi)
+
+(defcustom sysml2-cosim-omsimulator-path nil
+  "Path to OMSimulator executable."
+  :type '(choice (const :tag "Search exec-path" nil)
+                 (file :tag "OMSimulator path"))
+  :group 'sysml2-fmi)
+
+(defcustom sysml2-cosim-gnuplot-path nil
+  "Path to gnuplot executable for results plotting."
+  :type '(choice (const :tag "Search exec-path" nil)
+                 (file :tag "Gnuplot path"))
+  :group 'sysml2-fmi)
+
+(defcustom sysml2-cosim-step-size 0.001
+  "Default simulation step size in seconds."
+  :type 'float
+  :group 'sysml2-fmi)
+
+(defcustom sysml2-cosim-stop-time 10.0
+  "Default simulation stop time in seconds."
+  :type 'float
+  :group 'sysml2-fmi)
+
+(defcustom sysml2-cosim-output-dir nil
+  "Default directory for simulation results."
+  :type '(choice (const :tag "Prompt each time" nil)
+                 (directory :tag "Output directory"))
+  :group 'sysml2-fmi)
+
+(defcustom sysml2-cosim-results-format "csv"
+  "Default format for simulation results."
+  :type '(choice (const "csv") (const "mat"))
+  :group 'sysml2-fmi)
+
 ;; --- Faces ---
 
 (defface sysml2-keyword-face
@@ -307,6 +374,21 @@ When nil, searches `exec-path'."
 
 (defvar sysml2--api-auth-token nil
   "Optional authentication token for the Systems Modeling API.")
+
+(defvar sysml2--fmi-inspector-buffer nil
+  "Buffer used for FMU inspector display.")
+
+(defvar sysml2--fmi-current-fmu-path nil
+  "Path to the FMU currently being inspected.")
+
+(defvar sysml2--cosim-process nil
+  "Current co-simulation process, or nil if none is running.")
+
+(defvar sysml2--cosim-results-buffer nil
+  "Buffer used for simulation results display.")
+
+(defvar sysml2--cosim-verification-buffer nil
+  "Buffer used for requirement verification dashboard.")
 
 (provide 'sysml2-vars)
 ;;; sysml2-vars.el ends here

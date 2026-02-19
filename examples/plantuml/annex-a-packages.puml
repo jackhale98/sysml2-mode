@@ -1,0 +1,153 @@
+@startuml
+
+skinparam package {
+  BackgroundColor White
+  BorderColor SteelBlue
+}
+
+package "SimpleVehicleModel" {
+  package "Definitions" {
+    package "PartDefinitions" {
+    }
+    package "PortDefinitions" {
+    }
+    package "ItemDefinitions" {
+    }
+    package "SignalDefinitions" {
+    }
+    package "InterfaceDefinitions" {
+    }
+    package "AllocationDefinitions" {
+    }
+    package "ActionDefinitions" {
+    }
+    package "StateDefinitions" {
+    }
+    package "RequirementDefinitions" {
+    }
+    package "AttributeDefinitions" {
+    }
+    package "IndividualDefinitions" {
+    }
+    package "MetadataDefinitions" {
+    }
+    package "KeyWord_MetadataDefinitions" {
+    }
+    package "GenericContext" {
+    }
+  }
+  package "VehicleLogicalConfiguration" {
+    package "PartsTree" {
+    }
+  }
+  package "VehicleLogicalToPhysicalAllocation" {
+  }
+  package "VehicleConfigurations" {
+    package "VehicleConfiguration_a" {
+      package "PartsTree" {
+      }
+      package "ActionTree" {
+      }
+      package "Requirements" {
+      }
+    }
+    package "VehicleConfiguration_b" {
+      package "PartsTree" {
+      }
+      package "ActionTree" {
+      }
+      package "DiscreteInteractions" {
+        package "Sequence" {
+        }
+      }
+      package "Requirements" {
+      }
+    }
+    package "Engine4Cyl_Variant" {
+    }
+    package "WheelHubAssemblies" {
+    }
+  }
+  package "VehicleAnalysis" {
+    package "FuelEconomyAnalysisModel" {
+    }
+    package "ElectricalPowerAnalysis" {
+    }
+    package "ReliabilityAnalyis" {
+    }
+    package "VehicleTradeOffAnalysis" {
+    }
+  }
+  package "VehicleVerification" {
+    package "VerificationCaseDefinitions" {
+    }
+    package "VerificationCases1" {
+    }
+    package "VerificationSystem" {
+    }
+  }
+  package "VehicleIndividuals" {
+  }
+  package "MissionContext" {
+    package "ContextDefinitions" {
+    }
+    package "TransportPassengerScenario" {
+    }
+  }
+  package "VehicleSuperSetModel" {
+    package "VariationPointDefinitions" {
+    }
+    package "VehiclePartsTree" {
+    }
+  }
+  package "SafetyandSecurityGroups" {
+    package "SafetyGroup" {
+    }
+    package "SecurityGroup" {
+    }
+    package "SafetyandSecurityGroup" {
+    }
+    package "MandatorySafetyGroup" {
+    }
+  }
+  package "Views_Viewpoints" {
+  }
+  package "ViewpointDefinitions" {
+    package "ViewDefinitions" {
+    }
+    package "VehicleViews" {
+    }
+  }
+}
+
+"SimpleVehicleModel" ..> "Definitions" : <<import>>
+"Definitions" ..> "PartDefinitions" : <<import>>
+"Definitions" ..> "PortDefinitions" : <<import>>
+"Definitions" ..> "ItemDefinitions" : <<import>>
+"Definitions" ..> "SignalDefinitions" : <<import>>
+"Definitions" ..> "InterfaceDefinitions" : <<import>>
+"Definitions" ..> "AllocationDefinitions" : <<import>>
+"Definitions" ..> "ActionDefinitions" : <<import>>
+"Definitions" ..> "StateDefinitions" : <<import>>
+"Definitions" ..> "RequirementDefinitions" : <<import>>
+"Definitions" ..> "AttributeDefinitions" : <<import>>
+"Definitions" ..> "IndividualDefinitions" : <<import>>
+"Definitions" ..> "MetadataDefinitions" : <<import>>
+"Definitions" ..> "KeyWord_MetadataDefinitions" : <<import>>
+"VehicleLogicalToPhysicalAllocation" ..> "VehicleConfigurations" : <<import>>
+"VehicleLogicalToPhysicalAllocation" ..> "VehicleLogicalConfiguration" : <<import>>
+"VehicleAnalysis" ..> "VehicleConfigurations" : <<import>>
+"VehicleVerification" ..> "VehicleConfigurations" : <<import>>
+"VehicleVerification" ..> "VerificationCaseDefinitions" : <<import>>
+"VehicleVerification" ..> "VerificationCases1" : <<import>>
+"VehicleVerification" ..> "VerificationSystem" : <<import>>
+"MissionContext" ..> "VehicleConfigurations" : <<import>>
+"MissionContext" ..> "TransportPassengerScenario" : <<import>>
+"TransportPassengerScenario" ..> "ContextDefinitions" : <<import>>
+"VehiclePartsTree" ..> "VariationPointDefinitions" : <<import>>
+"SafetyandSecurityGroups" ..> "VehicleConfigurations" : <<import>>
+"VehicleViews" ..> "ViewpointDefinitions" : <<import>>
+"VehicleViews" ..> "ViewDefinitions" : <<import>>
+"VehicleViews" ..> "VehicleConfigurations" : <<import>>
+
+@enduml

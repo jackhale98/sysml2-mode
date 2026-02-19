@@ -17,5 +17,51 @@ class FuelEconomyRequirement <<requirement>> {
                 driving scenario"
 }
 
+class vehicleSpecification <<requirement>> {
+  text = "The total mass of the vehicle shall be less than or equal to the required mass.
+                        Assume total mass includes a full tank of gas of 60 kg"
+}
+class vehicleMassRequirement <<requirement>> {
+  text = "The total mass of the vehicle shall be less than or equal to the required mass.
+                        Assume total mass includes a full tank of gas of 60 kg"
+}
+class vehicleFuelEconomyRequirements <<requirement>> {
+  text = "fuel economy requirements group"
+}
+class cityFuelEconomyRequirement <<requirement>> {
+}
+class highwayFuelEconomyRequirement <<requirement>> {
+}
+class engineSpecification <<requirement>> {
+  text = "The total mass of the engine shall be less than or equal to the required mass."
+}
+class engineMassRequirement <<requirement>> {
+  text = "The total mass of the engine shall be less than or equal to the required mass."
+}
+class torqueGenerationRequirement <<requirement>> {
+}
+class drivePowerOutputRequirement <<requirement>> {
+}
+class transportRequirements <<requirement>> {
+  text = "deliver passenger to destination safely, comfortably, and within acceptable time"
+}
+
+vehicleMassRequirement --|> MassRequirement
+cityFuelEconomyRequirement --|> FuelEconomyRequirement
+highwayFuelEconomyRequirement --|> FuelEconomyRequirement
+engineMassRequirement --|> MassRequirement
+torqueGenerationRequirement --|> TorqueGenerationRequirement
+drivePowerOutputRequirement --|> DrivePowerOutputRequirement
+
+vehicleSpecification *-- vehicleMassRequirement
+vehicleSpecification *-- vehicleFuelEconomyRequirements
+vehicleSpecification *-- cityFuelEconomyRequirement
+vehicleSpecification *-- highwayFuelEconomyRequirement
+engineSpecification *-- engineMassRequirement
+engineSpecification *-- torqueGenerationRequirement
+engineSpecification *-- drivePowerOutputRequirement
+
+vehicle_b.engine ..> engineSpecification : <<satisfy>>
+vehicle_b ..> vehicleSpecification : <<satisfy>>
 
 @enduml

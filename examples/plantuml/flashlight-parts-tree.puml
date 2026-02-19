@@ -1,0 +1,47 @@
+@startuml
+
+skinparam class {
+  BackgroundColor<<block>> LightBlue
+  BackgroundColor<<port>> LightGreen
+  BackgroundColor<<interface>> LightYellow
+  BackgroundColor<<item>> WhiteSmoke
+  BackgroundColor<<action>> LightCoral
+  BackgroundColor<<constraint>> Wheat
+  BackgroundColor<<enumeration>> Plum
+}
+
+class Battery <<block>>
+class Battery {
+  voltage
+  capacity
+}
+class Bulb <<block>>
+class Bulb {
+  wattage
+}
+class Switch <<block>>
+class Switch {
+  isOn
+}
+class FlashlightCase <<block>>
+class FlashlightCase {
+  material
+  length
+}
+class Flashlight <<block>>
+
+class ElectricalPowerPort <<port>>
+class LightPort <<port>>
+class Light <<item>>
+class TurnOn <<action>>
+class TurnOff <<action>>
+class UseFlashlight <<action>>
+
+
+
+Flashlight *-- Battery
+Flashlight *-- Bulb
+Flashlight *-- Switch
+Flashlight *-- FlashlightCase
+
+@enduml

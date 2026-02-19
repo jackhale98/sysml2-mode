@@ -1,0 +1,27 @@
+@startuml
+
+left to right direction
+
+actor "environment" as environment
+actor "road" as road
+actor "driver" as driver
+actor "passenger" as passenger
+
+rectangle "Vehicle" {
+  usecase "TransportPassenger" as TransportPassenger
+  usecase "GetInVehicle" as GetInVehicle
+  usecase "GetOutOfVehicle" as GetOutOfVehicle
+}
+
+environment --> TransportPassenger
+road --> TransportPassenger
+driver --> TransportPassenger
+passenger --> TransportPassenger
+TransportPassenger ..> getInVehicle : <<include>>
+TransportPassenger ..> getOutOfVehicle : <<include>>
+driver --> GetInVehicle
+passenger --> GetInVehicle
+driver --> GetOutOfVehicle
+passenger --> GetOutOfVehicle
+
+@enduml

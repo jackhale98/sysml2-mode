@@ -230,5 +230,31 @@ ISQ::LengthValue <|-- DiameterChoices
 
 TransmissionChoices *-- TransmissionAutomatic
 TransmissionChoices *-- TransmissionManual
+Vehicle *-- TorqueGenerator
+Vehicle *-- ElectricalGenerator
+Vehicle *-- SteeringSubsystem
+Vehicle *-- BrakingSubsystem
+Vehicle *-- FuelTank
+Vehicle *-- AxleAssembly
+AxleAssembly *-- Axle
+AxleAssembly *-- "2" Wheel
+Vehicle *-- StarterMotor
+Vehicle *-- Engine
+Vehicle *-- Transmission
+Vehicle *-- Driveshaft
+Vehicle *-- VehicleSoftware
+Vehicle *-- SpeedSensor
+Vehicle *-- BodyAssy
+AxleAssembly *-- FrontAxle
+AxleAssembly *-- Differential
+StarterMotor *-- "4..6" Cylinder
+Engine *-- "4..6" Cylinder
+VehicleSoftware *-- VehicleController
+VehicleController *-- CruiseController
+BodyAssy *-- Body
+Engine *-- Engine4Cyl
+Engine *-- Engine6Cyl
+Engine4Cyl *-- "6" Cylinder
+Engine6Cyl *-- "6" Cylinder
 
 @enduml
