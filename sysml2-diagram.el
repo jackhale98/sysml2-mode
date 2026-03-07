@@ -21,8 +21,15 @@
 ;;; Public API:
 ;;
 ;; Functions:
-;;   `sysml2-diagram-preview' -- Preview diagram at point
+;;   `sysml2-diagram-preview' -- Preview diagram at point (auto-detect type)
 ;;   `sysml2-diagram-preview-buffer' -- Preview tree diagram for buffer
+;;   `sysml2-diagram-tree' -- Preview parts tree diagram
+;;   `sysml2-diagram-ibd' -- Preview internal block diagram
+;;   `sysml2-diagram-state-machine' -- Preview state machine diagram
+;;   `sysml2-diagram-action-flow' -- Preview action flow diagram
+;;   `sysml2-diagram-requirement' -- Preview requirement tree diagram
+;;   `sysml2-diagram-use-case' -- Preview use case diagram
+;;   `sysml2-diagram-package' -- Preview package diagram
 ;;   `sysml2-diagram-export' -- Export diagram to file
 ;;   `sysml2-diagram-type' -- Select diagram type via completing-read
 ;;   `sysml2-diagram-open-plantuml' -- Open PlantUML source buffer
@@ -216,6 +223,70 @@ Bound to `C-c C-d b'."
        (if success
            (sysml2--diagram-display-image data sysml2-diagram-output-format)
          (message "PlantUML error: %s" data))))))
+
+;; --- Direct Diagram Commands ---
+
+(declare-function sysml2-which-function "sysml2-navigation")
+
+(defun sysml2--diagram-read-scope (type)
+  "Return a scope name for diagram TYPE.
+Uses `sysml2-which-function' to auto-detect the enclosing definition,
+falling back to `read-string' if no enclosing definition is found."
+  (or (sysml2-which-function)
+      (let ((name (read-string (format "%s — scope (definition name): " type))))
+        (if (string-empty-p name) nil name))))
+
+(defun sysml2--diagram-generate-and-show (type scope)
+  "Generate a diagram of TYPE with SCOPE and display it."
+  (let ((puml (sysml2-plantuml-generate type scope)))
+    (setq sysml2--diagram-source-buffer (current-buffer))
+    (sysml2--diagram-invoke-plantuml
+     puml sysml2-diagram-output-format
+     (lambda (success data)
+       (if success
+           (sysml2--diagram-display-image data sysml2-diagram-output-format)
+         (message "PlantUML error: %s" data))))))
+
+(defun sysml2-diagram-tree ()
+  "Preview a parts tree diagram for the current buffer."
+  (interactive)
+  (sysml2--diagram-generate-and-show 'tree nil))
+
+(defun sysml2-diagram-ibd ()
+  "Preview an internal block diagram (interconnection).
+Auto-detects scope from enclosing definition, or prompts."
+  (interactive)
+  (sysml2--diagram-generate-and-show
+   'interconnection (sysml2--diagram-read-scope "IBD")))
+
+(defun sysml2-diagram-state-machine ()
+  "Preview a state machine diagram.
+Auto-detects scope from enclosing definition, or prompts."
+  (interactive)
+  (sysml2--diagram-generate-and-show
+   'state-machine (sysml2--diagram-read-scope "State machine")))
+
+(defun sysml2-diagram-action-flow ()
+  "Preview an action flow diagram.
+Auto-detects scope from enclosing definition, or prompts."
+  (interactive)
+  (sysml2--diagram-generate-and-show
+   'action-flow (sysml2--diagram-read-scope "Action flow")))
+
+(defun sysml2-diagram-requirement ()
+  "Preview a requirement tree diagram for the current buffer."
+  (interactive)
+  (sysml2--diagram-generate-and-show 'requirement-tree nil))
+
+(defun sysml2-diagram-use-case ()
+  "Preview a use case diagram for the current buffer."
+  (interactive)
+  (sysml2--diagram-generate-and-show 'use-case nil))
+
+(defun sysml2-diagram-package ()
+  "Preview a package diagram for the current buffer."
+  (interactive)
+  (sysml2--diagram-generate-and-show 'package nil))
 
 (defun sysml2-diagram-export (filename)
   "Export diagram to FILENAME; format derived from extension.

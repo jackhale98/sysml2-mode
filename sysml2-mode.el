@@ -148,14 +148,19 @@
     ;; LSP
     (define-key map (kbd "C-c C-l s") #'sysml2-lsp-ensure)
     (define-key map (kbd "C-c C-l r") #'sysml2-lsp-restart)
-    ;; Diagram
+    ;; Diagram — direct type commands
+    (define-key map (kbd "C-c C-d t") #'sysml2-diagram-tree)
+    (define-key map (kbd "C-c C-d i") #'sysml2-diagram-ibd)
+    (define-key map (kbd "C-c C-d s") #'sysml2-diagram-state-machine)
+    (define-key map (kbd "C-c C-d a") #'sysml2-diagram-action-flow)
+    (define-key map (kbd "C-c C-d r") #'sysml2-diagram-requirement)
+    (define-key map (kbd "C-c C-d u") #'sysml2-diagram-use-case)
+    (define-key map (kbd "C-c C-d k") #'sysml2-diagram-package)
+    ;; Diagram — general
     (define-key map (kbd "C-c C-d p") #'sysml2-diagram-preview)
     (define-key map (kbd "C-c C-d b") #'sysml2-diagram-preview-buffer)
     (define-key map (kbd "C-c C-d e") #'sysml2-diagram-export)
-    (define-key map (kbd "C-c C-d t") #'sysml2-diagram-type)
     (define-key map (kbd "C-c C-d o") #'sysml2-diagram-open-plantuml)
-    (define-key map (kbd "C-c C-d r") #'sysml2-diagram-render-examples)
-    (define-key map (kbd "C-c C-d g") #'sysml2-diagram-generate-examples)
     ;; Smart Connection / Relationship Insertion
     (define-key map (kbd "C-c C-c c") #'sysml2-connect)
     (define-key map (kbd "C-c C-c f") #'sysml2-insert-flow)

@@ -8,6 +8,7 @@ and the editor features that make working with it productive.
 
 - Emacs 29.1+ with `sysml2-mode` installed
 - (Recommended) Tree-sitter grammar for enhanced highlighting:
+
   ```elisp
   (add-to-list 'treesit-language-source-alist
                '(sysml "https://github.com/jackhale98/tree-sitter-sysml"
@@ -28,9 +29,14 @@ and the editor features that make working with it productive.
 | `C-c C-c i`   | `SPC m c i`   | Insert interface              |
 | `C-c C-c a`   | `SPC m c a`   | Insert allocation             |
 | `C-c C-c s`   | `SPC m c s`   | Insert satisfy                |
-| `C-c C-d p`   | `SPC m d p`   | Preview diagram at point      |
-| `C-c C-d b`   | `SPC m d b`   | Preview diagram (whole buffer)|
-| `C-c C-d t`   | `SPC m d t`   | Select diagram type           |
+| `C-c C-d t`   | `SPC m d t`   | Tree diagram (BDD)            |
+| `C-c C-d i`   | `SPC m d i`   | IBD (interconnection)         |
+| `C-c C-d s`   | `SPC m d s`   | State machine diagram         |
+| `C-c C-d a`   | `SPC m d a`   | Action flow diagram           |
+| `C-c C-d r`   | `SPC m d r`   | Requirement tree              |
+| `C-c C-d u`   | `SPC m d u`   | Use case diagram              |
+| `C-c C-d k`   | `SPC m d k`   | Package diagram               |
+| `C-c C-d p`   | `SPC m d p`   | Preview diagram (auto-detect) |
 | `C-c C-d e`   | `SPC m d e`   | Export diagram                |
 
 Snippets (type abbreviation then `TAB`):
@@ -63,6 +69,7 @@ package DroneSystem {
 ```
 
 **What's happening:**
+
 - `package` declares a namespace for all your model elements
 - `import ISQ::*` brings in the International System of Quantities (mass,
   length, speed, etc.)
@@ -94,6 +101,7 @@ package DroneSystem {
 ```
 
 **SysML v2 concepts:**
+
 - `:>` means **specializes** — `Voltage` is a more specific kind of
   `ElectricPotentialValue`
 - Attribute definitions without `:>` are standalone types
@@ -158,6 +166,7 @@ what flows in and out of a component.
 ```
 
 **SysML v2 concepts:**
+
 - `in` / `out` specify the direction of data flow
 - `item` is for discrete things that flow (messages, signals, physical items)
 - `attribute` is for continuous values (measurements, settings)
@@ -221,6 +230,7 @@ structure of your system's components.
 ```
 
 **SysML v2 concepts:**
+
 - `attribute` usages inside a part are its properties/data
 - `port` usages are its communication interfaces
 - Parts are **definitions** (templates) — they aren't instantiated yet
@@ -254,6 +264,7 @@ part definition. Usages are instances of definitions.
 ```
 
 **SysML v2 concepts:**
+
 - `part motor : Motor[4]` creates 4 instances of `Motor` — the `[4]` is a
   **multiplicity**
 - The parts inside `Drone` define its **structural decomposition** — what
@@ -379,6 +390,7 @@ inputs, outputs, and sub-actions with control flow.
 ```
 
 **SysML v2 concepts:**
+
 - `first ... then ...` defines **control flow** (sequencing)
 - Actions can have `in` and `out` parameters
 - Composite actions contain sub-actions (decomposition)
@@ -451,14 +463,14 @@ transitions.
 ```
 
 **SysML v2 concepts:**
+
 - `entry; then idle;` sets the initial state
 - `accept` specifies the **trigger** (event) for a transition
 - States can be **nested** (`flying` contains `hovering`, `cruising`, etc.)
 - `first ... then ...` in transitions means "from state ... go to state ..."
 
-> **Editor tip:** Type `sd` then `TAB` for the state def snippet. Use the
-> diagram preview (`SPC m d p`) with diagram type set to "state" to see a
-> visual state machine.
+> **Editor tip:** Type `sd` then `TAB` for the state def snippet. Use
+> `SPC m d s` / `C-c C-d s` to generate a state machine diagram.
 
 ---
 
@@ -510,13 +522,14 @@ formal constraints.
 ```
 
 **SysML v2 concepts:**
+
 - `doc /* ... */` is a **documentation comment** — structured prose
 - `subject` names the element being constrained
 - `require constraint { ... }` contains a formal Boolean expression
 - `<=` is a comparison operator; `[kg]` and `[m]` are unit annotations
 
 > **Editor tip:** Type `rd` then `TAB` for the requirement def snippet.
-> Preview requirements as a diagram with `SPC m d t` → "requirement".
+> Preview requirements with `SPC m d r` / `C-c C-d r`.
 
 ---
 
@@ -539,7 +552,85 @@ Link requirements to the parts that fulfill them using `satisfy`.
 
 ---
 
-## Step 12: Define Allocations
+## Step 12: Verification Cases
+
+**Verification cases** define how you prove a requirement is met.
+They link a requirement to a test procedure and pass/fail criteria.
+
+```sysml
+    // Verification: prove the drone meets weight requirements
+    verification def WeightVerification {
+        subject drone : Drone;
+        verify requirement MaxWeightReq;
+
+        action measureWeight {
+            out measured : ISQ::MassValue;
+        }
+
+        require constraint {
+            measureWeight.measured <= 25 [SI::kg]
+        }
+    }
+
+    // Verification for GPS accuracy
+    verification def GPSAccuracyVerification {
+        subject gps : GPSModule;
+        verify requirement GPSAccuracyReq;
+
+        action testPosition {
+            out error : ISQ::LengthValue;
+        }
+
+        require constraint {
+            testPosition.error <= 0.5 [SI::m]
+        }
+    }
+```
+
+**SysML v2 concepts:**
+
+- `verify requirement` connects a verification case to the requirement
+  it proves — this is the formal "test evidence" link
+- `subject` declares the element under test (same as in requirements)
+- The verification action defines the test procedure
+- `require constraint` is the pass/fail criterion
+- Combined with `satisfy` (design intent) and `verify` (test evidence),
+  you get full traceability: requirement → design → test
+
+> **Editor tip:** Verification cases show up in the outline panel and
+> imenu. Use `M-.` on a requirement name to jump to its definition.
+
+---
+
+## Step 13: Concerns
+
+**Concerns** capture stakeholder worries — things like safety, cost,
+performance, or regulatory compliance. They are referenced by viewpoints
+to declare what each stakeholder cares about.
+
+```sysml
+    concern def SafetyConcern {
+        doc /* The drone must be safe for operation
+               near people and property. */
+    }
+
+    concern def RegulatoryCompliance {
+        doc /* The drone must meet FAA regulations
+               for commercial operation. */
+    }
+
+    concern def PerformanceConcern {
+        doc /* Flight time and payload capacity must
+               meet mission requirements. */
+    }
+```
+
+Concerns are model elements, not just comments. They can be referenced
+by viewpoints to formally trace which stakeholder cares about what.
+
+---
+
+## Step 14: Define Allocations
 
 **Allocations** trace behavioral elements to structural elements —
 "this action is performed by this part."
@@ -560,7 +651,7 @@ Link requirements to the parts that fulfill them using `satisfy`.
 
 ---
 
-## Step 13: Specialization and Variation
+## Step 15: Specialization and Variation
 
 SysML v2 supports **specialization** (inheritance) and **variation**
 (product lines).
@@ -597,13 +688,14 @@ SysML v2 supports **specialization** (inheritance) and **variation**
 ```
 
 **SysML v2 concepts:**
+
 - `:>` on a part def means **specialization** (SurveyDrone is a kind of Drone)
 - `redefines` replaces an inherited feature with a new version
 - `variation` / `variant` define a product-line choice point
 
 ---
 
-## Step 14: Create Individual Instances
+## Step 16: Create Individual Instances
 
 **Individuals** are specific instances of definitions — actual drones,
 not the template.
@@ -617,7 +709,7 @@ not the template.
 
 ---
 
-## Step 15: Use Cases
+## Step 17: Use Cases
 
 **Use cases** describe how actors interact with the system.
 
@@ -636,54 +728,99 @@ not the template.
     }
 ```
 
-> **Editor tip:** Preview use case diagrams with `SPC m d t` → "use-case",
-> then `SPC m d p`.
+> **Editor tip:** Preview use case diagrams with `SPC m d u` / `C-c C-d u`.
 
 ---
 
-## Step 16: Views
+## Step 18: Views
 
 **Views** filter and present parts of the model for different stakeholders.
+In SysML v2, views are *model elements* — they define which parts of the
+model to expose and how to render them. They don't generate diagrams by
+themselves; instead, they declare a *filter* that selects model elements
+and a *viewpoint* that specifies rendering concerns.
+
+A **viewpoint** declares what a stakeholder cares about:
 
 ```sysml
-    // Structural overview for engineers
+    viewpoint def EngineeringConcerns {
+        doc /* Structural decomposition and interfaces */
+        frame concern StructuralDecomposition;
+        frame concern InterfaceCompatibility;
+    }
+```
+
+A **view** applies a viewpoint and filters elements:
+
+```sysml
+    // Structural overview for engineers — shows all parts
     view def StructuralOverview {
+        viewpoint EngineeringConcerns;
         filter @SysML::PartUsage;
     }
 
-    // Requirements view for certification
+    // Requirements view for certification — shows requirements only
     view def CertificationView {
         filter @SysML::RequirementUsage;
     }
 ```
 
+A **rendering** specifies the output format:
+
+```sysml
+    rendering def AsTreeDiagram {
+        doc /* Render as a tree/BDD diagram */
+    }
+```
+
+**How views relate to diagrams in practice:**
+
+Views are a formal SysML v2 concept for declaring *what* to show and to
+*whom*. The actual diagram generation is a tool concern. In sysml2-mode,
+the diagram commands (`C-c C-d t`, `C-c C-d i`, etc.) generate PlantUML
+diagrams directly from your model — they don't require view definitions.
+Think of views as documentation of stakeholder perspectives in the model
+itself, while the diagram commands are your working visualization tools.
+
+> **Editor tip:** Use the `vd` snippet for view def, `vpd` for viewpoint
+> def. You can generate diagrams without views — views are optional model
+> elements for formal specification of stakeholder perspectives.
+
 ---
 
-## Step 17: Generate Diagrams
+## Step 19: Generate Diagrams
 
 With your model complete, generate visual diagrams using PlantUML.
+Each diagram type has its own command:
 
-1. **Set diagram type:** `SPC m d t` / `C-c C-d t` — choose from:
-   - `tree` — Block Definition Diagram (BDD): shows part hierarchy
-   - `interconnection` — Internal Block Diagram (IBD): shows connections
-   - `state` — State Machine Diagram
-   - `action` — Action Flow Diagram
-   - `requirement` — Requirement Tree
-   - `use-case` — Use Case Diagram
-   - `package` — Package Diagram
+| Keybinding  | Doom        | Diagram                            |
+|-------------|-------------|------------------------------------|
+| `C-c C-d t` | `SPC m d t` | **Tree** (BDD) — part hierarchy    |
+| `C-c C-d i` | `SPC m d i` | **IBD** — internal connections     |
+| `C-c C-d s` | `SPC m d s` | **State machine** — transitions    |
+| `C-c C-d a` | `SPC m d a` | **Action flow** — sequences        |
+| `C-c C-d r` | `SPC m d r` | **Requirement tree** — hierarchy   |
+| `C-c C-d u` | `SPC m d u` | **Use case** — actors & scenarios  |
+| `C-c C-d k` | `SPC m d k` | **Package** — namespace structure  |
 
-2. **Preview:** `SPC m d p` / `C-c C-d p` — renders the definition at point
+Additional commands:
 
-3. **Preview buffer:** `SPC m d b` / `C-c C-d b` — renders the whole file
+- **Auto-detect:** `C-c C-d p` / `SPC m d p` — detects diagram type from
+  the definition at point (e.g., generates a state machine if inside a
+  `state def`)
+- **Export:** `C-c C-d e` / `SPC m d e` — save as SVG/PNG/PDF
+- **PlantUML source:** `C-c C-d o` / `SPC m d o` — view generated PlantUML
 
-4. **Export:** `SPC m d e` / `C-c C-d e` — save as SVG/PNG/PDF
+For scoped diagrams (IBD, state machine, action flow), the command
+auto-detects the enclosing definition name. If you're not inside a
+definition, it prompts you for the scope.
 
 > **Note:** Diagram generation requires PlantUML. Install it and set
 > `sysml2-plantuml-executable-path` or `sysml2-plantuml-jar-path`.
 
 ---
 
-## Step 18: Navigation and Exploration
+## Step 20: Navigation and Exploration
 
 ### Outline panel
 
@@ -710,6 +847,7 @@ in the modeline.
 
 If using tree-sitter mode (modeline shows `SysML2[TS]`), Emacs has
 built-in tree inspection commands:
+
 - `M-x treesit-inspect-mode` — shows the parse tree node at cursor
   in the modeline
 - `M-x treesit-explore-mode` — opens the full parse tree explorer
@@ -931,6 +1069,40 @@ package DroneSystem {
     satisfy requirement MaxAltitudeReq by Drone;
     satisfy requirement GPSAccuracyReq by GPSModule;
 
+    // --- Verification ---
+    verification def WeightVerification {
+        subject drone : Drone;
+        verify requirement MaxWeightReq;
+        action measureWeight {
+            out measured : ISQ::MassValue;
+        }
+        require constraint {
+            measureWeight.measured <= 25 [kg]
+        }
+    }
+
+    verification def GPSAccuracyVerification {
+        subject gps : GPSModule;
+        verify requirement GPSAccuracyReq;
+        action testPosition {
+            out error : ISQ::LengthValue;
+        }
+        require constraint {
+            testPosition.error <= 0.5 [m]
+        }
+    }
+
+    // --- Concerns ---
+    concern def SafetyConcern {
+        doc /* The drone must be safe for operation
+               near people and property. */
+    }
+
+    concern def RegulatoryCompliance {
+        doc /* The drone must meet FAA regulations
+               for commercial operation. */
+    }
+
     // --- Allocations ---
     allocation navAlloc
         allocate Navigate to FlightController;
@@ -960,7 +1132,13 @@ package DroneSystem {
     }
 
     // --- Views ---
+    viewpoint def EngineeringConcerns {
+        doc /* Structural decomposition and interfaces */
+        frame concern SafetyConcern;
+    }
+
     view def StructuralOverview {
+        viewpoint EngineeringConcerns;
         filter @SysML::PartUsage;
     }
 
@@ -974,34 +1152,38 @@ package DroneSystem {
 
 ## SysML v2 Concept Summary
 
-| Concept              | Keyword            | Purpose                              |
-|----------------------|--------------------|--------------------------------------|
-| Package              | `package`          | Namespace / container                |
-| Import               | `import`           | Bring in external definitions        |
-| Attribute def        | `attribute def`    | Value type                           |
-| Enumeration          | `enum def`         | Fixed set of values                  |
-| Port def             | `port def`         | Communication interface              |
-| Part def             | `part def`         | Structural component                 |
-| Part usage           | `part name : Type` | Instance of a part def               |
-| Connection           | `connection`       | Structural link between parts        |
-| Flow                 | `flow ... of`      | Item/data flowing between ports      |
-| Binding              | `bind`             | Value equality constraint            |
-| Interface            | `interface`        | Typed connection interface           |
-| Action def           | `action def`       | Behavior / function                  |
-| State def            | `state def`        | Lifecycle / state machine            |
-| Requirement def      | `requirement def`  | What the system shall do/be          |
-| Constraint def       | `constraint def`   | Boolean condition                    |
-| Use case def         | `use case def`     | Actor-system interaction             |
-| Allocation           | `allocation`       | Trace behavior → structure           |
-| Satisfy              | `satisfy`          | Trace requirement → implementation   |
-| Specialization       | `:>`               | Inheritance / "is a kind of"         |
-| Redefinition         | `redefines`        | Override inherited feature           |
-| Multiplicity         | `[n]` or `[n..m]`  | How many instances                   |
-| Variation            | `variation`        | Product line choice point            |
-| Individual           | `individual`       | Specific named instance              |
-| View def             | `view def`         | Filtered model presentation          |
-| Abstract             | `abstract`         | Cannot be instantiated directly      |
-| Visibility           | `public`/`private` | Access control                       |
+| Concept         | Keyword            | Purpose                         |
+|-----------------|--------------------|---------------------------------|
+| Package         | `package`          | Namespace / container           |
+| Import          | `import`           | Bring in external definitions   |
+| Attribute def   | `attribute def`    | Value type                      |
+| Enumeration     | `enum def`         | Fixed set of values             |
+| Port def        | `port def`         | Communication interface         |
+| Part def        | `part def`         | Structural component            |
+| Part usage      | `part name : Type` | Instance of a part def          |
+| Connection      | `connection`       | Structural link between parts   |
+| Flow            | `flow ... of`      | Item/data between ports         |
+| Binding         | `bind`             | Value equality constraint       |
+| Interface       | `interface`        | Typed connection interface      |
+| Action def      | `action def`       | Behavior / function             |
+| State def       | `state def`        | Lifecycle / state machine       |
+| Requirement def | `requirement def`  | What the system shall do/be     |
+| Constraint def  | `constraint def`   | Boolean condition               |
+| Use case def    | `use case def`     | Actor-system interaction        |
+| Concern def     | `concern def`      | Stakeholder worry / risk        |
+| Verification    | `verification def` | Test / evidence for requirement |
+| Allocation      | `allocation`       | Trace behavior to structure     |
+| Satisfy         | `satisfy`          | Requirement to implementation   |
+| Verify          | `verify`           | Requirement to test evidence    |
+| Specialization  | `:>`               | Inheritance / "is a kind of"    |
+| Redefinition    | `redefines`        | Override inherited feature      |
+| Multiplicity    | `[n]` or `[n..m]`  | How many instances              |
+| Variation       | `variation`        | Product line choice point       |
+| Individual      | `individual`       | Specific named instance         |
+| View def        | `view def`         | Filtered model presentation     |
+| Viewpoint def   | `viewpoint def`    | Stakeholder perspective         |
+| Abstract        | `abstract`         | Cannot instantiate directly     |
+| Visibility      | `public`/`private` | Access control                  |
 | Doc comment          | `doc /* ... */`     | Structured documentation             |
 | Metadata             | `#AnnotationName`  | Model annotations                    |
 
