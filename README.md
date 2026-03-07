@@ -8,6 +8,22 @@ Provides syntax highlighting, indentation, completion, navigation, diagram gener
 
 **[Tutorial](TUTORIAL.md)** — Step-by-step guide to building a complete SysML v2 model with sysml2-mode (drone system example covering all 20 SysML v2 concepts).
 
+## Table of Contents
+
+- [Installation](#installation)
+- [Features](#features)
+- [Diagram Generation](#diagram-generation)
+- [FMI/FMU Integration](#fmifmu-integration)
+- [Co-Simulation](#co-simulation)
+- [Systems Modeling API](#systems-modeling-api)
+- [LSP Support](#lsp-support)
+- [Evil-Mode Integration](#evil-mode-integration)
+- [Keybinding Reference](#keybinding-reference)
+- [Customization](#customization)
+- [Module Architecture](#module-architecture)
+- [Testing](#testing)
+- [License](#license)
+
 ## Installation
 
 ### From source

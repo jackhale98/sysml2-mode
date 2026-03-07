@@ -4,6 +4,34 @@ This tutorial walks through building a complete SysML v2 model from scratch
 using `sysml2-mode` in Emacs. You'll learn both the SysML v2 textual notation
 and the editor features that make working with it productive.
 
+## Table of Contents
+
+- [Prerequisites](#prerequisites)
+- [Quick Reference: Key Bindings](#quick-reference-key-bindings)
+- [Step 1: Create a Package](#step-1-create-a-package)
+- [Step 2: Define Attributes](#step-2-define-attributes)
+- [Step 3: Define Enumerations](#step-3-define-enumerations)
+- [Step 4: Define Ports](#step-4-define-ports)
+- [Step 5: Define Parts](#step-5-define-parts)
+- [Step 6: Compose the System](#step-6-compose-the-system)
+- [Step 7: Connect Parts](#step-7-connect-parts)
+- [Step 8: Define Behavior with Actions](#step-8-define-behavior-with-actions)
+- [Step 9: Define States](#step-9-define-states)
+- [Step 10: Define Requirements](#step-10-define-requirements)
+- [Step 11: Satisfy Requirements](#step-11-satisfy-requirements)
+- [Step 12: Verification Cases](#step-12-verification-cases)
+- [Step 13: Concerns](#step-13-concerns)
+- [Step 14: Define Allocations](#step-14-define-allocations)
+- [Step 15: Specialization and Variation](#step-15-specialization-and-variation)
+- [Step 16: Create Individual Instances](#step-16-create-individual-instances)
+- [Step 17: Use Cases](#step-17-use-cases)
+- [Step 18: Views](#step-18-views)
+- [Step 19: Generate Diagrams](#step-19-generate-diagrams)
+- [Step 20: Navigation and Exploration](#step-20-navigation-and-exploration)
+- [Complete File](#complete-file)
+- [SysML v2 Concept Summary](#sysml-v2-concept-summary)
+- [Further Reading](#further-reading)
+
 ## Prerequisites
 
 - Emacs 29.1+ with `sysml2-mode` installed
