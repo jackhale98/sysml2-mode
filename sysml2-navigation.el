@@ -32,6 +32,8 @@
 
 (declare-function sysml2-project-root "sysml2-project")
 (declare-function sysml2-project-find-sysml-files "sysml2-project")
+(declare-function sysml2-ts--search-definition-in-buffer "sysml2-ts")
+(declare-function sysml2-ts--rename-symbol "sysml2-ts")
 
 ;; --- Imenu ---
 
@@ -324,8 +326,10 @@ with \\[pop-global-mark]."
   (let ((sym (thing-at-point 'symbol t)))
     (unless sym
       (user-error "No identifier at point"))
-    ;; 1. Search the current buffer first
-    (let ((local-pos (sysml2--search-definition-in-buffer sym)))
+    ;; 1. Search the current buffer first (tree-sitter when available)
+    (let ((local-pos (if (derived-mode-p 'sysml2-ts-mode)
+                         (sysml2-ts--search-definition-in-buffer sym)
+                       (sysml2--search-definition-in-buffer sym))))
       (if local-pos
           (progn
             (push-mark nil t)
@@ -364,29 +368,33 @@ with \\[pop-global-mark]."
   "Rename the symbol at point throughout the current buffer.
 Prompts for a new name and replaces all occurrences, skipping
 those inside comments and strings.  Only modifies the current
-buffer for safety."
+buffer for safety.
+When `sysml2-ts-mode' is active, uses tree-sitter for precise
+identifier matching instead of regex."
   (interactive)
-  (let ((old-name (thing-at-point 'symbol t)))
-    (unless old-name
-      (user-error "No symbol at point"))
-    (let ((new-name (read-string
-                     (format "Rename `%s' to: " old-name)
-                     old-name)))
-      (when (string-empty-p new-name)
-        (user-error "New name must not be empty"))
-      (when (string= old-name new-name)
-        (user-error "New name is the same as the old name"))
-      (let ((count 0)
-            (re (concat "\\_<" (regexp-quote old-name) "\\_>")))
-        (save-excursion
-          (goto-char (point-min))
-          (while (re-search-forward re nil t)
-            (unless (sysml2--nav-in-comment-or-string-p)
-              (replace-match new-name t t)
-              (setq count (1+ count)))))
-        (message "Renamed `%s' -> `%s' (%d occurrence%s)"
-                 old-name new-name count
-                 (if (= count 1) "" "s"))))))
+  (if (derived-mode-p 'sysml2-ts-mode)
+      (sysml2-ts--rename-symbol)
+    (let ((old-name (thing-at-point 'symbol t)))
+      (unless old-name
+        (user-error "No symbol at point"))
+      (let ((new-name (read-string
+                       (format "Rename `%s' to: " old-name)
+                       old-name)))
+        (when (string-empty-p new-name)
+          (user-error "New name must not be empty"))
+        (when (string= old-name new-name)
+          (user-error "New name is the same as the old name"))
+        (let ((count 0)
+              (re (concat "\\_<" (regexp-quote old-name) "\\_>")))
+          (save-excursion
+            (goto-char (point-min))
+            (while (re-search-forward re nil t)
+              (unless (sysml2--nav-in-comment-or-string-p)
+                (replace-match new-name t t)
+                (setq count (1+ count)))))
+          (message "Renamed `%s' -> `%s' (%d occurrence%s)"
+                   old-name new-name count
+                   (if (= count 1) "" "s")))))))
 
 (provide 'sysml2-navigation)
 ;;; sysml2-navigation.el ends here

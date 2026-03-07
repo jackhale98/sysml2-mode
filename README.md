@@ -6,12 +6,14 @@ Provides syntax highlighting, indentation, completion, navigation, diagram gener
 
 **Requires:** Emacs 29.1+
 
+**[Tutorial](TUTORIAL.md)** — Step-by-step guide to building a complete SysML v2 model with sysml2-mode (drone system example covering all 20 SysML v2 concepts).
+
 ## Installation
 
 ### From source
 
 ```bash
-git clone https://github.com/sysml2-mode/sysml2-mode.git
+git clone https://github.com/jackhale98/sysml2-mode.git
 ```
 
 Add to your init file:
@@ -81,7 +83,7 @@ Context-aware `completion-at-point` with annotation hints:
 
 ### Snippets
 
-25 yasnippet templates for common patterns (requires [yasnippet](https://github.com/joaotavora/yasnippet)):
+32 yasnippet templates for common patterns (requires [yasnippet](https://github.com/joaotavora/yasnippet)):
 
 | Key | Expansion |
 |-----|-----------|
@@ -119,33 +121,46 @@ Standard library path is auto-resolved from project root or a custom path.
 
 ### Tree-Sitter Support
 
-When the `sysml` tree-sitter grammar is installed, `sysml2-mode` automatically remaps to `sysml2-ts-mode` for incremental, context-aware highlighting and indentation.
+When the [`sysml` tree-sitter grammar](https://github.com/jackhale98/tree-sitter-sysml) is installed, `sysml2-mode` automatically remaps to `sysml2-ts-mode` for:
+
+- **Font-lock** — node-type-aware highlighting (7 feature groups)
+- **Indentation** — parent-type-based indent rules
+- **Imenu** — 28 definition categories from parse tree
+- **Which-function** — accurate enclosing definition via `treesit-parent-until`
+- **Completion** — context-aware CAPF using parse tree queries
+- **Flymake** — tree-sitter ERROR node reporting
+- **Goto-definition / Rename** — parse-tree-based search
+
+Install the grammar:
+
+```elisp
+(add-to-list 'treesit-language-source-alist
+             '(sysml "https://github.com/jackhale98/tree-sitter-sysml"
+                     nil "src"))
+M-x treesit-install-language-grammar RET sysml
+```
 
 ## Diagram Generation
 
 Generate [PlantUML](https://plantuml.com/) diagrams from SysML v2 models. Seven diagram types:
 
-| Type | Command | Description |
-|------|---------|-------------|
-| Parts Tree (BDD) | `C-c C-d b` | Class diagram of definitions and compositions |
-| Interconnection (IBD) | `C-c C-d p` | Component diagram of a part def's internal structure |
-| State Machine | `C-c C-d p` | State diagram (auto-detected inside `state def`) |
-| Action Flow | `C-c C-d p` | Activity diagram (auto-detected inside `action def`) |
-| Requirement Tree | `C-c C-d p` | Requirement hierarchy with satisfy relationships |
-| Use Case | `C-c C-d p` | Actors, use cases, includes |
-| Package | `C-c C-d p` | Package hierarchy with import arrows |
+Each diagram type has its own command:
 
-`C-c C-d p` auto-detects the diagram type at point.
-
-### Diagram Commands
-
-| Binding | Command | Description |
-|---------|---------|-------------|
-| `C-c C-d p` | `sysml2-diagram-preview` | Preview diagram at point |
-| `C-c C-d b` | `sysml2-diagram-preview-buffer` | Preview full buffer tree |
+| Binding | Command | Diagram |
+|---------|---------|---------|
+| `C-c C-d t` | `sysml2-diagram-tree` | Parts Tree (BDD) |
+| `C-c C-d i` | `sysml2-diagram-ibd` | Interconnection (IBD) |
+| `C-c C-d s` | `sysml2-diagram-state-machine` | State Machine |
+| `C-c C-d a` | `sysml2-diagram-action-flow` | Action Flow |
+| `C-c C-d r` | `sysml2-diagram-requirement` | Requirement Tree |
+| `C-c C-d u` | `sysml2-diagram-use-case` | Use Case |
+| `C-c C-d k` | `sysml2-diagram-package` | Package |
+| `C-c C-d p` | `sysml2-diagram-preview` | Auto-detect at point |
 | `C-c C-d e` | `sysml2-diagram-export` | Export to file |
-| `C-c C-d t` | `sysml2-diagram-type` | Select diagram type |
-| `C-c C-d o` | `sysml2-diagram-open-plantuml` | View generated PlantUML source |
+| `C-c C-d o` | `sysml2-diagram-open-plantuml` | View PlantUML source |
+
+Scoped diagrams (IBD, state machine, action flow) auto-detect the
+enclosing definition or prompt for a scope name.
 
 ### PlantUML Execution Modes
 
@@ -283,24 +298,21 @@ Integrates with both [eglot](https://github.com/joaotavora/eglot) (built into Em
 
 Two servers are supported:
 
-### SysIDE (Sensmetry) -- Recommended
+### SysIDE (Sensmetry)
 
-[SysIDE](https://github.com/sensmetry/sysml-2ls) is an open-source LSP server with the most complete SysML v2 language support.
-
-**Install:**
-
-```bash
-git clone https://github.com/sensmetry/sysml-2ls.git
-cd sysml-2ls
-npm install
-npm run build
-```
-
-The language server binary is at `packages/syside-languageserver/bin/syside-lsp`. Add it to your `PATH` or configure:
+[SysIDE](https://github.com/sensmetry/sysml-2ls) is an open-source LSP server for SysML v2. Note: this project was archived in Oct 2025 but remains functional.
 
 ```elisp
-(setq sysml2-lsp-server 'syside)  ;; default
+(setq sysml2-lsp-server 'syside)
 (setq sysml2-lsp-server-path "/path/to/syside-lsp")
+```
+
+### Eclipse SysON
+
+[SysON](https://github.com/eclipse-syson/syson) is Eclipse's actively maintained SysML v2 tooling with LSP support.
+
+```elisp
+(setq sysml2-lsp-server 'syson)
 ```
 
 With eglot (recommended, built into Emacs 29+):
@@ -327,37 +339,50 @@ The [official OMG pilot](https://github.com/Systems-Modeling/SysML-v2-Pilot-Impl
 
 ## Evil-Mode Integration
 
-Optional keybindings for [evil-mode](https://github.com/emacs-evil/evil) users. Provides two binding layers:
-
-1. **Localleader** (`,` prefix) -- works for all evil users
-2. **general.el** (`SPC m` prefix) -- Doom/Spacemacs style
+Optional keybindings for [evil-mode](https://github.com/emacs-evil/evil) users via [general.el](https://github.com/noctuid/general.el) (`SPC m` prefix, Doom/Spacemacs style):
 
 | Prefix | Category |
 |--------|----------|
-| `, n` / `SPC m n` | Navigation |
-| `, d` / `SPC m d` | Diagram |
-| `, a` / `SPC m a` | API |
-| `, l` / `SPC m l` | LSP |
-| `, s` / `SPC m s` | Simulation / FMI |
+| `SPC m n` | Navigation (outline, goto-definition) |
+| `SPC m r` | Rename symbol |
+| `SPC m c` | Connections (connect, flow, bind, etc.) |
+| `SPC m d` | Diagram (tree, IBD, state, etc.) |
+| `SPC m a` | API |
+| `SPC m l` | LSP |
+| `SPC m s` | Simulation / FMI |
 
-Neither evil nor general.el is a hard dependency.
+Plus `gd` for goto-definition in normal state. Neither evil nor general.el is a hard dependency.
 
 ## Keybinding Reference
 
 | Binding | Command |
 |---------|---------|
 | **Navigation** | |
+| `M-.` | `sysml2-goto-definition` |
+| `C-c C-r` | `sysml2-rename-symbol` |
 | `C-c C-n o` | `imenu` |
 | `C-c C-n t` | `sysml2-outline-toggle` |
+| **Connections** | |
+| `C-c C-c c` | `sysml2-connect` |
+| `C-c C-c f` | `sysml2-insert-flow` |
+| `C-c C-c b` | `sysml2-insert-binding` |
+| `C-c C-c i` | `sysml2-insert-interface` |
+| `C-c C-c a` | `sysml2-insert-allocation` |
+| `C-c C-c s` | `sysml2-insert-satisfy` |
+| **Diagram** | |
+| `C-c C-d t` | `sysml2-diagram-tree` |
+| `C-c C-d i` | `sysml2-diagram-ibd` |
+| `C-c C-d s` | `sysml2-diagram-state-machine` |
+| `C-c C-d a` | `sysml2-diagram-action-flow` |
+| `C-c C-d r` | `sysml2-diagram-requirement` |
+| `C-c C-d u` | `sysml2-diagram-use-case` |
+| `C-c C-d k` | `sysml2-diagram-package` |
+| `C-c C-d p` | `sysml2-diagram-preview` |
+| `C-c C-d e` | `sysml2-diagram-export` |
+| `C-c C-d o` | `sysml2-diagram-open-plantuml` |
 | **LSP** | |
 | `C-c C-l s` | `sysml2-lsp-ensure` |
 | `C-c C-l r` | `sysml2-lsp-restart` |
-| **Diagram** | |
-| `C-c C-d p` | `sysml2-diagram-preview` |
-| `C-c C-d b` | `sysml2-diagram-preview-buffer` |
-| `C-c C-d e` | `sysml2-diagram-export` |
-| `C-c C-d t` | `sysml2-diagram-type` |
-| `C-c C-d o` | `sysml2-diagram-open-plantuml` |
 | **API** | |
 | `C-c C-a l` | `sysml2-api-list-projects` |
 | `C-c C-a q` | `sysml2-api-query` |
@@ -380,7 +405,7 @@ Key variables:
 | Variable | Default | Description |
 |----------|---------|-------------|
 | `sysml2-indent-offset` | `4` | Spaces per indentation level |
-| `sysml2-lsp-server` | `'syside` | LSP server (`syside`, `pilot`, `none`) |
+| `sysml2-lsp-server` | `'syside` | LSP server (`syside`, `syson`, `pilot`, `none`) |
 | `sysml2-plantuml-exec-mode` | `'executable` | PlantUML invocation mode |
 | `sysml2-diagram-output-format` | `"svg"` | Diagram output format |
 | `sysml2-cosim-tool` | `'fmpy` | Co-simulation tool (`fmpy`, `omsimulator`) |
@@ -413,23 +438,20 @@ sysml2-mode.el          Entry point, syntax table, keymap, mode definition
 
 ## Testing
 
-154 ERT tests across 12 test files:
+202 ERT tests across 16 test files:
 
 ```bash
-emacs --batch -L . -L test \
-  -l sysml2-mode \
-  -l test/test-font-lock.el \
-  -l test/test-indent.el \
-  -l test/test-completion.el \
-  -l test/test-plantuml.el \
-  -l test/test-diagram.el \
-  -l test/test-project.el \
-  -l test/test-flymake.el \
-  -l test/test-api.el \
-  -l test/test-evil.el \
-  -l test/test-outline.el \
-  -l test/test-fmi.el \
-  -l test/test-cosim.el \
+make test
+# or manually:
+emacs --batch -L . -L test -l sysml2-mode \
+  -l test/test-helper.el -l test/test-lang.el \
+  -l test/test-font-lock.el -l test/test-indent.el \
+  -l test/test-completion.el -l test/test-navigation.el \
+  -l test/test-plantuml.el -l test/test-diagram.el \
+  -l test/test-project.el -l test/test-flymake.el \
+  -l test/test-outline.el -l test/test-fmi.el \
+  -l test/test-cosim.el -l test/test-evil.el \
+  -l test/test-api.el -l test/test-ts.el \
   -f ert-run-tests-batch-and-exit
 ```
 

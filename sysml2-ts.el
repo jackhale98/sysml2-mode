@@ -54,6 +54,8 @@
 (declare-function sysml2-ts--parent-context "sysml2-ts")
 (declare-function sysml2-ts--collect-definition-names "sysml2-ts")
 (declare-function sysml2-ts--collect-usage-names "sysml2-ts")
+(declare-function sysml2-ts--search-definition-in-buffer "sysml2-ts")
+(declare-function sysml2-ts--rename-symbol "sysml2-ts")
 (declare-function sysml2-completion-at-point "sysml2-completion")
 (defvar treesit-language-source-alist)
 
@@ -215,16 +217,32 @@
 
   (defvar sysml2-ts--indent-rules
     `((sysml
+       ;; Closing delimiters align with parent
        ((node-is "}") parent-bol 0)
        ((node-is "]") parent-bol 0)
        ((node-is ")") parent-bol 0)
+       ;; Top-level
        ((parent-is "source_file") column-0 0)
+       ;; Body blocks
        ((parent-is "package_body") parent-bol ,sysml2-indent-offset)
        ((parent-is "definition_body") parent-bol ,sysml2-indent-offset)
        ((parent-is "enumeration_body") parent-bol ,sysml2-indent-offset)
        ((parent-is "state_body") parent-bol ,sysml2-indent-offset)
        ((parent-is "requirement_body") parent-bol ,sysml2-indent-offset)
        ((parent-is "constraint_body") parent-bol ,sysml2-indent-offset)
+       ;; Connection/flow/allocation clauses indent their sub-parts
+       ((parent-is "connection_usage") parent-bol ,sysml2-indent-offset)
+       ((parent-is "flow_usage") parent-bol ,sysml2-indent-offset)
+       ((parent-is "allocation_usage") parent-bol ,sysml2-indent-offset)
+       ((parent-is "satisfy_statement") parent-bol ,sysml2-indent-offset)
+       ((parent-is "bind_statement") parent-bol ,sysml2-indent-offset)
+       ;; Transition and succession
+       ((parent-is "transition_statement") parent-bol ,sysml2-indent-offset)
+       ((parent-is "succession_statement") parent-bol ,sysml2-indent-offset)
+       ;; Action/state usages with bodies
+       ((parent-is "action_usage") parent-bol ,sysml2-indent-offset)
+       ((parent-is "state_usage") parent-bol ,sysml2-indent-offset)
+       ;; Fallback
        (no-node parent-bol ,sysml2-indent-offset)))
     "Tree-sitter indentation rules for SysML v2.")
 
@@ -371,33 +389,39 @@ Returns a list of name strings for connectable elements (parts, ports, etc.)."
             (treesit-query-error nil))))
       (nreverse names)))
 
+  (defvar sysml2-ts--context-node-alist
+    '(("typed_by"           . typed-by)
+      ("specialization"     . specialization)
+      ("connect_clause"     . connect)
+      ("allocate_clause"    . allocate)
+      ("allocation_usage"   . allocate)
+      ("satisfy_statement"  . satisfy)
+      ("flow_usage"         . flow))
+    "Alist mapping tree-sitter node types to completion context symbols.
+Used by `sysml2-ts--parent-context' to determine what completions to offer.")
+
   (defun sysml2-ts--parent-context ()
     "Determine the completion context by examining the tree-sitter node at point.
-Returns one of: `typed-by', `specialization', `body', `connect', or nil."
+Walks up the tree (max 5 levels) looking for context-significant ancestor
+nodes.  Returns one of: `typed-by', `specialization', `body', `connect',
+`allocate', `satisfy', `flow', or nil."
     (let* ((node (treesit-node-at (point)))
-           (parent (and node (treesit-node-parent node)))
-           (grandparent (and parent (treesit-node-parent parent)))
-           (parent-type (and parent (treesit-node-type parent)))
-           (grandparent-type (and grandparent (treesit-node-type grandparent))))
-      (cond
-       ;; Inside a typed_by clause — suggest definition names
-       ((or (equal parent-type "typed_by")
-            (equal grandparent-type "typed_by"))
-        'typed-by)
-       ;; Inside a specialization clause — suggest definition names
-       ((or (equal parent-type "specialization")
-            (equal grandparent-type "specialization"))
-        'specialization)
-       ;; Inside a connect clause or after "to" — suggest usage names
-       ((or (equal parent-type "connect_clause")
-            (equal grandparent-type "connect_clause"))
-        'connect)
-       ;; Inside a body block — suggest usage keywords
-       ((or (member parent-type sysml2-ts--body-node-types)
-            (member grandparent-type sysml2-ts--body-node-types))
-        'body)
-       ;; Default — no special tree-sitter context
-       (t nil))))
+           (ancestor node)
+           (levels 0)
+           (context nil))
+      ;; Walk up max 5 ancestor levels looking for a context node
+      (while (and ancestor (< levels 5) (not context))
+        (let ((node-type (treesit-node-type ancestor)))
+          (let ((match (assoc node-type sysml2-ts--context-node-alist)))
+            (when match
+              (setq context (cdr match))))
+          ;; Check body node types
+          (when (and (not context)
+                     (member node-type sysml2-ts--body-node-types))
+            (setq context 'body)))
+        (setq ancestor (treesit-node-parent ancestor))
+        (setq levels (1+ levels)))
+      context))
 
   (defun sysml2-ts--completion-at-point ()
     "Completion-at-point function using tree-sitter for SysML v2 buffers.
@@ -439,6 +463,34 @@ context is identified."
                    :exclusive 'no
                    :annotation-function
                    (lambda (_cand) " <usage>")))))
+        ('allocate
+         ;; Inside allocate clause or allocation_usage — suggest usage names
+         (let ((candidates (sysml2-ts--collect-usage-names)))
+           (when candidates
+             (list start end candidates
+                   :exclusive 'no
+                   :annotation-function
+                   (lambda (_cand) " <usage>")))))
+        ('satisfy
+         ;; Inside satisfy statement — suggest requirement and part names
+         (let ((candidates (append (sysml2-ts--collect-definition-names)
+                                   (sysml2-ts--collect-usage-names))))
+           (when candidates
+             (list start end candidates
+                   :exclusive 'no
+                   :annotation-function
+                   (lambda (cand)
+                     (if (member cand (sysml2-ts--collect-definition-names))
+                         " <def>"
+                       " <usage>"))))))
+        ('flow
+         ;; Inside flow usage — suggest port/part names
+         (let ((candidates (sysml2-ts--collect-usage-names)))
+           (when candidates
+             (list start end candidates
+                   :exclusive 'no
+                   :annotation-function
+                   (lambda (_cand) " <usage>")))))
         ('body
          (let ((candidates (append sysml2-usage-keywords
                                    sysml2-behavioral-keywords
@@ -455,6 +507,76 @@ context is identified."
         (_
          ;; Fall back to the regex-based CAPF
          (sysml2-completion-at-point)))))
+
+  ;; --- Go to Definition (tree-sitter) ---
+
+  (defun sysml2-ts--search-definition-in-buffer (sym)
+    "Search for a definition of SYM in the current buffer using tree-sitter.
+Query all definition node types and `package_declaration' for a
+node whose `name' field matches SYM.  Return the position
+\(`treesit-node-start') of the first match, or nil."
+    (let ((root (treesit-buffer-root-node))
+          (all-types (cons "package_declaration"
+                           sysml2-ts--definition-node-types))
+          (result nil))
+      (catch 'found
+        (dolist (node-type all-types)
+          (let ((query (format "((%s name: (identifier) @name))" node-type)))
+            (condition-case nil
+                (let ((captures (treesit-query-capture root query)))
+                  (dolist (cap captures)
+                    (when (and (eq (car cap) 'name)
+                               (string= (treesit-node-text (cdr cap) t) sym))
+                      (setq result (treesit-node-start (cdr cap)))
+                      (throw 'found result))))
+              (treesit-query-error nil)))))
+      result))
+
+  ;; --- Rename Symbol (tree-sitter) ---
+
+  (defun sysml2-ts--rename-symbol ()
+    "Rename the symbol at point in the current buffer using tree-sitter.
+Finds all `identifier' nodes whose text matches the old name and
+replaces them, working backwards from the end of the buffer to
+preserve positions.  Prompts for the new name interactively."
+    (let ((old-name (thing-at-point 'symbol t)))
+      (unless old-name
+        (user-error "No symbol at point"))
+      (let ((new-name (read-string
+                       (format "Rename `%s' to: " old-name)
+                       old-name)))
+        (when (string-empty-p new-name)
+          (user-error "New name must not be empty"))
+        (when (string= old-name new-name)
+          (user-error "New name is the same as the old name"))
+        (let* ((root (treesit-buffer-root-node))
+               (query "((identifier) @id)")
+               (captures (condition-case nil
+                             (treesit-query-capture root query)
+                           (treesit-query-error nil)))
+               (matches nil)
+               (count 0))
+          ;; Collect all identifier nodes matching old-name
+          (dolist (cap captures)
+            (when (and (eq (car cap) 'id)
+                       (string= (treesit-node-text (cdr cap) t) old-name))
+              (push (cdr cap) matches)))
+          ;; Sort by position descending so replacements don't shift later positions
+          (setq matches (sort matches
+                              (lambda (a b)
+                                (> (treesit-node-start a)
+                                   (treesit-node-start b)))))
+          ;; Replace each match
+          (dolist (node matches)
+            (let ((start (treesit-node-start node))
+                  (end (treesit-node-end node)))
+              (goto-char start)
+              (delete-region start end)
+              (insert new-name)
+              (setq count (1+ count))))
+          (message "Renamed `%s' -> `%s' (%d occurrence%s)"
+                   old-name new-name count
+                   (if (= count 1) "" "s"))))))
 
   ;; --- Mode definition ---
 

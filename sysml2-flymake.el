@@ -36,6 +36,7 @@
 (declare-function treesit-node-start "treesit")
 (declare-function treesit-node-end "treesit")
 (declare-function treesit-node-type "treesit")
+(declare-function treesit-node-parent "treesit")
 
 ;; --- Delimiter matching ---
 
@@ -151,26 +152,72 @@ Returns a list of Flymake diagnostics."
 
 ;; --- Tree-sitter Flymake backend ---
 
+(defun sysml2-ts--error-message-for-parent (parent-node)
+  "Return a context-aware error message based on PARENT-NODE type.
+Examines the parent of an ERROR node to provide more specific diagnostics."
+  (let ((parent-type (and parent-node (treesit-node-type parent-node))))
+    (cond
+     ((equal parent-type "definition_body")
+      "Unexpected syntax in definition body")
+     ((equal parent-type "package_body")
+      "Unexpected syntax in package")
+     ((equal parent-type "state_body")
+      "Unexpected syntax in state body")
+     ((equal parent-type "requirement_body")
+      "Unexpected syntax in requirement body")
+     ((equal parent-type "constraint_body")
+      "Unexpected syntax in constraint body")
+     ((equal parent-type "enumeration_body")
+      "Unexpected syntax in enumeration body")
+     (t
+      "Tree-sitter syntax error"))))
+
 (defun sysml2-ts--flymake-backend (report-fn &rest _args)
   "Flymake backend using tree-sitter to report syntax errors.
 Queries the tree-sitter parse tree for ERROR and MISSING nodes
-and reports them as Flymake diagnostics via REPORT-FN."
+and reports them as Flymake diagnostics via REPORT-FN.
+
+ERROR nodes are reported as errors with context-aware messages based
+on their parent node type.  MISSING nodes are reported as warnings
+indicating the expected node type."
   (when (and (fboundp 'treesit-available-p)
              (treesit-available-p)
              (treesit-ready-p 'sysml t))
     (let* ((root (treesit-buffer-root-node 'sysml))
-           (errors (treesit-query-capture root '((ERROR) @error)))
+           (errors (condition-case nil
+                       (treesit-query-capture root '((ERROR) @error))
+                     (treesit-query-error nil)))
+           (missing (condition-case nil
+                        (treesit-query-capture root '((MISSING) @missing))
+                      (treesit-query-error nil)))
            (diagnostics nil))
+      ;; Process ERROR nodes with context-aware messages
       (dolist (err errors)
-        (let ((node (cdr err)))
-          (push (flymake-make-diagnostic
-                 (current-buffer)
-                 (treesit-node-start node)
-                 (treesit-node-end node)
-                 :error
-                 (format "Tree-sitter syntax error (%s)"
-                         (treesit-node-type node)))
-                diagnostics)))
+        (when (eq (car err) 'error)
+          (let* ((node (cdr err))
+                 (parent (treesit-node-parent node))
+                 (msg (sysml2-ts--error-message-for-parent parent)))
+            (push (flymake-make-diagnostic
+                   (current-buffer)
+                   (treesit-node-start node)
+                   (max (1+ (treesit-node-start node))
+                        (treesit-node-end node))
+                   :error
+                   msg)
+                  diagnostics))))
+      ;; Process MISSING nodes as warnings
+      (dolist (miss missing)
+        (when (eq (car miss) 'missing)
+          (let* ((node (cdr miss))
+                 (node-type (treesit-node-type node)))
+            (push (flymake-make-diagnostic
+                   (current-buffer)
+                   (treesit-node-start node)
+                   (max (1+ (treesit-node-start node))
+                        (treesit-node-end node))
+                   :warning
+                   (format "Missing expected node: %s" node-type))
+                  diagnostics))))
       (funcall report-fn diagnostics))))
 
 ;; --- Flymake backend ---
