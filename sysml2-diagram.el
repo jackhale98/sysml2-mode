@@ -34,6 +34,7 @@
 ;;   `sysml2-diagram-type' -- Select diagram type via completing-read
 ;;   `sysml2-diagram-open-plantuml' -- Open PlantUML source buffer
 ;;   `sysml2-diagram-preview-mode' -- Minor mode for auto-refresh
+;;   `sysml2-diagram-view' -- Generate diagram from a view def's filter
 ;;   `sysml2-diagram-render-puml-file' -- Render a .puml file to image
 ;;   `sysml2-diagram-render-examples' -- Batch render all example .puml files
 ;;   `sysml2-diagram-generate-examples' -- Generate .puml from .sysml fixtures
@@ -497,6 +498,73 @@ the result to examples/plantuml/.  Works interactively and in batch:
     (message "Generated %d/%d example PlantUML files"
              count (length sysml2--diagram-example-specs))
     count))
+
+;; --- View-Filtered Diagrams ---
+
+(defconst sysml2--diagram-view-filter-type-alist
+  '(("PartUsage" . tree)
+    ("RequirementUsage" . requirement-tree)
+    ("ConnectionUsage" . interconnection)
+    ("StateUsage" . state-machine)
+    ("ActionUsage" . action-flow)
+    ("UseCaseUsage" . use-case))
+  "Map SysML v2 view filter metatype names to diagram type symbols.")
+
+(defun sysml2--diagram-parse-views ()
+  "Parse the current buffer for `view def' declarations with filter clauses.
+Return a list of (NAME . DIAGRAM-TYPE) where DIAGRAM-TYPE is a symbol
+derived from the `filter @SysML::XXX' clause inside each view def."
+  (save-excursion
+    (goto-char (point-min))
+    (let ((views nil)
+          (view-re (concat "\\bview[ \t]+def[ \t]+"
+                           "\\([A-Za-z_][A-Za-z0-9_]*\\)")))
+      (while (re-search-forward view-re nil t)
+        (let ((name (match-string-no-properties 1))
+              (view-start (match-end 0)))
+          (save-excursion
+            (goto-char view-start)
+            (when (re-search-forward "{" nil t)
+              (let ((brace-start (1- (point)))
+                    (brace-end nil))
+                (goto-char brace-start)
+                (condition-case nil
+                    (progn
+                      (forward-sexp 1)
+                      (setq brace-end (point)))
+                  (scan-error nil))
+                (when brace-end
+                  (let ((body (buffer-substring-no-properties
+                               brace-start brace-end)))
+                    (when (string-match
+                           "filter[ \t]+@SysML::\\([A-Za-z_][A-Za-z0-9_]*\\)"
+                           body)
+                      (let* ((metatype (match-string 1 body))
+                             (dtype (cdr (assoc metatype
+                                                sysml2--diagram-view-filter-type-alist))))
+                        (when dtype
+                          (push (cons name dtype) views)))))))))))
+      (nreverse views))))
+
+(defun sysml2-diagram-view ()
+  "Generate a diagram based on a `view def' in the current buffer.
+Parses all view definitions with `filter @SysML::...' clauses,
+prompts the user to select one, then generates and displays the
+corresponding diagram type."
+  (interactive)
+  (let ((views (sysml2--diagram-parse-views)))
+    (unless views
+      (user-error "No view definitions with filter clauses found in buffer"))
+    (let* ((candidates (mapcar (lambda (v)
+                                 (format "%s (%s)" (car v) (cdr v)))
+                               views))
+           (choice (completing-read "View: " candidates nil t))
+           (idx (cl-position choice candidates :test #'string=))
+           (view (nth idx views))
+           (dtype (cdr view))
+           (scope (when (memq dtype '(interconnection state-machine action-flow))
+                    (sysml2--diagram-read-scope (symbol-name dtype)))))
+      (sysml2--diagram-generate-and-show dtype scope))))
 
 ;; --- Preview Minor Mode ---
 

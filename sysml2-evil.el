@@ -41,6 +41,7 @@
 (declare-function sysml2-diagram-requirement "sysml2-diagram")
 (declare-function sysml2-diagram-use-case "sysml2-diagram")
 (declare-function sysml2-diagram-package "sysml2-diagram")
+(declare-function sysml2-diagram-view "sysml2-diagram")
 (declare-function sysml2-fmi-inspect-fmu "sysml2-fmi")
 (declare-function sysml2-fmi-extract-interfaces "sysml2-fmi")
 (declare-function sysml2-fmi-generate-modelica "sysml2-fmi")
@@ -65,6 +66,8 @@
 (declare-function sysml2-api-query "sysml2-api")
 (declare-function sysml2-lsp-ensure "sysml2-lsp")
 (declare-function sysml2-lsp-restart "sysml2-lsp")
+(declare-function sysml2-report-summary "sysml2-report")
+(declare-function sysml2-report-traceability "sysml2-report")
 
 (defvar sysml2-mode-map)
 (defvar sysml2-outline-mode-map)
@@ -111,6 +114,8 @@
      "d r" '(sysml2-diagram-requirement :which-key "requirement tree")
      "d u" '(sysml2-diagram-use-case :which-key "use case")
      "d k" '(sysml2-diagram-package :which-key "package")
+     ;; Diagram — view-filtered
+     "d v" '(sysml2-diagram-view :which-key "view filter")
      ;; Diagram — general
      "d p" '(sysml2-diagram-preview :which-key "preview at point")
      "d b" '(sysml2-diagram-preview-buffer :which-key "preview buffer")
@@ -134,6 +139,10 @@
      "s r" '(sysml2-cosim-run :which-key "run simulation")
      "s p" '(sysml2-cosim-results :which-key "plot results")
      "s c" '(sysml2-cosim-verify-requirements :which-key "verify requirements")
+     ;; Inspect / Report
+     "i"   '(:ignore t :which-key "inspect")
+     "i s" '(sysml2-report-summary :which-key "model summary")
+     "i t" '(sysml2-report-traceability :which-key "traceability matrix")
      ;; Code folding
      "f"   '(:ignore t :which-key "fold")
      "f t" '(hs-toggle-hiding :which-key "toggle")

@@ -21,16 +21,44 @@ Add to your init file:
 ```elisp
 (add-to-list 'load-path "/path/to/sysml2-mode")
 (require 'sysml2-mode)
+;; .sysml and .kerml files auto-activate — no auto-mode-alist needed
 ```
 
 ### use-package
 
 ```elisp
 (use-package sysml2-mode
-  :load-path "/path/to/sysml2-mode"
-  :mode (("\\.sysml\\'" . sysml2-mode)
-         ("\\.kerml\\'"  . kerml-mode)))
+  :load-path "/path/to/sysml2-mode")
 ```
+
+### straight.el / elpaca
+
+```elisp
+(use-package sysml2-mode
+  :straight (:host github :repo "jackhale98/sysml2-mode"
+             :files ("*.el" "snippets")))
+```
+
+### Doom Emacs
+
+Add to `~/.config/doom/packages.el`:
+
+```elisp
+(package! sysml2-mode
+  :recipe (:host github :repo "jackhale98/sysml2-mode"
+           :files ("*.el" "snippets")))
+```
+
+Add to `~/.config/doom/config.el`:
+
+```elisp
+(use-package! sysml2-mode
+  :config
+  (require 'sysml2-evil)  ;; SPC m keybindings
+  (require 'sysml2-ts))   ;; tree-sitter support
+```
+
+Then run `doom sync`.
 
 ## Features
 

@@ -85,6 +85,7 @@
 (require 'sysml2-cosim)
 (require 'sysml2-evil)
 (require 'sysml2-outline)
+(require 'sysml2-report)
 
 ;; --- Version ---
 
@@ -142,6 +143,8 @@
 (declare-function hs-hide-all "hideshow")
 (declare-function hs-show-all "hideshow")
 (declare-function hs-hide-level "hideshow")
+(declare-function sysml2-report-summary "sysml2-report")
+(declare-function sysml2-report-traceability "sysml2-report")
 (defvar hs-special-modes-alist)
 
 ;; --- Keymap ---
@@ -164,6 +167,8 @@
     (define-key map (kbd "C-c C-d r") #'sysml2-diagram-requirement)
     (define-key map (kbd "C-c C-d u") #'sysml2-diagram-use-case)
     (define-key map (kbd "C-c C-d k") #'sysml2-diagram-package)
+    ;; Diagram — view-filtered
+    (define-key map (kbd "C-c C-d v") #'sysml2-diagram-view)
     ;; Diagram — general
     (define-key map (kbd "C-c C-d p") #'sysml2-diagram-preview)
     (define-key map (kbd "C-c C-d b") #'sysml2-diagram-preview-buffer)
@@ -188,6 +193,9 @@
     (define-key map (kbd "C-c C-s r") #'sysml2-cosim-run)
     (define-key map (kbd "C-c C-s p") #'sysml2-cosim-results)
     (define-key map (kbd "C-c C-s c") #'sysml2-cosim-verify-requirements)
+    ;; Inspect / Report
+    (define-key map (kbd "C-c C-i s") #'sysml2-report-summary)
+    (define-key map (kbd "C-c C-i t") #'sysml2-report-traceability)
     ;; Code folding
     (define-key map (kbd "C-c C-f t") #'hs-toggle-hiding)
     (define-key map (kbd "C-c C-f h") #'hs-hide-block)
