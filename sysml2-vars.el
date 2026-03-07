@@ -101,6 +101,36 @@ When non-nil, searches project root for `sysml.library/' directory."
   :type 'boolean
   :group 'sysml2)
 
+(defcustom sysml2-diagram-backend 'native
+  "Diagram generation backend.
+`native' uses direct SVG for trees/tables and D2 for graph layouts.
+`plantuml' uses PlantUML for all diagram types (legacy)."
+  :type '(choice (const :tag "Native (SVG + D2)" native)
+                 (const :tag "PlantUML (legacy)" plantuml))
+  :group 'sysml2-diagram)
+
+(defcustom sysml2-d2-executable-path nil
+  "Path to D2 executable.
+When nil, searches `exec-path' for `d2'."
+  :type '(choice (const :tag "Search exec-path" nil)
+                 (file :tag "Executable path"))
+  :group 'sysml2-diagram)
+
+(defcustom sysml2-d2-theme nil
+  "D2 theme to use for generated diagrams.
+See `d2 --help' for available themes."
+  :type '(choice (const :tag "Default" nil)
+                 (integer :tag "Theme number"))
+  :group 'sysml2-diagram)
+
+(defcustom sysml2-d2-layout-engine nil
+  "D2 layout engine.
+When nil, uses D2's default (dagre)."
+  :type '(choice (const :tag "Default (dagre)" nil)
+                 (const :tag "ELK" elk)
+                 (const :tag "TALA" tala))
+  :group 'sysml2-diagram)
+
 (defcustom sysml2-plantuml-jar-path nil
   "Path to PlantUML jar file.
 When nil, uses `plantuml-mode' setting if available."

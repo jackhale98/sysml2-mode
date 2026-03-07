@@ -12,9 +12,15 @@
 
 ;;; Commentary:
 
-;; User-facing diagram commands and preview management.  Handles
-;; PlantUML invocation (executable, jar, or server), image display,
-;; export, and auto-refresh preview mode.
+;; User-facing diagram commands and preview management.
+;;
+;; Dual-backend architecture:
+;;   - `native' backend (default): Direct SVG for deterministic layouts
+;;     (tree/BDD, requirements) + D2 for graph layouts (IBD, state
+;;     machine, action flow, use case, package)
+;;   - `plantuml' backend (legacy): PlantUML for all diagram types
+;;
+;; Backend selection is controlled by `sysml2-diagram-backend'.
 
 ;;; Code:
 
@@ -32,14 +38,14 @@
 ;;   `sysml2-diagram-package' -- Preview package diagram
 ;;   `sysml2-diagram-export' -- Export diagram to file
 ;;   `sysml2-diagram-type' -- Select diagram type via completing-read
-;;   `sysml2-diagram-open-plantuml' -- Open PlantUML source buffer
+;;   `sysml2-diagram-open-source' -- Open diagram source buffer
 ;;   `sysml2-diagram-preview-mode' -- Minor mode for auto-refresh
 ;;   `sysml2-diagram-view' -- Generate diagram from a view def's filter
-;;   `sysml2-diagram-render-puml-file' -- Render a .puml file to image
-;;   `sysml2-diagram-render-examples' -- Batch render all example .puml files
-;;   `sysml2-diagram-generate-examples' -- Generate .puml from .sysml fixtures
 
 (require 'sysml2-vars)
+(require 'sysml2-model)
+(require 'sysml2-svg)
+(require 'sysml2-d2)
 (require 'sysml2-plantuml)
 
 (defvar url-http-end-of-headers)
@@ -153,6 +159,123 @@ CALLBACK receives (SUCCESS DATA-OR-ERROR)."
          (funcall callback t (buffer-substring (point) (point-max)))))
      nil t)))
 
+;; --- D2 Invocation ---
+
+(defun sysml2--diagram-resolve-d2 ()
+  "Return the D2 executable path, or nil if not found."
+  (or sysml2-d2-executable-path
+      (executable-find "d2")))
+
+(defun sysml2--diagram-invoke-d2 (d2-string format callback)
+  "Invoke D2 on D2-STRING for FORMAT, call CALLBACK with result.
+CALLBACK receives (SUCCESS DATA-OR-ERROR)."
+  (let ((d2-cmd (sysml2--diagram-resolve-d2)))
+    (unless d2-cmd
+      (funcall callback nil "D2 not found. Install from https://d2lang.com or set `sysml2-d2-executable-path'.")
+      (cl-return-from sysml2--diagram-invoke-d2 nil))
+    (let* ((temp-in (make-temp-file "sysml2-d2-" nil ".d2"))
+           (temp-out (make-temp-file "sysml2-d2-out-" nil (concat "." format)))
+           (args (list d2-cmd))
+           (proc-buf (generate-new-buffer " *sysml2-d2*")))
+      (with-temp-file temp-in
+        (insert d2-string))
+      ;; Build args
+      (when sysml2-d2-theme
+        (setq args (append args (list "--theme" (number-to-string sysml2-d2-theme)))))
+      (when sysml2-d2-layout-engine
+        (setq args (append args (list "--layout" (symbol-name sysml2-d2-layout-engine)))))
+      (setq args (append args (list temp-in temp-out)))
+      (set-process-sentinel
+       (apply #'start-process "sysml2-d2" proc-buf (car args) (cdr args))
+       (lambda (proc _event)
+         (when (memq (process-status proc) '(exit signal))
+           (if (= (process-exit-status proc) 0)
+               (let ((output (with-temp-buffer
+                               (set-buffer-multibyte nil)
+                               (insert-file-contents-literally temp-out)
+                               (buffer-string))))
+                 (funcall callback t output))
+             (let ((err (with-current-buffer (process-buffer proc)
+                          (buffer-string))))
+               (funcall callback nil err)))
+           (kill-buffer (process-buffer proc))
+           (ignore-errors (delete-file temp-in))
+           (ignore-errors (delete-file temp-out))))))))
+
+(defun sysml2--diagram-invoke-d2-sync (d2-string format)
+  "Synchronously invoke D2 on D2-STRING for FORMAT.
+Returns image data as a string."
+  (let ((d2-cmd (sysml2--diagram-resolve-d2)))
+    (unless d2-cmd
+      (user-error "D2 not found; install from https://d2lang.com or set `sysml2-d2-executable-path'"))
+    (let* ((temp-in (make-temp-file "sysml2-d2-" nil ".d2"))
+           (temp-out (make-temp-file "sysml2-d2-out-" nil (concat "." format)))
+           (args (list)))
+      (with-temp-file temp-in
+        (insert d2-string))
+      (when sysml2-d2-theme
+        (setq args (append args (list "--theme" (number-to-string sysml2-d2-theme)))))
+      (when sysml2-d2-layout-engine
+        (setq args (append args (list "--layout" (symbol-name sysml2-d2-layout-engine)))))
+      (setq args (append args (list temp-in temp-out)))
+      (let ((exit-code (apply #'call-process d2-cmd nil nil nil args)))
+        (unless (= exit-code 0)
+          (user-error "D2 failed with exit code %d" exit-code))
+        (prog1
+            (with-temp-buffer
+              (set-buffer-multibyte nil)
+              (insert-file-contents-literally temp-out)
+              (buffer-string))
+          (ignore-errors (delete-file temp-in))
+          (ignore-errors (delete-file temp-out)))))))
+
+;; --- Unified Generation and Display ---
+
+(defconst sysml2--diagram-svg-types '(tree requirement-tree)
+  "Diagram types rendered by the direct SVG backend.")
+
+(defconst sysml2--diagram-d2-types
+  '(interconnection state-machine action-flow use-case package)
+  "Diagram types rendered by the D2 backend.")
+
+(defun sysml2--diagram-generate-and-display (type scope)
+  "Generate a diagram of TYPE with SCOPE and display it.
+Uses the backend selected by `sysml2-diagram-backend'."
+  (setq sysml2--diagram-source-buffer (current-buffer))
+  (pcase sysml2-diagram-backend
+    ('native
+     (cond
+      ((memq type sysml2--diagram-svg-types)
+       ;; Direct SVG — no external tool needed
+       (let ((svg-data (sysml2-svg-generate type scope)))
+         (sysml2--diagram-display-image svg-data "svg")))
+      ((memq type sysml2--diagram-d2-types)
+       ;; D2 — try local binary first, fall back to web playground
+       (let ((d2-src (sysml2-d2-generate type scope)))
+         (if (sysml2--diagram-resolve-d2)
+             (sysml2--diagram-invoke-d2
+              d2-src "svg"
+              (lambda (success data)
+                (if success
+                    (sysml2--diagram-display-image data "svg")
+                  (message "D2 error: %s" data))))
+           ;; No local D2 — open in web playground
+           (let* ((encoded (sysml2--d2-playground-encode d2-src))
+                  (url (concat "https://play.d2lang.com/?script=" encoded)))
+             (browse-url url)
+             (message "D2 not installed locally — opened in web playground")))))
+
+      (t (error "Unknown diagram type: %s" type))))
+    ('plantuml
+     (let ((puml (sysml2-plantuml-generate type scope)))
+       (sysml2--diagram-invoke-plantuml
+        puml sysml2-diagram-output-format
+        (lambda (success data)
+          (if success
+              (sysml2--diagram-display-image data sysml2-diagram-output-format)
+            (message "PlantUML error: %s" data))))))
+    (_ (error "Unknown diagram backend: %s" sysml2-diagram-backend))))
+
 ;; --- Preview Management ---
 
 (defun sysml2--diagram-get-preview-buffer ()
@@ -200,30 +323,16 @@ CALLBACK receives (SUCCESS DATA-OR-ERROR)."
   "Preview diagram for the definition at point.
 Auto-detects the diagram type.  Bound to `C-c C-d p'."
   (interactive)
-  (let* ((detected (sysml2-plantuml-detect-type-at-point))
+  (let* ((detected (sysml2--model-detect-diagram-type-at-point))
          (dtype (car detected))
-         (scope (cdr detected))
-         (puml (sysml2-plantuml-generate dtype scope)))
-    (setq sysml2--diagram-source-buffer (current-buffer))
-    (sysml2--diagram-invoke-plantuml
-     puml sysml2-diagram-output-format
-     (lambda (success data)
-       (if success
-           (sysml2--diagram-display-image data sysml2-diagram-output-format)
-         (message "PlantUML error: %s" data))))))
+         (scope (cdr detected)))
+    (sysml2--diagram-generate-and-display dtype scope)))
 
 (defun sysml2-diagram-preview-buffer ()
   "Preview a tree diagram for the entire buffer.
 Bound to `C-c C-d b'."
   (interactive)
-  (let ((puml (sysml2-plantuml-generate 'tree nil)))
-    (setq sysml2--diagram-source-buffer (current-buffer))
-    (sysml2--diagram-invoke-plantuml
-     puml sysml2-diagram-output-format
-     (lambda (success data)
-       (if success
-           (sysml2--diagram-display-image data sysml2-diagram-output-format)
-         (message "PlantUML error: %s" data))))))
+  (sysml2--diagram-generate-and-display 'tree nil))
 
 ;; --- Direct Diagram Commands ---
 
@@ -239,14 +348,7 @@ falling back to `read-string' if no enclosing definition is found."
 
 (defun sysml2--diagram-generate-and-show (type scope)
   "Generate a diagram of TYPE with SCOPE and display it."
-  (let ((puml (sysml2-plantuml-generate type scope)))
-    (setq sysml2--diagram-source-buffer (current-buffer))
-    (sysml2--diagram-invoke-plantuml
-     puml sysml2-diagram-output-format
-     (lambda (success data)
-       (if success
-           (sysml2--diagram-display-image data sysml2-diagram-output-format)
-         (message "PlantUML error: %s" data))))))
+  (sysml2--diagram-generate-and-display type scope))
 
 (defun sysml2-diagram-tree ()
   "Preview a parts tree diagram for the current buffer."
@@ -293,59 +395,129 @@ Auto-detects scope from enclosing definition, or prompts."
   "Export diagram to FILENAME; format derived from extension.
 Bound to `C-c C-d e'."
   (interactive "FExport diagram to file: ")
-  (let* ((ext (file-name-extension filename))
-         (format (or ext sysml2-diagram-output-format))
-         (detected (sysml2-plantuml-detect-type-at-point))
+  (let* ((ext (or (file-name-extension filename) "svg"))
+         (format ext)
+         (detected (sysml2--model-detect-diagram-type-at-point))
          (dtype (car detected))
-         (scope (cdr detected))
-         (puml (sysml2-plantuml-generate dtype scope)))
-    (sysml2--diagram-invoke-plantuml
-     puml format
-     (lambda (success data)
-       (if success
-           (progn
-             (with-temp-file filename
-               (set-buffer-multibyte nil)
-               (insert data))
-             (message "Exported to %s" filename))
-         (message "PlantUML error: %s" data))))))
+         (scope (cdr detected)))
+    (pcase sysml2-diagram-backend
+      ('native
+       (cond
+        ((memq dtype sysml2--diagram-svg-types)
+         (let ((svg-data (sysml2-svg-generate dtype scope)))
+           (with-temp-file filename
+             (set-buffer-multibyte nil)
+             (insert svg-data))
+           (message "Exported to %s" filename)))
+        ((memq dtype sysml2--diagram-d2-types)
+         (let ((d2-src (sysml2-d2-generate dtype scope)))
+           (sysml2--diagram-invoke-d2
+            d2-src format
+            (lambda (success data)
+              (if success
+                  (progn
+                    (with-temp-file filename
+                      (set-buffer-multibyte nil)
+                      (insert data))
+                    (message "Exported to %s" filename))
+                (message "D2 error: %s" data))))))))
+      ('plantuml
+       (let ((puml (sysml2-plantuml-generate dtype scope)))
+         (sysml2--diagram-invoke-plantuml
+          puml format
+          (lambda (success data)
+            (if success
+                (progn
+                  (with-temp-file filename
+                    (set-buffer-multibyte nil)
+                    (insert data))
+                  (message "Exported to %s" filename))
+              (message "PlantUML error: %s" data)))))))))
 
 (defun sysml2-diagram-type (type)
-  "Generate a diagram of TYPE via completing-read.
-Bound to `C-c C-d t'."
+  "Generate a diagram of TYPE via completing-read."
   (interactive
    (list (intern (completing-read "Diagram type: "
                                   '("tree" "interconnection" "state-machine"
                                     "action-flow" "requirement-tree"
                                     "use-case" "package")
                                   nil t))))
-  (let* ((scope (when (memq type '(interconnection state-machine action-flow))
-                  (read-string "Scope (definition name): ")))
-         (puml (sysml2-plantuml-generate type (if (string-empty-p scope) nil scope))))
-    (setq sysml2--diagram-source-buffer (current-buffer))
-    (sysml2--diagram-invoke-plantuml
-     puml sysml2-diagram-output-format
-     (lambda (success data)
-       (if success
-           (sysml2--diagram-display-image data sysml2-diagram-output-format)
-         (message "PlantUML error: %s" data))))))
+  (let ((scope (when (memq type '(interconnection state-machine action-flow))
+                 (let ((s (read-string "Scope (definition name): ")))
+                   (if (string-empty-p s) nil s)))))
+    (sysml2--diagram-generate-and-display type scope)))
 
 (defun sysml2-diagram-open-plantuml ()
-  "Open the PlantUML source for the current diagram in a buffer.
-Uses `plantuml-mode' if available.  Bound to `C-c C-d o'."
+  "Open the diagram source for the current diagram in a buffer.
+Bound to `C-c C-d o'."
   (interactive)
-  (let* ((detected (sysml2-plantuml-detect-type-at-point))
+  (let* ((detected (sysml2--model-detect-diagram-type-at-point))
          (dtype (car detected))
-         (scope (cdr detected))
-         (puml (sysml2-plantuml-generate dtype scope))
-         (buf (get-buffer-create "*SysML2 PlantUML*")))
-    (with-current-buffer buf
-      (erase-buffer)
-      (insert puml)
-      (goto-char (point-min))
-      (when (fboundp 'plantuml-mode)
-        (plantuml-mode)))
-    (pop-to-buffer buf)))
+         (scope (cdr detected)))
+    (pcase sysml2-diagram-backend
+      ('native
+       (cond
+        ((memq dtype sysml2--diagram-svg-types)
+         (let ((svg (sysml2-svg-generate dtype scope))
+               (buf (get-buffer-create "*SysML2 SVG Source*")))
+           (with-current-buffer buf
+             (erase-buffer)
+             (insert svg)
+             (goto-char (point-min))
+             (when (fboundp 'nxml-mode)
+               (nxml-mode)))
+           (pop-to-buffer buf)))
+        ((memq dtype sysml2--diagram-d2-types)
+         (let ((d2-src (sysml2-d2-generate dtype scope))
+               (buf (get-buffer-create "*SysML2 D2 Source*")))
+           (with-current-buffer buf
+             (erase-buffer)
+             (insert d2-src)
+             (goto-char (point-min)))
+           (pop-to-buffer buf)))))
+      ('plantuml
+       (let ((puml (sysml2-plantuml-generate dtype scope))
+             (buf (get-buffer-create "*SysML2 PlantUML*")))
+         (with-current-buffer buf
+           (erase-buffer)
+           (insert puml)
+           (goto-char (point-min))
+           (when (fboundp 'plantuml-mode)
+             (plantuml-mode)))
+         (pop-to-buffer buf))))))
+
+;; --- D2 Playground (Web Interface) ---
+
+(defun sysml2--d2-playground-encode (d2-source)
+  "Encode D2-SOURCE for use in a D2 playground URL.
+Uses base64url encoding."
+  (let ((b64 (base64-encode-string (encode-coding-string d2-source 'utf-8) t)))
+    ;; Convert to base64url: + -> -, / -> _, remove padding =
+    (setq b64 (replace-regexp-in-string "\\+" "-" b64))
+    (setq b64 (replace-regexp-in-string "/" "_" b64))
+    (setq b64 (replace-regexp-in-string "=+$" "" b64))
+    b64))
+
+(defun sysml2-diagram-open-in-playground ()
+  "Open the current diagram in the D2 web playground.
+Generates D2 source for the diagram at point and opens it in
+the browser at play.d2lang.com for interactive viewing.
+Changes to the D2 source in the playground do NOT update the
+SysML model — this is a one-way visualization.
+No local D2 installation required."
+  (interactive)
+  (let* ((detected (sysml2--model-detect-diagram-type-at-point))
+         (dtype (car detected))
+         (scope (cdr detected)))
+    (if (memq dtype sysml2--diagram-d2-types)
+        (let* ((d2-src (sysml2-d2-generate dtype scope))
+               (encoded (sysml2--d2-playground-encode d2-src))
+               (url (concat "https://play.d2lang.com/?script=" encoded)))
+          (browse-url url)
+          (message "Opened diagram in D2 playground (read-only visualization)"))
+      (if (memq dtype sysml2--diagram-svg-types)
+          (message "SVG diagrams (tree, requirements) don't need D2 — they render directly")
+        (message "Unknown diagram type: %s" dtype)))))
 
 ;; --- Synchronous Invocation ---
 
@@ -588,7 +760,7 @@ corresponding diagram type."
 
 (with-eval-after-load 'org
   (defun org-babel-execute:sysml (body params)
-    "Execute a SysML v2 code block via PlantUML transformation.
+    "Execute a SysML v2 code block via diagram generation.
 Supported PARAMS:
   :diagram-type — one of tree, interconnection, state-machine,
                   action-flow, requirement-tree (default: tree)
@@ -596,27 +768,52 @@ Supported PARAMS:
   :file — output file path"
     (let* ((diagram-type (intern (or (cdr (assq :diagram-type params)) "tree")))
            (scope (cdr (assq :scope params)))
-           (out-file (cdr (assq :file params)))
-           (puml (with-temp-buffer
-                   (insert body)
-                   (sysml2-mode)
-                   (sysml2-plantuml-generate diagram-type scope))))
-      (if out-file
-          (let ((format (or (file-name-extension out-file)
-                            sysml2-diagram-output-format))
-                (result nil))
-            (sysml2--diagram-invoke-plantuml
-             puml format
-             (lambda (success data)
-               (if success
-                   (progn
+           (out-file (cdr (assq :file params))))
+      (with-temp-buffer
+        (insert body)
+        (sysml2-mode)
+        (if out-file
+            (let ((format (or (file-name-extension out-file) "svg")))
+              (pcase sysml2-diagram-backend
+                ('native
+                 (cond
+                  ((memq diagram-type sysml2--diagram-svg-types)
+                   (let ((svg (sysml2-svg-generate diagram-type scope)))
                      (with-temp-file out-file
                        (set-buffer-multibyte nil)
-                       (insert data))
-                     (setq result out-file))
-                 (setq result (format "Error: %s" data)))))
-            result)
-        puml))))
+                       (insert svg))
+                     out-file))
+                  ((memq diagram-type sysml2--diagram-d2-types)
+                   (let ((d2-src (sysml2-d2-generate diagram-type scope)))
+                     (let ((data (sysml2--diagram-invoke-d2-sync d2-src format)))
+                       (with-temp-file out-file
+                         (set-buffer-multibyte nil)
+                         (insert data))
+                       out-file)))))
+                ('plantuml
+                 (let ((puml (sysml2-plantuml-generate diagram-type scope))
+                       (result nil))
+                   (sysml2--diagram-invoke-plantuml
+                    puml format
+                    (lambda (success data)
+                      (if success
+                          (progn
+                            (with-temp-file out-file
+                              (set-buffer-multibyte nil)
+                              (insert data))
+                            (setq result out-file))
+                        (setq result (format "Error: %s" data)))))
+                   result))))
+          ;; No output file — return source
+          (pcase sysml2-diagram-backend
+            ('native
+             (cond
+              ((memq diagram-type sysml2--diagram-svg-types)
+               (sysml2-svg-generate diagram-type scope))
+              ((memq diagram-type sysml2--diagram-d2-types)
+               (sysml2-d2-generate diagram-type scope))))
+            ('plantuml
+             (sysml2-plantuml-generate diagram-type scope))))))))
 
 (provide 'sysml2-diagram)
 ;;; sysml2-diagram.el ends here

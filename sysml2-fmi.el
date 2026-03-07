@@ -32,10 +32,7 @@
 (require 'sysml2-lang)
 (require 'dom)
 
-;; Forward declarations for plantuml extractors
-(declare-function sysml2--puml-find-def-bounds "sysml2-plantuml")
-(declare-function sysml2--puml-extract-port-usages "sysml2-plantuml")
-(declare-function sysml2--puml-extract-part-defs "sysml2-plantuml")
+(require 'sysml2-model)
 
 ;; --- Guard ---
 
@@ -239,7 +236,7 @@ When CONJUGATED is non-nil, flip \"input\" to \"output\" and vice versa."
 Returns list of plists with `:name', `:direction', `:type'."
   (with-current-buffer (or buffer (current-buffer))
     (save-excursion
-      (let ((bounds (sysml2--puml-find-def-bounds "port def" port-def-name)))
+      (let ((bounds (sysml2--model-find-def-bounds "port def" port-def-name)))
         (when bounds
           (let ((beg (car bounds))
                 (end (cdr bounds))
@@ -263,14 +260,14 @@ Combines port usages on the part def with port def item declarations.
 Returns list of plists with `:name', `:direction', `:sysml-type',
 `:fmi-type', `:causality', `:variability', `:source-port'."
   (with-current-buffer (or buffer (current-buffer))
-    (let ((bounds (sysml2--puml-find-def-bounds "part def" part-def-name)))
+    (let ((bounds (sysml2--model-find-def-bounds "part def" part-def-name)))
       (unless bounds
         (user-error "Part def '%s' not found" part-def-name))
       (let ((beg (car bounds))
             (end (cdr bounds))
             (results nil))
         ;; Get port usages on this part def
-        (let ((port-usages (sysml2--puml-extract-port-usages beg end)))
+        (let ((port-usages (sysml2--model-extract-port-usages beg end)))
           (dolist (port port-usages)
             (let* ((port-name (plist-get port :name))
                    (port-type (plist-get port :type))
@@ -411,7 +408,7 @@ Interactive: prompts for part def name and output path."
                    (read-string "Part def name: ")))
          (contract (sysml2--fmi-extract-part-interface name buf))
          (bounds (with-current-buffer buf
-                   (sysml2--puml-find-def-bounds "part def" name)))
+                   (sysml2--model-find-def-bounds "part def" name)))
          (attributes (when bounds
                        (with-current-buffer buf
                          (sysml2--fmi-extract-typed-attributes

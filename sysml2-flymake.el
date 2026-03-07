@@ -220,6 +220,133 @@ indicating the expected node type."
                   diagnostics))))
       (funcall report-fn diagnostics))))
 
+;; --- Semantic checks ---
+
+(defun sysml2--check-unsatisfied-requirements ()
+  "Check for requirement defs that have no matching satisfy statement.
+Returns a list of Flymake diagnostics at :note level."
+  (let ((req-defs nil)
+        (satisfied nil)
+        (diagnostics nil)
+        (req-def-re (concat "\\brequirement\\s-+def\\s-+"
+                            "\\(" sysml2--identifier-regexp "\\)"))
+        (satisfy-re (concat "\\bsatisfy\\s-+\\(?:requirement\\s-+\\)?"
+                            "\\(" sysml2--identifier-regexp "\\)")))
+    ;; Collect requirement def names and positions
+    (save-excursion
+      (goto-char (point-min))
+      (while (re-search-forward req-def-re nil t)
+        (let ((ppss (syntax-ppss (match-beginning 0))))
+          (unless (or (nth 3 ppss) (nth 4 ppss))
+            (push (cons (match-string-no-properties 1)
+                        (match-beginning 0))
+                  req-defs)))))
+    ;; Collect satisfied requirement names
+    (save-excursion
+      (goto-char (point-min))
+      (while (re-search-forward satisfy-re nil t)
+        (let ((ppss (syntax-ppss (match-beginning 0))))
+          (unless (or (nth 3 ppss) (nth 4 ppss))
+            (push (match-string-no-properties 1) satisfied)))))
+    ;; Report unsatisfied
+    (dolist (rd req-defs)
+      (unless (member (car rd) satisfied)
+        (push (flymake-make-diagnostic
+               (current-buffer)
+               (cdr rd) (+ (cdr rd) (length (car rd))
+                           (length "requirement def "))
+               :note
+               (format "Requirement `%s' has no satisfy statement" (car rd)))
+              diagnostics)))
+    diagnostics))
+
+(defun sysml2--check-unverified-requirements ()
+  "Check for requirement defs that have no matching verify statement.
+Returns a list of Flymake diagnostics at :note level."
+  (let ((req-defs nil)
+        (verified nil)
+        (diagnostics nil)
+        (req-def-re (concat "\\brequirement\\s-+def\\s-+"
+                            "\\(" sysml2--identifier-regexp "\\)"))
+        (verify-re (concat "\\bverify\\s-+\\(?:requirement\\s-+\\)?"
+                           "\\(" sysml2--identifier-regexp "\\)")))
+    ;; Collect requirement def names and positions
+    (save-excursion
+      (goto-char (point-min))
+      (while (re-search-forward req-def-re nil t)
+        (let ((ppss (syntax-ppss (match-beginning 0))))
+          (unless (or (nth 3 ppss) (nth 4 ppss))
+            (push (cons (match-string-no-properties 1)
+                        (match-beginning 0))
+                  req-defs)))))
+    ;; Collect verified requirement names
+    (save-excursion
+      (goto-char (point-min))
+      (while (re-search-forward verify-re nil t)
+        (let ((ppss (syntax-ppss (match-beginning 0))))
+          (unless (or (nth 3 ppss) (nth 4 ppss))
+            (push (match-string-no-properties 1) verified)))))
+    ;; Report unverified
+    (dolist (rd req-defs)
+      (unless (member (car rd) verified)
+        (push (flymake-make-diagnostic
+               (current-buffer)
+               (cdr rd) (+ (cdr rd) (length (car rd))
+                           (length "requirement def "))
+               :note
+               (format "Requirement `%s' has no verify statement" (car rd)))
+              diagnostics)))
+    diagnostics))
+
+(defun sysml2--check-unused-definitions ()
+  "Check for definitions that are never referenced elsewhere in the buffer.
+Returns a list of Flymake diagnostics at :note level.
+Skips package declarations."
+  (let ((defs nil)
+        (diagnostics nil)
+        (def-re (concat "\\b\\(?:part\\|action\\|state\\|port\\|connection"
+                        "\\|attribute\\|item\\|requirement\\|constraint"
+                        "\\|view\\|viewpoint\\|rendering\\|concern"
+                        "\\|allocation\\|interface\\|enum\\|enumeration"
+                        "\\|occurrence\\|metadata\\|calc\\|flow"
+                        "\\|analysis\\|verification"
+                        "\\|use case\\|case"
+                        "\\|assoc\\|assoc struct\\|behavior\\|class"
+                        "\\|classifier\\|connector\\|datatype\\|expr"
+                        "\\|feature\\|function\\|interaction\\|metaclass"
+                        "\\|predicate\\|step\\|struct\\|type"
+                        "\\)\\s-+def\\s-+"
+                        "\\(" sysml2--identifier-regexp "\\)")))
+    ;; Collect all definitions (name, position)
+    (save-excursion
+      (goto-char (point-min))
+      (while (re-search-forward def-re nil t)
+        (let ((ppss (syntax-ppss (match-beginning 0))))
+          (unless (or (nth 3 ppss) (nth 4 ppss))
+            (push (cons (match-string-no-properties 1)
+                        (match-beginning 0))
+                  defs)))))
+    ;; Check each definition for references
+    (dolist (def defs)
+      (let* ((name (car def))
+             (name-re (concat "\\b" (regexp-quote name) "\\b"))
+             (count 0))
+        (save-excursion
+          (goto-char (point-min))
+          (while (re-search-forward name-re nil t)
+            (let ((ppss (syntax-ppss (match-beginning 0))))
+              (unless (or (nth 3 ppss) (nth 4 ppss))
+                (setq count (1+ count))))))
+        ;; If only appears once (its own declaration), it's unused
+        (when (<= count 1)
+          (push (flymake-make-diagnostic
+                 (current-buffer)
+                 (cdr def) (+ (cdr def) (length name))
+                 :note
+                 (format "Definition `%s' is never referenced" name))
+                diagnostics))))
+    diagnostics))
+
 ;; --- Flymake backend ---
 
 (defun sysml2--flymake-backend (report-fn &rest _args)
@@ -227,7 +354,10 @@ indicating the expected node type."
 Calls REPORT-FN with collected diagnostics from all checks."
   (let ((diagnostics (append (sysml2--check-unmatched-delimiters)
                              (sysml2--check-unknown-keywords)
-                             (sysml2--check-missing-semicolons))))
+                             (sysml2--check-missing-semicolons)
+                             (sysml2--check-unsatisfied-requirements)
+                             (sysml2--check-unverified-requirements)
+                             (sysml2--check-unused-definitions))))
     (funcall report-fn diagnostics)))
 
 ;; --- Setup ---

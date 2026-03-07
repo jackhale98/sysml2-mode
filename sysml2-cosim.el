@@ -33,11 +33,7 @@
 (require 'sysml2-lang)
 (require 'sysml2-fmi)
 
-;; Forward declarations for plantuml extractors
-(declare-function sysml2--puml-extract-connections "sysml2-plantuml")
-(declare-function sysml2--puml-extract-part-usages "sysml2-plantuml")
-(declare-function sysml2--puml-extract-requirements "sysml2-plantuml")
-(declare-function sysml2--puml-extract-satisfactions "sysml2-plantuml")
+(require 'sysml2-model)
 
 ;; --- SSP Generation ---
 
@@ -48,8 +44,8 @@ Components are plists with `:name' and `:type'.
 Connections are plists with `:name', `:source', `:target',
 `:start-element', `:start-connector', `:end-element', `:end-connector'."
   (with-current-buffer (or buffer (current-buffer))
-    (let ((parts (sysml2--puml-extract-part-usages))
-          (conns (sysml2--puml-extract-connections))
+    (let ((parts (sysml2--model-extract-part-usages))
+          (conns (sysml2--model-extract-connections))
           (components nil)
           (connections nil))
       ;; Convert part usages to components
@@ -471,7 +467,7 @@ Interactive: prompts for CSV file and uses current buffer."
          (headers (plist-get data :headers))
          (rows (plist-get data :rows))
          (reqs (with-current-buffer buf
-                 (sysml2--puml-extract-requirements)))
+                 (sysml2--model-extract-requirements)))
          (verification nil))
     (dolist (req reqs)
       (let* ((req-name (plist-get req :name))

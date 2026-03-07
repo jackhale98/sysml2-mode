@@ -35,20 +35,7 @@
 (require 'sysml2-lang)
 (require 'sysml2-vars)
 
-;; Forward declarations for plantuml extractors
-(declare-function sysml2--puml-extract-part-defs "sysml2-plantuml")
-(declare-function sysml2--puml-extract-typed-defs "sysml2-plantuml")
-(declare-function sysml2--puml-extract-enum-defs "sysml2-plantuml")
-(declare-function sysml2--puml-extract-port-usages "sysml2-plantuml")
-(declare-function sysml2--puml-extract-connections "sysml2-plantuml")
-(declare-function sysml2--puml-extract-requirements "sysml2-plantuml")
-(declare-function sysml2--puml-extract-requirement-usages "sysml2-plantuml")
-(declare-function sysml2--puml-extract-states "sysml2-plantuml")
-(declare-function sysml2--puml-extract-transitions "sysml2-plantuml")
-(declare-function sysml2--puml-extract-actions "sysml2-plantuml")
-(declare-function sysml2--puml-extract-successions "sysml2-plantuml")
-(declare-function sysml2--puml-extract-satisfactions "sysml2-plantuml")
-(declare-function sysml2--puml-find-def-bounds "sysml2-plantuml")
+(require 'sysml2-model)
 
 ;; ---------------------------------------------------------------------------
 ;; Helper: comment/string check
@@ -522,9 +509,8 @@ satisfy and verify relationships, and coverage status.  The buffer uses
 
 (defun sysml2--report-md-part-decomp (source-buf)
   "Render the Part Decomposition / BOM section from SOURCE-BUF."
-  (require 'sysml2-plantuml)
   (with-current-buffer source-buf
-    (let ((part-defs (sysml2--puml-extract-part-defs))
+    (let ((part-defs (sysml2--model-extract-part-defs))
           (lines nil))
       (push (sysml2--report-md-heading 2 "Part Decomposition (BOM)") lines)
       (if (null part-defs)
@@ -559,18 +545,17 @@ satisfy and verify relationships, and coverage status.  The buffer uses
 
 (defun sysml2--report-md-interfaces (source-buf)
   "Render the Interface Table section from SOURCE-BUF."
-  (require 'sysml2-plantuml)
   (with-current-buffer source-buf
-    (let ((part-defs (sysml2--puml-extract-part-defs))
+    (let ((part-defs (sysml2--model-extract-part-defs))
           (lines nil)
           (found nil))
       (push (sysml2--report-md-heading 2 "Interface Table") lines)
       ;; For each part def, extract its ports
       (dolist (def part-defs)
         (let* ((name (plist-get def :name))
-               (bounds (sysml2--puml-find-def-bounds "part def" name))
+               (bounds (sysml2--model-find-def-bounds "part def" name))
                (ports (when bounds
-                        (sysml2--puml-extract-port-usages (car bounds) (cdr bounds)))))
+                        (sysml2--model-extract-port-usages (car bounds) (cdr bounds)))))
           (when ports
             (setq found t)
             (push (format "### %s\n\n" name) lines)
@@ -584,7 +569,7 @@ satisfy and verify relationships, and coverage status.  The buffer uses
                             (or (plist-get p :direction) "—")) lines))
             (push "\n" lines))))
       ;; Also check port defs at top level
-      (let ((port-defs (sysml2--puml-extract-typed-defs "port def" "port")))
+      (let ((port-defs (sysml2--model-extract-typed-defs "port def" "port")))
         (when port-defs
           (setq found t)
           (push "### Port Definitions\n\n" lines)
@@ -602,9 +587,8 @@ satisfy and verify relationships, and coverage status.  The buffer uses
 
 (defun sysml2--report-md-connections (source-buf)
   "Render the Connection Matrix section from SOURCE-BUF."
-  (require 'sysml2-plantuml)
   (with-current-buffer source-buf
-    (let ((connections (sysml2--puml-extract-connections))
+    (let ((connections (sysml2--model-extract-connections))
           (lines nil))
       (push (sysml2--report-md-heading 2 "Connection Matrix") lines)
       (if (null connections)
@@ -621,10 +605,9 @@ satisfy and verify relationships, and coverage status.  The buffer uses
 
 (defun sysml2--report-md-requirements (source-buf)
   "Render the Requirements Specification section from SOURCE-BUF."
-  (require 'sysml2-plantuml)
   (with-current-buffer source-buf
-    (let ((req-defs (sysml2--puml-extract-requirements))
-          (req-usages (sysml2--puml-extract-requirement-usages))
+    (let ((req-defs (sysml2--model-extract-requirements))
+          (req-usages (sysml2--model-extract-requirement-usages))
           (lines nil))
       (push (sysml2--report-md-heading 2 "Requirements Specification") lines)
       (if (and (null req-defs) (null req-usages))
@@ -707,7 +690,6 @@ satisfy and verify relationships, and coverage status.  The buffer uses
 
 (defun sysml2--report-md-states (source-buf)
   "Render the State Machines section from SOURCE-BUF."
-  (require 'sysml2-plantuml)
   (with-current-buffer source-buf
     (let ((definitions (sysml2--report-collect-definitions))
           (lines nil)
@@ -716,11 +698,11 @@ satisfy and verify relationships, and coverage status.  The buffer uses
       ;; Find state defs and extract their states/transitions
       (let ((state-def-names (cdr (assoc "state def" definitions))))
         (dolist (sname state-def-names)
-          (let ((bounds (sysml2--puml-find-def-bounds "state def" sname)))
+          (let ((bounds (sysml2--model-find-def-bounds "state def" sname)))
             (when bounds
               (setq found t)
-              (let ((states (sysml2--puml-extract-states (car bounds) (cdr bounds)))
-                    (transitions (sysml2--puml-extract-transitions (car bounds) (cdr bounds))))
+              (let ((states (sysml2--model-extract-states (car bounds) (cdr bounds)))
+                    (transitions (sysml2--model-extract-transitions (car bounds) (cdr bounds))))
                 (push (format "### %s\n\n" sname) lines)
                 (when states
                   (push "**States:**\n\n" lines)
@@ -763,7 +745,6 @@ making it suitable for successions nested inside action def bodies."
 
 (defun sysml2--report-md-actions (source-buf)
   "Render the Action Flows section from SOURCE-BUF."
-  (require 'sysml2-plantuml)
   (with-current-buffer source-buf
     (let ((definitions (sysml2--report-collect-definitions))
           (lines nil)
@@ -771,10 +752,10 @@ making it suitable for successions nested inside action def bodies."
       (push (sysml2--report-md-heading 2 "Action Flows") lines)
       (let ((action-def-names (cdr (assoc "action def" definitions))))
         (dolist (aname action-def-names)
-          (let ((bounds (sysml2--puml-find-def-bounds "action def" aname)))
+          (let ((bounds (sysml2--model-find-def-bounds "action def" aname)))
             (when bounds
               (setq found t)
-              (let ((actions (sysml2--puml-extract-actions (car bounds) (cdr bounds)))
+              (let ((actions (sysml2--model-extract-actions (car bounds) (cdr bounds)))
                     (successions (sysml2--report-extract-successions (car bounds) (cdr bounds))))
                 (push (format "### %s\n\n" aname) lines)
                 (when actions
@@ -798,9 +779,8 @@ making it suitable for successions nested inside action def bodies."
 
 (defun sysml2--report-md-enumerations (source-buf)
   "Render the Enumerations section from SOURCE-BUF."
-  (require 'sysml2-plantuml)
   (with-current-buffer source-buf
-    (let ((enum-defs (sysml2--puml-extract-enum-defs))
+    (let ((enum-defs (sysml2--model-extract-enum-defs))
           (lines nil))
       (push (sysml2--report-md-heading 2 "Enumerations") lines)
       (if (null enum-defs)
@@ -808,7 +788,7 @@ making it suitable for successions nested inside action def bodies."
         (dolist (def enum-defs)
           (let ((name (plist-get def :name))
                 (super (plist-get def :super))
-                (literals (plist-get def :attributes)))
+                (literals (plist-get def :literals)))
             (push (format "### %s\n\n" name) lines)
             (when super
               (push (format "- **Specializes:** %s\n" super) lines))
