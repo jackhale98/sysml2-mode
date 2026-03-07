@@ -4,13 +4,10 @@
 [
   (package_body)
   (definition_body)
-  (usage_body)
   (enumeration_body)
   (state_body)
-  (action_body)
   (requirement_body)
   (constraint_body)
-  (block)
 ] @indent
 
 ; Dedent closing braces

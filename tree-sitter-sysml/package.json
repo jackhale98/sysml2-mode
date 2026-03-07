@@ -4,6 +4,7 @@
   "description": "Tree-sitter grammar for SysML v2 / KerML textual notation",
   "license": "GPL-3.0-or-later",
   "main": "bindings/node",
+  "types": "bindings/node",
   "keywords": [
     "tree-sitter",
     "sysml",
@@ -23,15 +24,27 @@
     "src/**"
   ],
   "dependencies": {
-    "nan": "^2.18.0"
+    "node-addon-api": "^7.1.0",
+    "node-gyp-build": "^4.8.0"
+  },
+  "peerDependencies": {
+    "tree-sitter": "^0.21.0"
+  },
+  "peerDependenciesMeta": {
+    "tree_sitter": {
+      "optional": true
+    }
   },
   "devDependencies": {
-    "tree-sitter-cli": "^0.22.0"
+    "prebuildify": "^6.0.0",
+    "tree-sitter-cli": "^0.26.6"
   },
   "scripts": {
     "generate": "tree-sitter generate",
     "parse": "tree-sitter parse",
-    "test": "tree-sitter test"
+    "test": "tree-sitter test",
+    "install": "node-gyp-build",
+    "prebuildify": "prebuildify --napi --strip"
   },
   "tree-sitter": [
     {

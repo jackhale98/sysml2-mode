@@ -1,18 +1,33 @@
 /// <reference types="tree-sitter-cli/dsl" />
 // grammar.js — Tree-sitter grammar for SysML v2 / KerML textual notation
 //
-// Reference: OMG SysML v2 specification and
-// https://github.com/Systems-Modeling/SysML-v2-Pilot-Implementation/blob/master/org.omg.sysml.xtext/src/org/omg/sysml/xtext/SysML.xtext
+// Architecture: A single `_declaration` wrapper handles the shared
+// repeat($._prefix_metadata) + repeat($._modifier) prefix for ALL definitions
+// and usages. This prevents LR state explosion from 50+ rules sharing the
+// same prefix. Each specific definition/usage rule starts at its unique keyword.
 
 module.exports = grammar({
   name: "sysml",
 
   extras: ($) => [/\s/, $.line_comment, $.block_comment],
 
-  word: ($) => $.identifier,
+  word: ($) => $._word,
 
   conflicts: ($) => [
-    [$.qualified_name, $.identifier],
+    [$.qualified_name, $._expression],
+    [$.flow_usage, $.flow_statement],
+    [$.metadata_annotation, $.metadata_annotation_list],
+    [$.metadata_annotation],
+    [$.redefinition_statement, $.redefinition],
+    [$.satisfy_statement],
+    [$._expression, $.qualified_name, $.feature_chain],
+    [$._expression, $.feature_chain],
+    [$._feature_ref, $.feature_chain],
+    [$.redefinition_statement, $._expression, $.qualified_name],
+    [$.standalone_redefines, $.redefines_keyword],
+    [$.feature_usage, $.redefinition_statement, $._expression, $.qualified_name],
+    [$.feature_usage, $._expression, $.qualified_name],
+    [$.then_succession, $.state_body],
   ],
 
   rules: {
@@ -21,13 +36,29 @@ module.exports = grammar({
     _element: ($) =>
       choice(
         $.package_declaration,
-        $._definition,
-        $._usage,
+        $._declaration,
+        $.feature_usage,
         $.import_statement,
         $.alias_declaration,
         $.comment_element,
         $.doc_comment,
         $.satisfy_statement,
+        $.filter_statement,
+        $.metadata_annotation,
+        $._statement,
+      ),
+
+    // =================================================================
+    // Declaration wrapper — the key optimization.
+    // ONE rule handles the modifier prefix, then dispatches to the
+    // specific definition or usage type based on the keyword.
+    // =================================================================
+
+    _declaration: ($) =>
+      seq(
+        repeat($._prefix_metadata),
+        repeat($._modifier),
+        choice($._definition_type, $._usage_type),
       ),
 
     // --- Package ---
@@ -50,8 +81,9 @@ module.exports = grammar({
         "import",
         optional("all"),
         $.qualified_name,
-        optional(seq("::", "*")),
-        ";",
+        optional(token(seq("::", "*"))),
+        optional(token(seq("::", "**"))),
+        choice($._body, ";"),
       ),
 
     // --- Alias ---
@@ -73,14 +105,11 @@ module.exports = grammar({
         "comment",
         optional(field("name", $.identifier)),
         optional(seq("about", $.qualified_name)),
-        $.comment_body,
+        $.block_comment,
       ),
 
     doc_comment: ($) =>
-      seq("doc", $.comment_body),
-
-    comment_body: ($) =>
-      seq("/*", /[^*]*\*+([^/*][^*]*\*+)*/, "/"),
+      seq("doc", $.block_comment),
 
     // --- Satisfy ---
 
@@ -88,21 +117,24 @@ module.exports = grammar({
       seq(
         "satisfy",
         optional("requirement"),
-        $.qualified_name,
-        "by",
-        $.qualified_name,
-        ";",
+        optional($._feature_ref),
+        optional(seq("by", $._feature_ref)),
+        optional($.requirement_body),
+        optional(";"),
       ),
 
-    // --- Definitions ---
+    // =================================================================
+    // Definitions — no prefix (provided by _declaration wrapper)
+    // =================================================================
 
-    _definition: ($) =>
+    _definition_type: ($) =>
       choice(
         $.part_definition,
         $.action_definition,
         $.state_definition,
         $.port_definition,
         $.connection_definition,
+        $.flow_definition,
         $.attribute_definition,
         $.item_definition,
         $.requirement_definition,
@@ -117,234 +149,359 @@ module.exports = grammar({
         $.allocation_definition,
         $.interface_definition,
         $.enumeration_definition,
+        $.individual_definition,
         $.occurrence_definition,
         $.metadata_definition,
         $.calc_definition,
+        $.case_definition,
+        $.class_definition,
+        $.struct_definition,
+        $.assoc_definition,
+        $.behavior_definition,
+        $.datatype_definition,
+        $.feature_definition,
+        $.function_definition,
+        $.predicate_definition,
+        $.connector_definition,
+        $.interaction_definition,
+        $.type_definition,
+        $.namespace_definition,
       ),
 
-    // Each definition: optional modifiers + keyword(s) + "def" + name + optional specialization + body
     part_definition: ($) =>
       seq(
-        repeat($._modifier),
-        "part",
-        "def",
+        "part", "def",
+        optional($.short_name),
         field("name", $.identifier),
-        optional($.specialization),
-        $.definition_body,
+        optional($._type_relationships),
+        choice($.definition_body, ";"),
       ),
 
     action_definition: ($) =>
       seq(
-        repeat($._modifier),
-        "action",
-        "def",
+        "action", "def",
+        optional($.short_name),
         field("name", $.identifier),
-        optional($.specialization),
-        $.definition_body,
+        optional($._type_relationships),
+        choice($.definition_body, ";"),
       ),
 
     state_definition: ($) =>
       seq(
-        repeat($._modifier),
-        "state",
-        "def",
+        "state", "def",
+        optional($.short_name),
         field("name", $.identifier),
-        optional($.specialization),
-        $.definition_body,
+        optional($._type_relationships),
+        choice($.state_body, ";"),
       ),
 
     port_definition: ($) =>
       seq(
-        repeat($._modifier),
-        "port",
-        "def",
+        "port", "def",
+        optional($.short_name),
         field("name", $.identifier),
-        optional($.specialization),
-        $.definition_body,
+        optional($._type_relationships),
+        choice($.definition_body, ";"),
       ),
 
     connection_definition: ($) =>
       seq(
-        repeat($._modifier),
         optional("flow"),
-        "connection",
-        "def",
+        "connection", "def",
+        optional($.short_name),
         field("name", $.identifier),
-        optional($.specialization),
-        $.definition_body,
+        optional($._type_relationships),
+        choice($.definition_body, ";"),
+      ),
+
+    flow_definition: ($) =>
+      seq(
+        "flow", "def",
+        optional($.short_name),
+        field("name", $.identifier),
+        optional($._type_relationships),
+        choice($.definition_body, ";"),
       ),
 
     attribute_definition: ($) =>
       seq(
-        repeat($._modifier),
-        "attribute",
-        "def",
+        "attribute", "def",
+        optional($.short_name),
         field("name", $.identifier),
-        optional($.specialization),
-        choice($.definition_body, seq(";"))
+        optional($._type_relationships),
+        choice($.definition_body, ";"),
       ),
 
     item_definition: ($) =>
       seq(
-        repeat($._modifier),
-        "item",
-        "def",
+        "item", "def",
+        optional($.short_name),
         field("name", $.identifier),
-        optional($.specialization),
-        choice($.definition_body, seq(";"))
+        optional($._type_relationships),
+        choice($.definition_body, ";"),
       ),
 
     requirement_definition: ($) =>
       seq(
-        repeat($._modifier),
-        "requirement",
-        "def",
+        "requirement", "def",
+        optional($.short_name),
         field("name", $.identifier),
-        optional($.specialization),
-        $.definition_body,
+        optional($._type_relationships),
+        choice($.definition_body, ";"),
       ),
 
     constraint_definition: ($) =>
       seq(
-        repeat($._modifier),
-        "constraint",
-        "def",
+        "constraint", "def",
+        optional($.short_name),
         field("name", $.identifier),
-        optional($.specialization),
-        $.definition_body,
+        optional($._type_relationships),
+        choice($.definition_body, ";"),
       ),
 
     view_definition: ($) =>
       seq(
-        repeat($._modifier),
-        "view",
-        "def",
+        "view", "def",
+        optional($.short_name),
         field("name", $.identifier),
-        optional($.specialization),
-        $.definition_body,
+        optional($._type_relationships),
+        choice($.definition_body, ";"),
       ),
 
     viewpoint_definition: ($) =>
       seq(
-        repeat($._modifier),
-        "viewpoint",
-        "def",
+        "viewpoint", "def",
+        optional($.short_name),
         field("name", $.identifier),
-        optional($.specialization),
-        $.definition_body,
+        optional($._type_relationships),
+        choice($.definition_body, ";"),
       ),
 
     rendering_definition: ($) =>
       seq(
-        repeat($._modifier),
-        "rendering",
-        "def",
+        "rendering", "def",
+        optional($.short_name),
         field("name", $.identifier),
-        optional($.specialization),
-        $.definition_body,
+        optional($._type_relationships),
+        choice($.definition_body, ";"),
       ),
 
     concern_definition: ($) =>
       seq(
-        repeat($._modifier),
-        "concern",
-        "def",
+        "concern", "def",
+        optional($.short_name),
         field("name", $.identifier),
-        optional($.specialization),
-        $.definition_body,
+        optional($._type_relationships),
+        choice($.definition_body, ";"),
       ),
 
     use_case_definition: ($) =>
       seq(
-        repeat($._modifier),
-        "use",
-        "case",
-        "def",
+        "use", "case", "def",
+        optional($.short_name),
         field("name", $.identifier),
-        optional($.specialization),
-        $.definition_body,
+        optional($._type_relationships),
+        choice($.definition_body, ";"),
       ),
 
     analysis_case_definition: ($) =>
       seq(
-        repeat($._modifier),
-        "analysis",
-        "case",
-        "def",
+        "analysis", optional("case"), "def",
+        optional($.short_name),
         field("name", $.identifier),
-        optional($.specialization),
-        $.definition_body,
+        optional($._type_relationships),
+        choice($.definition_body, ";"),
       ),
 
     verification_case_definition: ($) =>
       seq(
-        repeat($._modifier),
-        "verification",
-        "case",
-        "def",
+        "verification", optional("case"), "def",
+        optional($.short_name),
         field("name", $.identifier),
-        optional($.specialization),
-        $.definition_body,
+        optional($._type_relationships),
+        choice($.definition_body, ";"),
       ),
 
     allocation_definition: ($) =>
       seq(
-        repeat($._modifier),
-        "allocation",
-        "def",
+        "allocation", "def",
+        optional($.short_name),
         field("name", $.identifier),
-        optional($.specialization),
-        $.definition_body,
+        optional($._type_relationships),
+        choice($.definition_body, ";"),
       ),
 
     interface_definition: ($) =>
       seq(
-        repeat($._modifier),
-        "interface",
-        "def",
+        "interface", "def",
+        optional($.short_name),
         field("name", $.identifier),
-        optional($.specialization),
-        $.definition_body,
+        optional($._type_relationships),
+        choice($.definition_body, ";"),
       ),
 
     enumeration_definition: ($) =>
       seq(
-        repeat($._modifier),
-        "enumeration",
-        "def",
+        choice("enum", "enumeration"), "def",
+        optional($.short_name),
         field("name", $.identifier),
-        optional($.specialization),
+        optional($._type_relationships),
         $.enumeration_body,
+      ),
+
+    individual_definition: ($) =>
+      seq(
+        "individual", "def",
+        optional($.short_name),
+        field("name", $.identifier),
+        optional($._type_relationships),
+        choice($.definition_body, ";"),
       ),
 
     occurrence_definition: ($) =>
       seq(
-        repeat($._modifier),
-        "occurrence",
-        "def",
+        "occurrence", "def",
+        optional($.short_name),
         field("name", $.identifier),
-        optional($.specialization),
-        $.definition_body,
+        optional($._type_relationships),
+        choice($.definition_body, ";"),
       ),
 
     metadata_definition: ($) =>
       seq(
-        repeat($._modifier),
-        "metadata",
-        "def",
+        "metadata", "def",
+        optional($.short_name),
         field("name", $.identifier),
-        optional($.specialization),
-        $.definition_body,
+        optional($._type_relationships),
+        choice($.definition_body, ";"),
       ),
 
     calc_definition: ($) =>
       seq(
-        repeat($._modifier),
-        "calc",
-        "def",
+        "calc", "def",
+        optional($.short_name),
         field("name", $.identifier),
-        optional($.specialization),
-        $.definition_body,
+        optional($._type_relationships),
+        choice($.definition_body, ";"),
+      ),
+
+    // --- KerML definitions ---
+
+    case_definition: ($) =>
+      seq(
+        "case", "def",
+        optional($.short_name),
+        field("name", $.identifier),
+        optional($._type_relationships),
+        choice($.definition_body, ";"),
+      ),
+
+    class_definition: ($) =>
+      seq(
+        "class", "def",
+        optional($.short_name),
+        field("name", $.identifier),
+        optional($._type_relationships),
+        choice($.definition_body, ";"),
+      ),
+
+    struct_definition: ($) =>
+      seq(
+        "struct", "def",
+        optional($.short_name),
+        field("name", $.identifier),
+        optional($._type_relationships),
+        choice($.definition_body, ";"),
+      ),
+
+    assoc_definition: ($) =>
+      seq(
+        "assoc", optional("struct"), "def",
+        optional($.short_name),
+        field("name", $.identifier),
+        optional($._type_relationships),
+        choice($.definition_body, ";"),
+      ),
+
+    behavior_definition: ($) =>
+      seq(
+        "behavior", "def",
+        optional($.short_name),
+        field("name", $.identifier),
+        optional($._type_relationships),
+        choice($.definition_body, ";"),
+      ),
+
+    datatype_definition: ($) =>
+      seq(
+        "datatype", "def",
+        optional($.short_name),
+        field("name", $.identifier),
+        optional($._type_relationships),
+        choice($.definition_body, ";"),
+      ),
+
+    feature_definition: ($) =>
+      seq(
+        "feature", "def",
+        optional($.short_name),
+        field("name", $.identifier),
+        optional($._type_relationships),
+        choice($.definition_body, ";"),
+      ),
+
+    function_definition: ($) =>
+      seq(
+        "function", "def",
+        optional($.short_name),
+        field("name", $.identifier),
+        optional($._type_relationships),
+        choice($.definition_body, ";"),
+      ),
+
+    predicate_definition: ($) =>
+      seq(
+        "predicate", "def",
+        optional($.short_name),
+        field("name", $.identifier),
+        optional($._type_relationships),
+        choice($.definition_body, ";"),
+      ),
+
+    connector_definition: ($) =>
+      seq(
+        "connector", "def",
+        optional($.short_name),
+        field("name", $.identifier),
+        optional($._type_relationships),
+        choice($.definition_body, ";"),
+      ),
+
+    interaction_definition: ($) =>
+      seq(
+        "interaction", "def",
+        optional($.short_name),
+        field("name", $.identifier),
+        optional($._type_relationships),
+        choice($.definition_body, ";"),
+      ),
+
+    type_definition: ($) =>
+      seq(
+        "type", "def",
+        optional($.short_name),
+        field("name", $.identifier),
+        optional($._type_relationships),
+        choice($.definition_body, ";"),
+      ),
+
+    namespace_definition: ($) =>
+      seq(
+        "namespace", "def",
+        optional($.short_name),
+        field("name", $.identifier),
+        optional($._type_relationships),
+        choice($.definition_body, ";"),
       ),
 
     // --- Definition body ---
@@ -355,11 +512,20 @@ module.exports = grammar({
     enumeration_body: ($) =>
       seq("{", repeat(choice($.enum_member, $._body_element)), "}"),
 
-    enum_member: ($) => seq("enum", field("name", $.identifier), ";"),
+    enum_member: ($) =>
+      prec(1, seq(
+        optional("enum"),
+        optional(field("name", $.identifier)),
+        optional($._type_relationships),
+        optional($.value_assignment),
+        ";",
+      )),
 
-    // --- Usages ---
+    // =================================================================
+    // Usages — no prefix (provided by _declaration wrapper)
+    // =================================================================
 
-    _usage: ($) =>
+    _usage_type: ($) =>
       choice(
         $.part_usage,
         $.attribute_usage,
@@ -368,164 +534,549 @@ module.exports = grammar({
         $.state_usage,
         $.item_usage,
         $.connection_usage,
+        $.interface_usage,
         $.constraint_usage,
         $.requirement_usage,
         $.ref_usage,
+        $.event_usage,
+        $.occurrence_usage,
+        $.allocation_usage,
+        $.flow_usage,
+        $.snapshot_usage,
+        $.timeslice_usage,
+        $.calc_usage,
+        $.view_usage,
+        $.viewpoint_usage,
+        $.rendering_usage,
+        $.concern_usage,
+        $.use_case_usage,
+        $.analysis_usage,
+        $.verification_usage,
+        $.metadata_usage,
+        // Behavioral (unique keywords, no modifier prefix needed)
         $.succession_statement,
         $.perform_statement,
         $.exhibit_statement,
         $.include_statement,
         $.transition_statement,
         $.end_feature,
+        $.then_succession,
+        // Control flow
+        $.if_action,
+        $.while_action,
+        $.for_action,
+        $.assign_action,
+        $.send_action,
+        $.merge_node,
+        $.decide_node,
+        $.fork_node,
+        $.join_node,
       ),
 
     part_usage: ($) =>
       seq(
-        repeat($._modifier),
         "part",
-        field("name", $.identifier),
-        optional($.typed_by),
+        optional(field("name", $.identifier)),
         optional($.multiplicity),
-        choice($.usage_body, ";"),
+        optional($._type_relationships),
+        optional($.multiplicity),
+        optional($.value_assignment),
+        optional($.metadata_annotation_list),
+        choice($._body, ";"),
       ),
 
     attribute_usage: ($) =>
       seq(
-        repeat($._modifier),
         "attribute",
-        field("name", $.identifier),
-        optional($.typed_by),
+        optional(field("name", $.identifier)),
+        optional($.multiplicity),
+        optional($._type_relationships),
+        optional($.multiplicity),
         optional($.value_assignment),
-        choice($.usage_body, ";"),
+        optional($.metadata_annotation_list),
+        choice($._body, ";"),
       ),
 
     port_usage: ($) =>
       seq(
-        repeat($._modifier),
         "port",
-        field("name", $.identifier),
-        optional(seq(":", optional("~"), field("type", $.qualified_name))),
-        choice($.usage_body, ";"),
+        optional(field("name", $.identifier)),
+        optional($.multiplicity),
+        optional($._type_relationships),
+        optional($.multiplicity),
+        optional($.value_assignment),
+        optional($.metadata_annotation_list),
+        choice($._body, ";"),
       ),
 
     action_usage: ($) =>
       seq(
-        repeat($._modifier),
         "action",
-        field("name", $.identifier),
-        optional($.typed_by),
-        choice($.action_body, ";"),
+        optional(field("name", $.identifier)),
+        optional($.multiplicity),
+        optional($._type_relationships),
+        optional($.multiplicity),
+        optional($.value_assignment),
+        optional(choice(
+          seq("send", $._expression, optional(seq("via", $._feature_ref))),
+          seq("accept", optional(field("accept_name", $.identifier)),
+              optional($._type_relationships),
+              optional(seq("via", $._feature_ref))),
+        )),
+        choice($._body, ";"),
       ),
 
     state_usage: ($) =>
       seq(
-        repeat($._modifier),
         "state",
-        field("name", $.identifier),
-        optional($.typed_by),
+        optional(field("name", $.identifier)),
+        optional($.multiplicity),
+        optional($._type_relationships),
+        optional($.multiplicity),
+        optional("parallel"),
         choice($.state_body, ";"),
       ),
 
     item_usage: ($) =>
       seq(
-        repeat($._modifier),
+        optional("ref"),
         "item",
-        field("name", $.identifier),
-        optional($.typed_by),
-        choice($.usage_body, ";"),
+        optional(field("name", $.identifier)),
+        optional($.multiplicity),
+        optional($._type_relationships),
+        optional($.multiplicity),
+        optional($.value_assignment),
+        choice($._body, ";"),
       ),
 
     connection_usage: ($) =>
       seq(
-        repeat($._modifier),
         optional("flow"),
         "connection",
-        field("name", $.identifier),
-        optional($.typed_by),
+        optional(field("name", $.identifier)),
+        optional($._type_relationships),
         optional($.connect_clause),
-        choice($.usage_body, ";"),
+        choice($._body, ";"),
+      ),
+
+    interface_usage: ($) =>
+      seq(
+        "interface",
+        optional(field("name", $.identifier)),
+        optional($._type_relationships),
+        optional($.multiplicity),
+        optional($.connect_clause),
+        choice($._body, ";"),
       ),
 
     constraint_usage: ($) =>
       seq(
-        repeat($._modifier),
-        optional("require"),
+        optional(choice("require", "assert", "assume")),
         "constraint",
         optional(field("name", $.identifier)),
-        optional($.typed_by),
+        optional($._type_relationships),
         choice($.constraint_body, ";"),
       ),
 
     requirement_usage: ($) =>
       seq(
-        repeat($._modifier),
         "requirement",
+        optional($.short_name),
         optional(field("name", $.identifier)),
-        optional($.typed_by),
+        optional($._type_relationships),
         choice($.requirement_body, ";"),
       ),
 
     ref_usage: ($) =>
       seq(
         "ref",
-        field("name", $.identifier),
-        optional($.typed_by),
-        ";",
+        optional(field("name", $.identifier)),
+        optional($._type_relationships),
+        optional($.multiplicity),
+        optional($.value_assignment),
+        choice($._body, ";"),
+      ),
+
+    event_usage: ($) =>
+      seq(
+        "event",
+        optional("occurrence"),
+        optional($._feature_ref),
+        optional($._type_relationships),
+        optional($.multiplicity),
+        optional($.value_assignment),
+        choice($._body, ";"),
+      ),
+
+    occurrence_usage: ($) =>
+      seq(
+        "occurrence",
+        optional(field("name", $.identifier)),
+        optional($._type_relationships),
+        optional($.multiplicity),
+        optional($.value_assignment),
+        choice($._body, ";"),
+      ),
+
+    allocation_usage: ($) =>
+      seq(
+        "allocation",
+        optional(field("name", $.identifier)),
+        optional($._type_relationships),
+        optional($.allocate_clause),
+        choice($._body, ";"),
+      ),
+
+    flow_usage: ($) =>
+      seq(
+        "flow",
+        optional(field("name", $.identifier)),
+        optional(seq("of", $._feature_ref)),
+        optional(choice(
+          seq("from", $._feature_ref, "to", $._feature_ref),
+          seq($._feature_ref, "to", $._feature_ref),
+        )),
+        choice($._body, ";"),
+      ),
+
+    snapshot_usage: ($) =>
+      seq(
+        "snapshot",
+        optional(field("name", $.identifier)),
+        optional($._type_relationships),
+        optional($.multiplicity),
+        optional($.value_assignment),
+        choice($._body, ";"),
+      ),
+
+    timeslice_usage: ($) =>
+      seq(
+        "timeslice",
+        optional(field("name", $.identifier)),
+        optional($._type_relationships),
+        optional($.multiplicity),
+        optional($.value_assignment),
+        choice($._body, ";"),
+      ),
+
+    calc_usage: ($) =>
+      seq(
+        "calc",
+        optional(field("name", $.identifier)),
+        optional($._type_relationships),
+        optional($.multiplicity),
+        optional($.value_assignment),
+        choice($._body, ";"),
+      ),
+
+    view_usage: ($) =>
+      seq(
+        "view",
+        optional(field("name", $.identifier)),
+        optional($._type_relationships),
+        optional($.multiplicity),
+        choice($._body, ";"),
+      ),
+
+    viewpoint_usage: ($) =>
+      seq(
+        "viewpoint",
+        optional(field("name", $.identifier)),
+        optional($._type_relationships),
+        optional($.multiplicity),
+        choice($._body, ";"),
+      ),
+
+    rendering_usage: ($) =>
+      seq(
+        "rendering",
+        optional(field("name", $.identifier)),
+        optional($._type_relationships),
+        optional($.multiplicity),
+        choice($._body, ";"),
+      ),
+
+    concern_usage: ($) =>
+      seq(
+        "concern",
+        optional(field("name", $.identifier)),
+        optional($._type_relationships),
+        optional($.multiplicity),
+        choice($._body, ";"),
+      ),
+
+    use_case_usage: ($) =>
+      seq(
+        "use", "case",
+        optional(field("name", $.identifier)),
+        optional($._type_relationships),
+        optional($.multiplicity),
+        choice($._body, ";"),
+      ),
+
+    analysis_usage: ($) =>
+      seq(
+        "analysis",
+        optional(field("name", $.identifier)),
+        optional($._type_relationships),
+        optional($.multiplicity),
+        choice($._body, ";"),
+      ),
+
+    verification_usage: ($) =>
+      seq(
+        "verification",
+        optional(field("name", $.identifier)),
+        optional($._type_relationships),
+        optional($.multiplicity),
+        choice($._body, ";"),
+      ),
+
+    metadata_usage: ($) =>
+      seq(
+        "metadata",
+        optional(field("name", $.identifier)),
+        optional($._type_relationships),
+        optional($.multiplicity),
+        choice($._body, ";"),
       ),
 
     end_feature: ($) =>
       seq(
         "end",
-        field("name", $.identifier),
-        optional($.typed_by),
-        ";",
+        repeat($._prefix_metadata),
+        optional(field("name", $.identifier)),
+        optional($._type_relationships),
+        optional($.multiplicity),
+        choice($._body, ";"),
+      ),
+
+    // Implicit feature usage (modifier-driven, no keyword — stays outside _declaration)
+    feature_usage: ($) =>
+      choice(
+        // With modifiers: name and type are optional
+        seq(
+          repeat($._prefix_metadata),
+          repeat1($._modifier),
+          optional(field("name", $.identifier)),
+          optional($._type_relationships),
+          optional($.multiplicity),
+          optional($.value_assignment),
+          choice($._body, ";"),
+        ),
+        // Without modifiers: name and type are required
+        seq(
+          repeat($._prefix_metadata),
+          field("name", $.identifier),
+          $._type_relationships,
+          optional($.multiplicity),
+          optional($.value_assignment),
+          choice($._body, ";"),
+        ),
       ),
 
     // --- Behavioral ---
 
+    then_succession: ($) =>
+      seq(
+        "then",
+        optional(choice("action", "fork", "join", "merge", "decide", "event")),
+        optional($._feature_ref),
+        optional($.multiplicity),
+        optional($._type_relationships),
+        optional($.value_assignment),
+        optional(choice(
+          seq("send", $._expression, optional(seq("via", $._feature_ref))),
+          seq("accept", optional(field("accept_name", $.identifier)),
+              optional($._type_relationships),
+              optional(seq("via", $._feature_ref))),
+        )),
+        choice($._body, ";"),
+      ),
+
     succession_statement: ($) =>
-      seq("first", $.qualified_name, "then", $.qualified_name, ";"),
+      choice(
+        seq("first", $._feature_ref, "then", $._feature_ref, ";"),
+        seq("first", $._feature_ref, ";"),
+      ),
 
     perform_statement: ($) =>
-      seq("perform", $.qualified_name, ";"),
+      seq(
+        "perform",
+        optional("action"),
+        $._feature_ref,
+        optional(seq("redefines", $._feature_ref)),
+        choice($._body, ";"),
+      ),
 
     exhibit_statement: ($) =>
-      seq("exhibit", $.qualified_name, ";"),
+      seq(
+        "exhibit",
+        optional("state"),
+        $._feature_ref,
+        optional(seq("redefines", $._feature_ref)),
+        optional("parallel"),
+        choice($.state_body, ";"),
+      ),
 
     include_statement: ($) =>
       seq(
         "include",
         repeat1(choice("use", "case", "action", "state")),
         field("name", $.identifier),
-        optional($.typed_by),
-        ";",
+        optional($._type_relationships),
+        optional($.multiplicity),
+        choice($._body, ";"),
       ),
 
     transition_statement: ($) =>
       seq(
         "transition",
         optional(field("name", $.identifier)),
-        optional(seq("first", $.qualified_name)),
-        optional(seq("accept", $.qualified_name)),
-        optional(seq("guard", $._expression)),
-        optional(seq("effect", $._expression)),
-        seq("then", $.qualified_name),
+        optional(seq("first", $._feature_ref)),
+        optional($.accept_clause),
+        optional(seq("if", $._expression)),
+        optional($.do_clause),
+        seq("then", $._feature_ref),
         ";",
       ),
 
+    accept_clause: ($) =>
+      seq(
+        "accept",
+        choice(
+          seq("when", $._expression),
+          seq("at", $._feature_ref),
+          seq(
+            $._feature_ref,
+            optional($._type_relationships),
+            optional(seq("via", $._feature_ref)),
+          ),
+        ),
+      ),
+
+    do_clause: ($) =>
+      seq("do", choice(
+        seq("send", $._expression, choice("to", "via"), $._feature_ref),
+        seq($._feature_ref, choice(";", $._body)),
+        $._body,
+      )),
+
+    send_action: ($) =>
+      seq("send", $._expression, "to", $._feature_ref, ";"),
+
+    if_action: ($) =>
+      seq(
+        "if", $._expression,
+        "then", $._feature_ref,
+        optional(seq("else", $._feature_ref)),
+        ";",
+      ),
+
+    while_action: ($) =>
+      seq(
+        "while", $._expression,
+        "do", $._feature_ref,
+        ";",
+      ),
+
+    for_action: ($) =>
+      seq(
+        "for", $.identifier,
+        ":", $._feature_ref,
+        "in", $._feature_ref,
+        "do", $._feature_ref,
+        ";",
+      ),
+
+    assign_action: ($) =>
+      seq(
+        "assign", $._feature_ref,
+        ":=", $._expression,
+        ";",
+      ),
+
+    merge_node: ($) =>
+      seq("merge", field("name", $.identifier), ";"),
+
+    decide_node: ($) =>
+      seq("decide", field("name", $.identifier), ";"),
+
+    fork_node: ($) =>
+      seq("fork", field("name", $.identifier), ";"),
+
+    join_node: ($) =>
+      seq("join", field("name", $.identifier), ";"),
+
+    // --- Statements ---
+
+    _statement: ($) =>
+      seq(
+        repeat($._prefix_metadata),
+        choice(
+          $.dependency_statement,
+          $.allocate_statement,
+          $.message_statement,
+          $.flow_statement,
+        ),
+      ),
+
+    dependency_statement: ($) =>
+      seq("dependency", optional(field("name", $.identifier)),
+          optional(seq("from", $._feature_ref)),
+          "to", $._feature_ref, ";"),
+
+    allocate_statement: ($) =>
+      seq("allocate", $._feature_ref, "to", $._feature_ref,
+          choice($._body, ";")),
+
+    message_statement: ($) =>
+      seq(
+        "message",
+        optional(field("name", $.identifier)),
+        optional(seq("of", $._feature_ref, optional($._type_relationships))),
+        optional(seq("from", $._feature_ref, "to", $._feature_ref)),
+        ";",
+      ),
+
+    flow_statement: ($) =>
+      seq(
+        "flow",
+        optional(field("name", $.identifier)),
+        optional(seq("of", $._feature_ref)),
+        optional(choice(
+          seq("from", $._feature_ref, "to", $._feature_ref),
+          seq($._feature_ref, "to", $._feature_ref),
+        )),
+        ";",
+      ),
+
+    allocate_clause: ($) =>
+      seq("allocate", $._feature_ref, "to", $._feature_ref),
+
     // --- Body variants ---
 
-    usage_body: ($) =>
-      seq("{", repeat($._body_element), "}"),
-
-    action_body: ($) =>
-      seq("{", repeat($._body_element), "}"),
+    _body: ($) => $.definition_body,
 
     state_body: ($) =>
       seq(
         "{",
-        optional(seq("entry", optional(choice(";", $.action_body)),
-                     optional(seq("then", $.qualified_name, ";")))),
+        optional(seq("entry", optional("action"), choice(
+          seq(";", optional(seq("then", $._feature_ref, ";"))),
+          $.definition_body,
+          seq($._feature_ref, choice(
+            seq(";", optional(seq("then", $._feature_ref, ";"))),
+            $.definition_body,
+          )),
+        ))),
+        optional(seq("do", choice(
+          seq($._feature_ref, choice(";", $._body)),
+          $._body,
+        ))),
+        optional(seq("exit", choice(
+          seq($._feature_ref, ";"),
+          ";",
+        ))),
         repeat($._body_element),
         "}",
       ),
@@ -536,15 +1087,12 @@ module.exports = grammar({
     constraint_body: ($) =>
       seq("{", repeat(choice($._body_element, $._expression)), "}"),
 
-    block: ($) =>
-      seq("{", repeat($._body_element), "}"),
-
     // --- Body elements ---
 
     _body_element: ($) =>
       choice(
-        $._definition,
-        $._usage,
+        $._declaration,
+        $.feature_usage,
         $.import_statement,
         $.alias_declaration,
         $.comment_element,
@@ -555,44 +1103,209 @@ module.exports = grammar({
         $.objective_declaration,
         $.filter_statement,
         $.metadata_annotation,
+        $.bind_statement,
+        $.verify_statement,
+        $.connect_statement,
+        $.interface_statement,
+        $.allocate_statement,
+        $.message_statement,
+        $.flow_statement,
+        $.dependency_statement,
+        $.redefinition_statement,
+        $.standalone_redefines,
+        $.require_statement,
+        $.return_statement,
+        $.render_statement,
+        $.expose_statement,
+        $.stakeholder_declaration,
+        $.frame_statement,
         $.expression_statement,
+        $.assignment_statement,
       ),
 
+    assignment_statement: ($) =>
+      choice(
+        seq(field("name", $.identifier), $.value_assignment, ";"),
+        seq(field("name", $.identifier), $._body),
+      ),
+
+    // Standalone :>> used inside bodies for named/anonymous redefinition
+    redefinition_statement: ($) =>
+      seq(
+        optional(field("name", $.identifier)),
+        optional($.multiplicity),
+        ":", token.immediate(prec(2, ">>")),
+        $._feature_ref,
+        optional($._type_relationships),
+        optional($.multiplicity),
+        optional($.value_assignment),
+        choice($._body, ";"),
+      ),
+
+    // Standalone redefines inside bodies (e.g. `redefines massRequired = 200 [kg];`)
+    standalone_redefines: ($) =>
+      seq("redefines", $._feature_ref,
+          optional($.value_assignment),
+          ";"),
+
+    require_statement: ($) =>
+      seq("require", $._feature_ref, ";"),
+
+    return_statement: ($) =>
+      seq("return",
+          optional(choice("attribute", "part", "port", "ref")),
+          optional(field("name", $.identifier)),
+          optional($._type_relationships),
+          optional($.value_assignment),
+          ";"),
+
+    render_statement: ($) =>
+      seq("render", $._feature_ref, ";"),
+
+    expose_statement: ($) =>
+      seq(
+        optional($.visibility),
+        "expose",
+        $.qualified_name,
+        optional(token(seq("::", "*"))),
+        optional(token(seq("::", "**"))),
+        choice($._body, ";"),
+      ),
+
+    stakeholder_declaration: ($) =>
+      seq("stakeholder", optional(field("name", $.identifier)),
+          optional($._type_relationships),
+          ";"),
+
+    frame_statement: ($) =>
+      seq("frame", optional("concern"),
+          optional(field("name", $.identifier)),
+          optional($._type_relationships),
+          ";"),
+
+    verify_statement: ($) =>
+      seq("verify", optional("requirement"), $._feature_ref,
+          optional($.value_assignment), choice($._body, ";")),
+
+    bind_statement: ($) =>
+      seq("bind", $._feature_ref, "=", $._feature_ref, ";"),
+
+    connect_statement: ($) =>
+      seq("connect", optional($.multiplicity),
+          $._feature_ref, optional($._type_relationships),
+          "to",
+          optional($.multiplicity), $._feature_ref, optional($._type_relationships),
+          choice($._body, ";")),
+
+    interface_statement: ($) =>
+      seq("interface",
+          $.feature_chain, "to", $.feature_chain,
+          choice($._body, ";")),
+
     subject_declaration: ($) =>
-      seq("subject", field("name", $.identifier), optional($.typed_by), ";"),
+      seq("subject", optional(field("name", $.identifier)),
+          optional($.multiplicity),
+          optional($._type_relationships),
+          optional($.value_assignment), ";"),
 
     actor_declaration: ($) =>
-      seq("actor", field("name", $.identifier), optional($.typed_by), ";"),
+      seq("actor", field("name", $.identifier),
+          optional($._type_relationships),
+          optional($.multiplicity),
+          optional($.value_assignment), ";"),
 
     objective_declaration: ($) =>
       seq("objective", optional(field("name", $.identifier)),
-          optional($.typed_by), choice($.usage_body, ";")),
+          optional($._type_relationships),
+          choice($._body, ";")),
+
+    filter_expression: ($) =>
+      choice(
+        seq("@", $._feature_ref),
+        $._expression,
+      ),
 
     filter_statement: ($) =>
-      seq("filter", $._expression, ";"),
+      seq("filter", $.filter_expression,
+          repeat(seq(choice("and", "or"), $.filter_expression)),
+          ";"),
 
     metadata_annotation: ($) =>
-      seq("@", $.qualified_name, optional($.usage_body), ";"),
+      seq("@", $._feature_ref, optional(seq("about", $._feature_ref)), optional($._body), optional(";")),
+
+    metadata_annotation_list: ($) =>
+      prec.left(repeat1(seq("{", "@", $._feature_ref, optional($._body), "}"))),
 
     expression_statement: ($) =>
       seq($._expression, ";"),
 
     // --- Type relationships ---
 
-    typed_by: ($) =>
-      seq(":", field("type", $.qualified_name)),
+    _type_relationships: ($) =>
+      repeat1($._type_relationship),
+
+    _type_relationship: ($) =>
+      choice(
+        $._colon_type_rel,
+        $.redefines_keyword,
+        $.subsets_keyword,
+      ),
+
+    _colon_type_rel: ($) =>
+      choice(
+        seq(":", choice(
+          $.redefinition,
+          $.specialization,
+          $.typed_by,
+        )),
+        $.binding,
+      ),
+
+    redefinition: ($) =>
+      seq(token.immediate(prec(2, ">>")), field("target", $._feature_ref)),
 
     specialization: ($) =>
-      seq(":>", field("target", $.qualified_name)),
+      seq(token.immediate(prec(1, ">")), field("target", $._feature_ref)),
+
+    binding: ($) =>
+      seq(token(seq("::", ">")), field("target", $._feature_ref)),
+
+    typed_by: ($) =>
+      seq(optional("~"), field("type", $.qualified_name)),
+
+    redefines_keyword: ($) =>
+      seq("redefines", field("target", $._feature_ref)),
+
+    subsets_keyword: ($) =>
+      seq("subsets", field("target", $._feature_ref)),
 
     multiplicity: ($) =>
-      seq("[", $._expression, optional(seq("..", $._expression)), "]"),
+      seq("[", choice("*", seq($._expression, optional(seq("..", choice("*", $._expression))))), "]",
+          optional(choice("ordered", "nonunique"))),
 
     value_assignment: ($) =>
       seq(choice("=", ":=", "default"), $._expression),
 
     connect_clause: ($) =>
-      seq("connect", $.qualified_name, "to", $.qualified_name),
+      seq("connect", optional($.multiplicity),
+          $._feature_ref, optional($._type_relationships), "to",
+          optional($.multiplicity), $._feature_ref, optional($._type_relationships)),
+
+    // --- Short name ---
+
+    short_name: ($) =>
+      seq("<", $.quoted_name, ">"),
+
+    quoted_name: ($) =>
+      /[^>]+/,
+
+    // --- Prefix metadata ---
+
+    _prefix_metadata: ($) =>
+      $.hash_tag,
+
+    hash_tag: ($) =>
+      seq("#", $.identifier),
 
     // --- Visibility ---
 
@@ -614,7 +1327,20 @@ module.exports = grammar({
         "in",
         "out",
         "inout",
-        "return",
+        "composite",
+        "conjugate",
+        "const",
+        "disjoint",
+        "portion",
+        "var",
+      ),
+
+    // --- Feature reference ---
+
+    _feature_ref: ($) =>
+      choice(
+        $.qualified_name,
+        $.feature_chain,
       ),
 
     // --- Expressions ---
@@ -623,6 +1349,7 @@ module.exports = grammar({
       choice(
         $.identifier,
         $.qualified_name,
+        $.feature_chain,
         $.number_literal,
         $.string_literal,
         $.boolean_literal,
@@ -631,6 +1358,10 @@ module.exports = grammar({
         $.unary_expression,
         $.paren_expression,
         $.bracket_expression,
+        $.index_expression,
+        $.invocation_expression,
+        $.new_expression,
+        $.meta_expression,
       ),
 
     binary_expression: ($) =>
@@ -652,25 +1383,58 @@ module.exports = grammar({
     unary_expression: ($) =>
       prec(2, seq(choice("not", "-", "~"), $._expression)),
 
-    paren_expression: ($) => seq("(", $._expression, ")"),
+    paren_expression: ($) =>
+      seq("(", commaSep1($._expression), ")"),
 
     bracket_expression: ($) =>
-      seq($._expression, "[", $._expression, "]"),
+      prec.left(1, seq($._expression, "[", $._expression, "]")),
+
+    index_expression: ($) =>
+      prec(3, seq($._expression, "#", "(", $._expression, ")")),
+
+    invocation_expression: ($) =>
+      prec(3, seq($.identifier, "(", commaSep($._expression), ")")),
+
+    new_expression: ($) =>
+      seq("new", $.identifier, "(", commaSep($._argument), ")"),
+
+    _argument: ($) =>
+      choice(
+        seq($.identifier, "=", $._expression),
+        $._expression,
+      ),
+
+    meta_expression: ($) =>
+      seq($._feature_ref, "meta", $._feature_ref),
 
     // --- Names ---
 
     qualified_name: ($) =>
       prec.left(
-        seq($.identifier, repeat1(seq("::", $.identifier))),
+        seq($.identifier, repeat(seq("::", $.identifier))),
       ),
 
-    identifier: ($) => /[A-Za-z_][A-Za-z0-9_]*/,
+    feature_chain: ($) =>
+      prec.left(
+        seq(choice($.qualified_name, $.identifier), repeat1(seq(".", $.identifier))),
+      ),
+
+    _word: ($) => /[A-Za-z_][A-Za-z0-9_]*/,
+
+    identifier: ($) => choice(
+      $._word,
+      $.quoted_identifier,
+    ),
+
+    quoted_identifier: ($) =>
+      seq("'", /[^']+/, "'"),
 
     // --- Literals ---
 
     number_literal: ($) =>
       token(choice(
         /[0-9]+(\.[0-9]+)?([eE][+-]?[0-9]+)?/,
+        /\.[0-9]+([eE][+-]?[0-9]+)?/,
         /0[xX][0-9a-fA-F]+/,
       )),
 
@@ -689,3 +1453,11 @@ module.exports = grammar({
       token(seq("/*", /[^*]*\*+([^/*][^*]*\*+)*/, "/")),
   },
 });
+
+function commaSep1(rule) {
+  return seq(rule, repeat(seq(",", rule)));
+}
+
+function commaSep(rule) {
+  return optional(commaSep1(rule));
+}
