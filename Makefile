@@ -37,4 +37,5 @@ lint:
 	done
 
 tree-sitter-test:
-	cd tree-sitter-sysml && npm install && npx tree-sitter generate && npx tree-sitter test
+	@echo "Tree-sitter grammar is now in a separate repo: https://github.com/jackhale98/tree-sitter-sysml"
+	@echo "Run tests there with: npm install && npx tree-sitter test"

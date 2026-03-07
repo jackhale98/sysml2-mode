@@ -326,8 +326,8 @@ the tree-sitter incremental parser for better accuracy.
   ;; --- Grammar source for treesit-install-language-grammar ---
 
   (add-to-list 'treesit-language-source-alist
-               '(sysml "https://github.com/jackhale98/sysml2-mode"
-                       nil "tree-sitter-sysml/src"))
+               '(sysml "https://github.com/jackhale98/tree-sitter-sysml"
+                       nil "src"))
 
   ;; --- Auto-remap when grammar is available ---
 
