@@ -1,4 +1,4 @@
-;;; sysml2-vars.el --- Customization variables and faces for sysml2-mode -*- lexical-binding: t; -*-
+;;; sysml2-vars.el --- Customization variables and faces for sysml2-mode -*- lexical-binding: t; byte-compile-dynamic-docstrings: nil; -*-
 
 ;; Copyright (C) 2026 sysml2-mode contributors
 ;; Author: sysml2-mode contributors
