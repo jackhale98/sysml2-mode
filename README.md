@@ -13,6 +13,7 @@ Provides syntax highlighting, indentation, completion, navigation, diagram gener
 - [Installation](#installation)
 - [Features](#features)
 - [Diagram Generation](#diagram-generation)
+- [Model Scaffolding](#model-scaffolding)
 - [FMI/FMU Integration](#fmifmu-integration)
 - [Co-Simulation](#co-simulation)
 - [Systems Modeling API](#systems-modeling-api)
@@ -147,11 +148,19 @@ Context-aware `completion-at-point` with annotation hints:
 
 ### Flymake Diagnostics
 
-Three in-buffer checks with no external tools required:
+Six in-buffer checks with no external tools required:
+
+**Syntax checks:**
 
 1. **Unmatched delimiters** -- detects mismatched `{}`, `[]`, `()`
 2. **Unknown definition keywords** -- catches typos like `prat def`
 3. **Missing semicolons** -- warns on single-line usages without trailing `;`
+
+**Semantic checks** (note-level hints):
+
+4. **Unsatisfied requirements** -- requirement defs with no `satisfy` statement
+5. **Unverified requirements** -- requirement defs with no `verify` statement
+6. **Unused definitions** -- definitions never referenced elsewhere in the buffer
 
 ### Project Detection
 
@@ -186,9 +195,7 @@ M-x treesit-install-language-grammar RET sysml
 
 ## Diagram Generation
 
-Generate [PlantUML](https://plantuml.com/) diagrams from SysML v2 models. Seven diagram types:
-
-Each diagram type has its own command:
+Generate diagrams from SysML v2 models with a dual-backend architecture. Seven diagram types:
 
 | Binding | Command | Diagram |
 |---------|---------|---------|
@@ -201,14 +208,40 @@ Each diagram type has its own command:
 | `C-c C-d k` | `sysml2-diagram-package` | Package |
 | `C-c C-d p` | `sysml2-diagram-preview` | Auto-detect at point |
 | `C-c C-d e` | `sysml2-diagram-export` | Export to file |
-| `C-c C-d o` | `sysml2-diagram-open-plantuml` | View PlantUML source |
+| `C-c C-d o` | `sysml2-diagram-open-plantuml` | View diagram source |
+| `C-c C-d w` | `sysml2-diagram-open-in-playground` | Open in D2 web playground |
 
 Scoped diagrams (IBD, state machine, action flow) auto-detect the
 enclosing definition or prompt for a scope name.
 
-### PlantUML Execution Modes
+### Native Backend (default)
+
+The native backend (`sysml2-diagram-backend` = `native`) uses two rendering engines:
+
+- **Direct SVG** (zero dependencies) for deterministic layouts: tree/BDD diagrams and requirement trees
+- **[D2](https://d2lang.com)** for graph layouts: IBD, state machine, action flow, use case, and package diagrams
+
+When D2 is not installed locally, graph diagrams automatically fall back to opening in the [D2 Playground](https://play.d2lang.com) in your browser — no local installation required. Changes in the playground do NOT update the SysML model; this is a one-way, read-only visualization.
+
+You can also open any D2-backed diagram in the playground explicitly with `C-c C-d w` / `SPC m d w`.
 
 ```elisp
+;; Install D2 for local rendering (optional):
+;; https://d2lang.com/tour/install
+
+;; Customize D2 settings:
+(setq sysml2-d2-executable-path "/path/to/d2")  ; nil = search exec-path
+(setq sysml2-d2-theme 0)                         ; theme number
+(setq sysml2-d2-layout-engine 'elk)              ; nil (dagre), elk, or tala
+```
+
+### PlantUML Backend (legacy)
+
+Set `sysml2-diagram-backend` to `plantuml` to use [PlantUML](https://plantuml.com/) for all diagram types:
+
+```elisp
+(setq sysml2-diagram-backend 'plantuml)
+
 ;; Direct executable (default)
 (setq sysml2-plantuml-exec-mode 'executable)
 
@@ -233,6 +266,22 @@ package Vehicle {
 }
 #+END_SRC
 ```
+
+## Model Scaffolding
+
+Interactive commands to bootstrap common SysML v2 model structures. Each command prompts for names, types, and optional elements, then inserts well-formed SysML v2 code at point.
+
+| Binding | Command | Scaffolds |
+|---------|---------|-----------|
+| `C-c m m` | `sysml2-scaffold` | Menu of all scaffolding commands |
+| `C-c m p` | `sysml2-scaffold-package` | Package with optional imports |
+| `C-c m d` | `sysml2-scaffold-part-def` | Part def with attributes, ports, specialization |
+| `C-c m o` | `sysml2-scaffold-port-def` | Port def with directional items |
+| `C-c m r` | `sysml2-scaffold-requirement-def` | Requirement def with doc, subject, constraint |
+| `C-c m s` | `sysml2-scaffold-state-def` | State def with states and auto-generated transitions |
+| `C-c m a` | `sysml2-scaffold-action-def` | Action def with sub-actions and successions |
+| `C-c m e` | `sysml2-scaffold-enum-def` | Enum def with literals |
+| `C-c m u` | `sysml2-scaffold-use-case-def` | Use case def with subject, actors, includes |
 
 ## FMI/FMU Integration
 
@@ -389,11 +438,15 @@ Optional keybindings for [evil-mode](https://github.com/emacs-evil/evil) users v
 |--------|----------|
 | `SPC m n` | Navigation (outline, goto-definition) |
 | `SPC m r` | Rename symbol |
-| `SPC m c` | Connections (connect, flow, bind, etc.) |
-| `SPC m d` | Diagram (tree, IBD, state, etc.) |
+| `SPC m o` | Outline panel |
+| `SPC m c` | Connections (connect, flow, bind, verify, subject, etc.) |
+| `SPC m d` | Diagram (tree, IBD, state, playground, etc.) |
+| `SPC m m` | Model scaffolding |
 | `SPC m a` | API |
 | `SPC m l` | LSP |
 | `SPC m s` | Simulation / FMI |
+| `SPC m i` | Inspect / Report |
+| `SPC m f` | Code folding |
 
 Plus `gd` for goto-definition in normal state. Neither evil nor general.el is a hard dependency.
 
@@ -413,6 +466,8 @@ Plus `gd` for goto-definition in normal state. Neither evil nor general.el is a 
 | `C-c C-c i` | `sysml2-insert-interface` |
 | `C-c C-c a` | `sysml2-insert-allocation` |
 | `C-c C-c s` | `sysml2-insert-satisfy` |
+| `C-c C-c v` | `sysml2-insert-verify` |
+| `C-c C-c u` | `sysml2-insert-subject` |
 | **Diagram** | |
 | `C-c C-d t` | `sysml2-diagram-tree` |
 | `C-c C-d i` | `sysml2-diagram-ibd` |
@@ -424,6 +479,17 @@ Plus `gd` for goto-definition in normal state. Neither evil nor general.el is a 
 | `C-c C-d p` | `sysml2-diagram-preview` |
 | `C-c C-d e` | `sysml2-diagram-export` |
 | `C-c C-d o` | `sysml2-diagram-open-plantuml` |
+| `C-c C-d w` | `sysml2-diagram-open-in-playground` |
+| **Scaffolding** | |
+| `C-c m m` | `sysml2-scaffold` |
+| `C-c m p` | `sysml2-scaffold-package` |
+| `C-c m d` | `sysml2-scaffold-part-def` |
+| `C-c m o` | `sysml2-scaffold-port-def` |
+| `C-c m r` | `sysml2-scaffold-requirement-def` |
+| `C-c m s` | `sysml2-scaffold-state-def` |
+| `C-c m a` | `sysml2-scaffold-action-def` |
+| `C-c m e` | `sysml2-scaffold-enum-def` |
+| `C-c m u` | `sysml2-scaffold-use-case-def` |
 | **LSP** | |
 | `C-c C-l s` | `sysml2-lsp-ensure` |
 | `C-c C-l r` | `sysml2-lsp-restart` |
@@ -439,6 +505,18 @@ Plus `gd` for goto-definition in normal state. Neither evil nor general.el is a 
 | `C-c C-s r` | `sysml2-cosim-run` |
 | `C-c C-s p` | `sysml2-cosim-results` |
 | `C-c C-s c` | `sysml2-cosim-verify-requirements` |
+| **Inspect / Report** | |
+| `C-c C-i s` | `sysml2-report-summary` |
+| `C-c C-i t` | `sysml2-report-traceability` |
+| `C-c C-i m` | `sysml2-report-export-markdown` |
+| `C-c C-i e` | `sysml2-report-export` |
+| **Code Folding** | |
+| `C-c C-f t` | `hs-toggle-hiding` |
+| `C-c C-f h` | `hs-hide-block` |
+| `C-c C-f s` | `hs-show-block` |
+| `C-c C-f H` | `hs-hide-all` |
+| `C-c C-f S` | `hs-show-all` |
+| `C-c C-f l` | `hs-hide-level` |
 
 ## Customization
 
@@ -449,7 +527,11 @@ Key variables:
 | Variable | Default | Description |
 |----------|---------|-------------|
 | `sysml2-indent-offset` | `4` | Spaces per indentation level |
-| `sysml2-lsp-server` | `'syside` | LSP server (`syside`, `syson`, `pilot`, `none`) |
+| `sysml2-diagram-backend` | `'native` | Backend: `native` (SVG + D2) or `plantuml` |
+| `sysml2-d2-executable-path` | `nil` | Path to D2 binary (nil = search exec-path) |
+| `sysml2-d2-theme` | `nil` | D2 theme number (nil = default) |
+| `sysml2-d2-layout-engine` | `nil` | D2 layout: nil (dagre), `elk`, or `tala` |
+| `sysml2-lsp-server` | `'pilot` | LSP server (`pilot`, `syside`, `syson`, `none`) |
 | `sysml2-plantuml-exec-mode` | `'executable` | PlantUML invocation mode |
 | `sysml2-diagram-output-format` | `"svg"` | Diagram output format |
 | `sysml2-cosim-tool` | `'fmpy` | Co-simulation tool (`fmpy`, `omsimulator`) |
@@ -463,14 +545,18 @@ sysml2-vars.el          Customization variables, faces, shared state
 sysml2-lang.el          Keyword lists, regexp constants (pure data)
 sysml2-font-lock.el     Syntax highlighting rules
 sysml2-indent.el        Indentation engine
-sysml2-completion.el    Context-aware completion
+sysml2-completion.el    Context-aware completion, scaffolding commands
 sysml2-navigation.el    Imenu, which-function, defun movement
 sysml2-snippets.el      Yasnippet template registration
 sysml2-project.el       Project root detection, library resolution
 sysml2-lsp.el           LSP client config (eglot + lsp-mode)
-sysml2-flymake.el       In-buffer diagnostics
-sysml2-plantuml.el      SysML-to-PlantUML transformation engine
-sysml2-diagram.el       PlantUML invocation, preview, export, org-babel
+sysml2-flymake.el       In-buffer diagnostics (syntax + semantic)
+sysml2-model.el         Shared model extraction layer (backend-agnostic)
+sysml2-svg.el           Direct SVG generation (tree, requirement diagrams)
+sysml2-d2.el            D2 language generation (IBD, state, action, etc.)
+sysml2-plantuml.el      SysML-to-PlantUML transformation (legacy backend)
+sysml2-diagram.el       Diagram dispatch, preview, export, org-babel
+sysml2-report.el        Model summary, traceability, Markdown/Pandoc export
 sysml2-api.el           Systems Modeling API REST client
 sysml2-fmi.el           FMU inspector, interface extraction, Modelica gen
 sysml2-cosim.el         SSP generation, simulation, results, verification

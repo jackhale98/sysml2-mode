@@ -84,7 +84,6 @@
 (declare-function sysml2-report-export "sysml2-report")
 
 (defvar sysml2-mode-map)
-(defvar sysml2-outline-mode-map)
 
 (with-eval-after-load 'evil
 
@@ -93,11 +92,15 @@
     (kbd "gd") #'sysml2-goto-definition)
 
   ;; Outline panel: evil bindings for navigation
-  (evil-define-key* 'normal sysml2-outline-mode-map
-    (kbd "RET") #'sysml2--outline-goto
-    (kbd "o")   #'sysml2--outline-goto-and-close
-    (kbd "gr")  #'sysml2-outline-refresh
-    (kbd "q")   #'sysml2-outline-toggle)
+  ;; Deferred until sysml2-outline is loaded, since sysml2-evil may be
+  ;; required before sysml2-outline.
+  (with-eval-after-load 'sysml2-outline
+    (defvar sysml2-outline-mode-map)
+    (evil-define-key* 'normal sysml2-outline-mode-map
+      (kbd "RET") #'sysml2--outline-goto
+      (kbd "o")   #'sysml2--outline-goto-and-close
+      (kbd "gr")  #'sysml2-outline-refresh
+      (kbd "q")   #'sysml2-outline-toggle))
 
   ;; general.el SPC m bindings (Doom/Spacemacs style)
   (with-eval-after-load 'general

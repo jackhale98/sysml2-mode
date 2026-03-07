@@ -57,6 +57,8 @@ and the editor features that make working with it productive.
 | `C-c C-c i`   | `SPC m c i`   | Insert interface              |
 | `C-c C-c a`   | `SPC m c a`   | Insert allocation             |
 | `C-c C-c s`   | `SPC m c s`   | Insert satisfy                |
+| `C-c C-c v`   | `SPC m c v`   | Insert verify                 |
+| `C-c C-c u`   | `SPC m c u`   | Insert subject                |
 | `C-c C-d t`   | `SPC m d t`   | Tree diagram (BDD)            |
 | `C-c C-d i`   | `SPC m d i`   | IBD (interconnection)         |
 | `C-c C-d s`   | `SPC m d s`   | State machine diagram         |
@@ -66,6 +68,12 @@ and the editor features that make working with it productive.
 | `C-c C-d k`   | `SPC m d k`   | Package diagram               |
 | `C-c C-d p`   | `SPC m d p`   | Preview diagram (auto-detect) |
 | `C-c C-d e`   | `SPC m d e`   | Export diagram                |
+| `C-c C-d w`   | `SPC m d w`   | Open in D2 web playground     |
+| `C-c m m`     | `SPC m m m`   | Scaffold menu                 |
+| `C-c m p`     | `SPC m m p`   | Scaffold package              |
+| `C-c m d`     | `SPC m m d`   | Scaffold part def             |
+| `C-c m r`     | `SPC m m r`   | Scaffold requirement def      |
+| `C-c m s`     | `SPC m m s`   | Scaffold state def            |
 
 Snippets (type abbreviation then `TAB`):
 
@@ -625,8 +633,11 @@ They link a requirement to a test procedure and pass/fail criteria.
 - Combined with `satisfy` (design intent) and `verify` (test evidence),
   you get full traceability: requirement → design → test
 
-> **Editor tip:** Verification cases show up in the outline panel and
-> imenu. Use `M-.` on a requirement name to jump to its definition.
+> **Editor tip:** Use `C-c C-c v` / `SPC m c v` to interactively insert
+> `verify requirement` statements — pick from existing requirement defs.
+> Use `C-c C-c u` / `SPC m c u` to insert `subject` declarations.
+> Verification cases show up in the outline panel and imenu. Use `M-.` on
+> a requirement name to jump to its definition.
 
 ---
 
@@ -805,8 +816,8 @@ A **rendering** specifies the output format:
 
 Views are a formal SysML v2 concept for declaring *what* to show and to
 *whom*. The actual diagram generation is a tool concern. In sysml2-mode,
-the diagram commands (`C-c C-d t`, `C-c C-d i`, etc.) generate PlantUML
-diagrams directly from your model — they don't require view definitions.
+the diagram commands (`C-c C-d t`, `C-c C-d i`, etc.) generate diagrams
+directly from your model — they don't require view definitions.
 Think of views as documentation of stakeholder perspectives in the model
 itself, while the diagram commands are your working visualization tools.
 
@@ -818,7 +829,11 @@ itself, while the diagram commands are your working visualization tools.
 
 ## Step 19: Generate Diagrams
 
-With your model complete, generate visual diagrams using PlantUML.
+With your model complete, generate visual diagrams. The default **native
+backend** uses direct SVG for tree/requirement diagrams (zero dependencies)
+and [D2](https://d2lang.com) for graph layouts (IBD, state machine, action
+flow, use case, package).
+
 Each diagram type has its own command:
 
 | Keybinding  | Doom        | Diagram                            |
@@ -837,14 +852,20 @@ Additional commands:
   the definition at point (e.g., generates a state machine if inside a
   `state def`)
 - **Export:** `C-c C-d e` / `SPC m d e` — save as SVG/PNG/PDF
-- **PlantUML source:** `C-c C-d o` / `SPC m d o` — view generated PlantUML
+- **View source:** `C-c C-d o` / `SPC m d o` — view generated diagram source
+- **Web playground:** `C-c C-d w` / `SPC m d w` — open D2 diagram in
+  [play.d2lang.com](https://play.d2lang.com) for interactive read-only
+  viewing (no local D2 installation required)
 
 For scoped diagrams (IBD, state machine, action flow), the command
 auto-detects the enclosing definition name. If you're not inside a
 definition, it prompts you for the scope.
 
-> **Note:** Diagram generation requires PlantUML. Install it and set
-> `sysml2-plantuml-executable-path` or `sysml2-plantuml-jar-path`.
+> **Note:** Tree/BDD and requirement diagrams render directly as SVG with
+> no external tools. Graph diagrams use D2 if installed locally, or
+> automatically open in the D2 web playground as a fallback. You can also
+> set `sysml2-diagram-backend` to `plantuml` to use PlantUML for all
+> diagram types.
 
 ---
 
