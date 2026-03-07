@@ -18,25 +18,44 @@
 ;; Features:
 ;; - Syntax highlighting (regex and tree-sitter backends)
 ;; - Indentation
-;; - Completion with context-aware candidates (CAPF)
-;; - Smart connection insertion (C-c C-c prefix)
-;; - Navigation: imenu, which-function, outline, beginning/end-of-defun
+;; - Context-aware completion (CAPF) with annotated candidates
+;; - Smart connection editing (C-c C-c prefix) — select from existing
+;;   parts/ports with type annotations, dot-path resolution
+;; - Outline side panel with jump-to-definition (C-c C-n t)
+;; - Navigation: imenu, which-function, beginning/end-of-defun
 ;; - PlantUML diagram generation (7 types: tree, IBD, state, action,
 ;;   requirement, use-case, package)
 ;; - LSP support (eglot + lsp-mode; pilot, syson servers)
 ;; - YASnippet snippets (32 templates)
 ;; - Org-Babel integration
 ;; - FMI 3.0 / co-simulation integration
-;; - Evil mode support
+;; - Evil mode / Doom Emacs support (SPC m prefix)
 ;;
 ;; Tree-sitter support:
-;; When Emacs is compiled with tree-sitter and the `sysml' grammar is
-;; installed, `sysml2-ts-mode' activates automatically via
-;; `major-mode-remap-alist' for enhanced accuracy.
+;; When Emacs 29.1+ is compiled with tree-sitter and the `sysml'
+;; grammar is installed, `sysml2-ts-mode' activates automatically
+;; via `major-mode-remap-alist' for enhanced accuracy.
+;;
+;; Install the grammar:
+;;   (add-to-list 'treesit-language-source-alist
+;;                '(sysml "https://github.com/jackhale98/tree-sitter-sysml"
+;;                        nil "src"))
+;;   (treesit-install-language-grammar 'sysml)
 ;;
 ;; Quick start:
 ;;   (require 'sysml2-mode)
 ;;   ;; .sysml and .kerml files auto-activate the mode
+;;
+;; Doom Emacs:
+;;   Add to packages.el:
+;;     (package! sysml2-mode
+;;       :recipe (:host github :repo "jackhale98/sysml2-mode"
+;;                :files ("*.el" "snippets")))
+;;   Add to config.el:
+;;     (use-package! sysml2-mode
+;;       :init (add-to-list 'auto-mode-alist
+;;                          '("\\.sysml\\'" . sysml2-mode))
+;;       :config (require 'sysml2-evil) (require 'sysml2-ts))
 
 ;;; Code:
 
@@ -113,6 +132,9 @@
     table)
   "Syntax table for `sysml2-mode'.")
 
+;; Forward declarations for functions used in keymap
+(declare-function sysml2-goto-definition "sysml2-navigation")
+
 ;; --- Keymap ---
 
 (defvar sysml2-mode-map
@@ -120,6 +142,7 @@
     ;; Navigation
     (define-key map (kbd "C-c C-n o") #'imenu)
     (define-key map (kbd "C-c C-n t") #'sysml2-outline-toggle)
+    (define-key map (kbd "M-.") #'sysml2-goto-definition)
     ;; LSP
     (define-key map (kbd "C-c C-l s") #'sysml2-lsp-ensure)
     (define-key map (kbd "C-c C-l r") #'sysml2-lsp-restart)

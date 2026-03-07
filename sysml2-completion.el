@@ -249,22 +249,46 @@ Returns a completion table based on the context at point."
 
 ;; --- Smart Connection Commands ---
 
+(defun sysml2--annotate-usage (name usages)
+  "Return an annotation string for NAME based on USAGES plist data."
+  (let ((match (seq-find (lambda (u) (string= (plist-get u :name) name)) usages)))
+    (if match
+        (let ((kind (plist-get match :kind))
+              (type (plist-get match :type)))
+          (concat " " (propertize
+                       (if type (format "<%s : %s>" kind type) (format "<%s>" kind))
+                       'face 'completions-annotations)))
+      (when (string-match-p "\\." name)
+        (concat " " (propertize "<path>" 'face 'completions-annotations))))))
+
+(defun sysml2--read-connectable (prompt)
+  "Read a connectable element name with PROMPT, showing annotated candidates."
+  (let* ((names (sysml2--connectable-names))
+         (usages (sysml2--buffer-usage-names))
+         (all (delete-dups (append names (mapcar (lambda (u) (plist-get u :name)) usages)))))
+    (completing-read prompt
+                     (lambda (str pred action)
+                       (if (eq action 'metadata)
+                           `(metadata
+                             (annotation-function
+                              . ,(lambda (cand) (sysml2--annotate-usage cand usages))))
+                         (complete-with-action action all str pred)))
+                     nil t)))
+
+(defun sysml2--read-definition-type (prompt)
+  "Read a definition type with PROMPT, allowing empty for none."
+  (let ((defs (sysml2--buffer-definition-names)))
+    (completing-read prompt defs nil nil)))
+
 (defun sysml2-connect ()
   "Insert a connection usage by selecting source and target interactively.
 Scans the buffer for connectable elements (parts, ports) and offers
 them for completion.  Generates valid SysML v2 connection syntax."
   (interactive)
-  (let* ((names (sysml2--connectable-names))
-         (usages (sysml2--buffer-usage-names))
-         (defs (sysml2--buffer-definition-names))
-         (all-connectable (delete-dups (append names
-                                               (mapcar (lambda (u) (plist-get u :name))
-                                                       usages))))
-         (conn-name (read-string "Connection name: "))
-         (conn-type (completing-read "Connection type (empty for none): "
-                                     defs nil nil))
-         (source (completing-read "Connect (source): " all-connectable nil nil))
-         (target (completing-read "To (target): " all-connectable nil nil))
+  (let* ((conn-name (read-string "Connection name: "))
+         (conn-type (sysml2--read-definition-type "Connection type (RET for none): "))
+         (source (sysml2--read-connectable "Connect (source): "))
+         (target (sysml2--read-connectable "To (target): "))
          (indent (make-string (current-indentation) ?\s)))
     (end-of-line)
     (insert "\n" indent "connection " conn-name)
@@ -275,9 +299,8 @@ them for completion.  Generates valid SysML v2 connection syntax."
 (defun sysml2-insert-binding ()
   "Insert a binding connector by selecting source and target interactively."
   (interactive)
-  (let* ((names (sysml2--connectable-names))
-         (source (completing-read "Bind (source): " names nil nil))
-         (target (completing-read "To (target): " names nil nil))
+  (let* ((source (sysml2--read-connectable "Bind (source): "))
+         (target (sysml2--read-connectable "To (target): "))
          (indent (make-string (current-indentation) ?\s)))
     (end-of-line)
     (insert "\n" indent "bind " source " = " target ";")))
@@ -285,30 +308,24 @@ them for completion.  Generates valid SysML v2 connection syntax."
 (defun sysml2-insert-flow ()
   "Insert a flow connection by selecting source and target interactively."
   (interactive)
-  (let* ((names (sysml2--connectable-names))
-         (defs (sysml2--buffer-definition-names))
-         (flow-name (read-string "Flow name: "))
-         (item-type (completing-read "Item type flowing (empty for none): "
-                                     defs nil nil))
-         (source (completing-read "From (source): " names nil nil))
-         (target (completing-read "To (target): " names nil nil))
+  (let* ((flow-name (read-string "Flow name: "))
+         (item-type (sysml2--read-definition-type "Item type flowing (RET for none): "))
+         (source (sysml2--read-connectable "From (source): "))
+         (target (sysml2--read-connectable "To (target): "))
          (indent (make-string (current-indentation) ?\s)))
     (end-of-line)
     (insert "\n" indent "flow " flow-name)
     (unless (string-empty-p item-type)
-      (insert " : " item-type))
+      (insert " of " item-type))
     (insert " from " source " to " target ";")))
 
 (defun sysml2-insert-interface ()
   "Insert an interface usage by selecting endpoints interactively."
   (interactive)
-  (let* ((names (sysml2--connectable-names))
-         (defs (sysml2--buffer-definition-names))
-         (iface-name (read-string "Interface name: "))
-         (iface-type (completing-read "Interface type (empty for none): "
-                                      defs nil nil))
-         (source (completing-read "Connect (source): " names nil nil))
-         (target (completing-read "To (target): " names nil nil))
+  (let* ((iface-name (read-string "Interface name: "))
+         (iface-type (sysml2--read-definition-type "Interface type (RET for none): "))
+         (source (sysml2--read-connectable "Connect (source): "))
+         (target (sysml2--read-connectable "To (target): "))
          (indent (make-string (current-indentation) ?\s)))
     (end-of-line)
     (insert "\n" indent "interface " iface-name)
@@ -320,13 +337,11 @@ them for completion.  Generates valid SysML v2 connection syntax."
   "Insert an allocation usage by selecting source and target interactively."
   (interactive)
   (let* ((usages (sysml2--buffer-usage-names))
-         (all-names (mapcar (lambda (u) (plist-get u :name)) usages))
          (defs (sysml2--buffer-definition-names))
+         (all (delete-dups (append (mapcar (lambda (u) (plist-get u :name)) usages) defs)))
          (alloc-name (read-string "Allocation name: "))
-         (source (completing-read "Allocate (source): "
-                                  (append all-names defs) nil nil))
-         (target (completing-read "To (target): "
-                                  (append all-names defs) nil nil))
+         (source (completing-read "Allocate (source): " all nil t))
+         (target (completing-read "To (target): " all nil t))
          (indent (make-string (current-indentation) ?\s)))
     (end-of-line)
     (insert "\n" indent "allocation " alloc-name
@@ -337,9 +352,17 @@ them for completion.  Generates valid SysML v2 connection syntax."
   (interactive)
   (let* ((usages (sysml2--buffer-usage-names))
          (defs (sysml2--buffer-definition-names))
-         (all-names (append (mapcar (lambda (u) (plist-get u :name)) usages) defs))
-         (req (completing-read "Satisfy requirement: " all-names nil nil))
-         (by (completing-read "By (satisfying element): " all-names nil nil))
+         (all (delete-dups (append (mapcar (lambda (u) (plist-get u :name)) usages) defs)))
+         ;; Filter to requirement-like names for the requirement prompt
+         (req-usages (seq-filter (lambda (u)
+                                   (member (plist-get u :kind)
+                                           '("requirement" "constraint")))
+                                 usages))
+         (req-names (if req-usages
+                        (mapcar (lambda (u) (plist-get u :name)) req-usages)
+                      all))
+         (req (completing-read "Satisfy requirement: " req-names nil t))
+         (by (completing-read "By (satisfying element): " all nil t))
          (indent (make-string (current-indentation) ?\s)))
     (end-of-line)
     (insert "\n" indent "satisfy " req " by " by ";")))

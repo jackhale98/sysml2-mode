@@ -143,8 +143,15 @@ Returns a list of plists (:name :type :level :pos :line)."
     (define-key map (kbd "q") #'sysml2-outline-toggle)
     (define-key map (kbd "n") #'next-line)
     (define-key map (kbd "p") #'previous-line)
+    (define-key map [mouse-1] #'sysml2--outline-click)
     map)
   "Keymap for `sysml2-outline-mode'.")
+
+(defun sysml2--outline-click (event)
+  "Jump to outline entry at mouse click EVENT."
+  (interactive "e")
+  (mouse-set-point event)
+  (sysml2--outline-goto))
 
 (define-derived-mode sysml2-outline-mode special-mode "SysML2-Outline"
   "Major mode for the SysML2 outline side panel.

@@ -18,7 +18,8 @@
 ;;
 ;; Requires:
 ;;   - Emacs 29.1+ with tree-sitter support compiled in
-;;   - The `sysml' tree-sitter grammar installed
+;;   - The `sysml' tree-sitter grammar from
+;;     https://github.com/jackhale98/tree-sitter-sysml
 ;;
 ;; When tree-sitter is available and the grammar is installed,
 ;; `sysml2-ts-mode' automatically remaps `sysml2-mode'.

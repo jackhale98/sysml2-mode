@@ -46,43 +46,36 @@
 (declare-function sysml2-cosim-results "sysml2-cosim")
 (declare-function sysml2-cosim-verify-requirements "sysml2-cosim")
 (declare-function sysml2-outline-toggle "sysml2-outline")
+(declare-function sysml2-outline-refresh "sysml2-outline")
+(declare-function sysml2--outline-goto "sysml2-outline")
+(declare-function sysml2--outline-goto-and-close "sysml2-outline")
+(declare-function sysml2-goto-definition "sysml2-navigation")
+(declare-function sysml2-connect "sysml2-completion")
+(declare-function sysml2-insert-flow "sysml2-completion")
+(declare-function sysml2-insert-binding "sysml2-completion")
+(declare-function sysml2-insert-interface "sysml2-completion")
+(declare-function sysml2-insert-allocation "sysml2-completion")
+(declare-function sysml2-insert-satisfy "sysml2-completion")
 (declare-function sysml2-api-list-projects "sysml2-api")
 (declare-function sysml2-api-query "sysml2-api")
 (declare-function sysml2-lsp-ensure "sysml2-lsp")
 (declare-function sysml2-lsp-restart "sysml2-lsp")
 
 (defvar sysml2-mode-map)
+(defvar sysml2-outline-mode-map)
 
 (with-eval-after-load 'evil
 
-  ;; Normal-state bindings on localleader (,) as universal fallback
+  ;; Go to definition with gd (standard evil binding)
   (evil-define-key* 'normal sysml2-mode-map
-    ;; Navigation
-    (kbd ", n o") #'imenu
-    (kbd ", n t") #'sysml2-outline-toggle
-    ;; Diagram
-    (kbd ", d p") #'sysml2-diagram-preview
-    (kbd ", d b") #'sysml2-diagram-preview-buffer
-    (kbd ", d e") #'sysml2-diagram-export
-    (kbd ", d t") #'sysml2-diagram-type
-    (kbd ", d o") #'sysml2-diagram-open-plantuml
-    (kbd ", d r") #'sysml2-diagram-render-examples
-    (kbd ", d g") #'sysml2-diagram-generate-examples
-    ;; API
-    (kbd ", a l") #'sysml2-api-list-projects
-    (kbd ", a q") #'sysml2-api-query
-    ;; LSP
-    (kbd ", l s") #'sysml2-lsp-ensure
-    (kbd ", l r") #'sysml2-lsp-restart
-    ;; Simulation / FMI
-    (kbd ", s i") #'sysml2-fmi-inspect-fmu
-    (kbd ", s e") #'sysml2-fmi-extract-interfaces
-    (kbd ", s m") #'sysml2-fmi-generate-modelica
-    (kbd ", s v") #'sysml2-fmi-validate-interfaces
-    (kbd ", s g") #'sysml2-cosim-generate-ssp
-    (kbd ", s r") #'sysml2-cosim-run
-    (kbd ", s p") #'sysml2-cosim-results
-    (kbd ", s c") #'sysml2-cosim-verify-requirements)
+    (kbd "gd") #'sysml2-goto-definition)
+
+  ;; Outline panel: evil bindings for navigation
+  (evil-define-key* 'normal sysml2-outline-mode-map
+    (kbd "RET") #'sysml2--outline-goto
+    (kbd "o")   #'sysml2--outline-goto-and-close
+    (kbd "gr")  #'sysml2-outline-refresh
+    (kbd "q")   #'sysml2-outline-toggle)
 
   ;; general.el SPC m bindings (Doom/Spacemacs style)
   (with-eval-after-load 'general
@@ -93,7 +86,16 @@
      ;; Navigation
      "n"   '(:ignore t :which-key "navigate")
      "n o" '(imenu :which-key "outline (imenu)")
-     "n t" '(sysml2-outline-toggle :which-key "toggle outline panel")
+     "n d" '(sysml2-goto-definition :which-key "go to definition")
+     "o"   '(sysml2-outline-toggle :which-key "outline panel")
+     ;; Connections
+     "c"   '(:ignore t :which-key "connect")
+     "c c" '(sysml2-connect :which-key "connection")
+     "c f" '(sysml2-insert-flow :which-key "flow")
+     "c b" '(sysml2-insert-binding :which-key "binding")
+     "c i" '(sysml2-insert-interface :which-key "interface")
+     "c a" '(sysml2-insert-allocation :which-key "allocation")
+     "c s" '(sysml2-insert-satisfy :which-key "satisfy")
      ;; Diagram
      "d"   '(:ignore t :which-key "diagram")
      "d p" '(sysml2-diagram-preview :which-key "preview at point")

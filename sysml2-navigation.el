@@ -236,5 +236,43 @@ With ARG, move forward ARG definitions."
         (scan-error
          (goto-char (point-max)))))))
 
+;; --- Go to Definition ---
+
+(defun sysml2-goto-definition ()
+  "Jump to the definition of the identifier at point.
+Searches the current buffer for a definition matching the symbol
+under the cursor (e.g. `part def NAME', `port def NAME', etc.).
+Pushes the current position onto the mark ring for easy return
+with \\[pop-global-mark]."
+  (interactive)
+  (let ((sym (thing-at-point 'symbol t)))
+    (unless sym
+      (user-error "No identifier at point"))
+    (let ((def-re (concat "\\b\\(?:"
+                          (regexp-opt sysml2-definition-keywords)
+                          "\\)\\s-+"
+                          (regexp-quote sym)
+                          "\\_>"))
+          (pkg-re (concat "\\bpackage\\s-+" (regexp-quote sym) "\\_>"))
+          (found nil))
+      (save-excursion
+        (goto-char (point-min))
+        (while (and (not found)
+                    (re-search-forward def-re nil t))
+          (unless (sysml2--nav-in-comment-or-string-p)
+            (setq found (match-beginning 0))))
+        (unless found
+          (goto-char (point-min))
+          (while (and (not found)
+                      (re-search-forward pkg-re nil t))
+            (unless (sysml2--nav-in-comment-or-string-p)
+              (setq found (match-beginning 0))))))
+      (if found
+          (progn
+            (push-mark nil t)
+            (goto-char found)
+            (recenter))
+        (user-error "No definition found for `%s'" sym)))))
+
 (provide 'sysml2-navigation)
 ;;; sysml2-navigation.el ends here
