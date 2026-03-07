@@ -169,10 +169,11 @@ Left-to-right can be more readable for wide inheritance trees."
                  (const :tag "Other frame" other-frame))
   :group 'sysml2-diagram)
 
-(defcustom sysml2-lsp-server 'syside
+(defcustom sysml2-lsp-server 'pilot
   "Which LSP server to use for SysML v2."
-  :type '(choice (const :tag "Syside (Sensmetry)" syside)
-                 (const :tag "Pilot Implementation" pilot)
+  :type '(choice (const :tag "Pilot Implementation (recommended)" pilot)
+                 (const :tag "Syside (Sensmetry, archived)" syside)
+                 (const :tag "Eclipse SysON" syson)
                  (const :tag "None" none))
   :group 'sysml2-lsp)
 

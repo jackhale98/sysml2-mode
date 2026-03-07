@@ -1,0 +1,9 @@
+# -*- mode: snippet; require-final-newline: nil -*-
+# name: Enum Definition
+# key: ed
+# --
+enum def ${1:Name} {
+    enum ${2:value1};
+    enum ${3:value2};
+    $0
+}

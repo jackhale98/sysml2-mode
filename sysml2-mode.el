@@ -112,6 +112,13 @@
     (define-key map (kbd "C-c C-d o") #'sysml2-diagram-open-plantuml)
     (define-key map (kbd "C-c C-d r") #'sysml2-diagram-render-examples)
     (define-key map (kbd "C-c C-d g") #'sysml2-diagram-generate-examples)
+    ;; Smart Connection / Relationship Insertion
+    (define-key map (kbd "C-c C-c c") #'sysml2-connect)
+    (define-key map (kbd "C-c C-c f") #'sysml2-insert-flow)
+    (define-key map (kbd "C-c C-c b") #'sysml2-insert-binding)
+    (define-key map (kbd "C-c C-c i") #'sysml2-insert-interface)
+    (define-key map (kbd "C-c C-c a") #'sysml2-insert-allocation)
+    (define-key map (kbd "C-c C-c s") #'sysml2-insert-satisfy)
     ;; API
     (define-key map (kbd "C-c C-a l") #'sysml2-api-list-projects)
     (define-key map (kbd "C-c C-a q") #'sysml2-api-query)

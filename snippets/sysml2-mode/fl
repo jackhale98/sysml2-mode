@@ -1,0 +1,5 @@
+# -*- mode: snippet; require-final-newline: nil -*-
+# name: Flow Usage
+# key: fl
+# --
+flow ${1:name} : ${2:ItemType} from ${3:source} to ${4:target};

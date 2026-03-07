@@ -51,34 +51,49 @@
 ;; === Keyword Categories ===
 
 (defconst sysml2-definition-keywords
-  '("part def" "action def" "state def" "port def" "connection def"
+  '(;; SysML v2
+    "part def" "action def" "state def" "port def" "connection def"
     "attribute def" "item def" "requirement def" "constraint def"
     "view def" "viewpoint def" "rendering def" "concern def"
-    "use case def" "analysis case def" "verification case def"
-    "allocation def" "interface def" "flow connection def"
-    "enumeration def" "occurrence def" "metadata def" "calc def"
-    "succession flow connection def")
-  "SysML v2 definition keywords (multi-word forms ending in `def').")
+    "use case def" "analysis def" "verification def"
+    "allocation def" "interface def" "flow def"
+    "enum def" "occurrence def" "metadata def" "calc def"
+    "case def"
+    ;; KerML
+    "assoc def" "assoc struct def" "behavior def" "class def"
+    "classifier def" "connector def" "datatype def" "expr def"
+    "feature def" "function def" "interaction def" "metaclass def"
+    "namespace def" "predicate def" "step def" "struct def"
+    "type def")
+  "SysML v2 / KerML definition keywords (multi-word forms ending in `def').")
 
 (defconst sysml2-usage-keywords
-  '("part" "action" "state" "port" "connection" "attribute"
+  '(;; SysML v2
+    "part" "action" "state" "port" "connection" "attribute"
     "item" "requirement" "constraint" "view" "viewpoint"
-    "rendering" "concern" "use case" "analysis case"
-    "verification case" "allocation" "interface"
-    "flow connection" "enumeration" "occurrence" "metadata"
+    "rendering" "concern" "use case" "analysis"
+    "verification" "allocation" "interface"
+    "flow" "enum" "occurrence" "metadata"
     "calc" "ref" "succession" "binding" "exhibit" "perform"
-    "include" "snapshot" "timeslice" "dependency" "expose")
-  "SysML v2 usage keywords.")
+    "include" "snapshot" "timeslice" "dependency" "expose"
+    "case"
+    ;; KerML
+    "assoc" "behavior" "class" "classifier" "connector"
+    "datatype" "expr" "feature" "function" "interaction"
+    "metaclass" "namespace" "predicate" "step" "struct" "type")
+  "SysML v2 / KerML usage keywords.")
 
 (defconst sysml2-structural-keywords
   '("package" "import" "alias" "comment" "doc" "about" "rep"
-    "language" "library" "standard library" "filter")
+    "language" "library" "standard library" "filter"
+    "defined" "verify" "via" "allocate")
   "Package and organizational keywords.")
 
 (defconst sysml2-behavioral-keywords
   '("entry" "exit" "do" "first" "then" "accept" "send" "assign"
     "if" "else" "while" "for" "loop" "merge" "decide" "join"
-    "fork" "transition" "trigger" "guard" "effect")
+    "fork" "transition" "trigger" "guard" "effect"
+    "after" "event" "message" "parallel" "terminate" "until" "when")
   "Behavioral and control flow keywords.")
 
 (defconst sysml2-relationship-keywords
@@ -86,7 +101,11 @@
     "conjugates" "inverse" "featured" "typing" "satisfy"
     "assert" "assume" "require" "subject" "objective"
     "stakeholder" "actor" "bind" "connect" "to" "from"
-    "end" "all" "default")
+    "end" "all" "default"
+    "by" "conjugation" "crosses" "differences" "disjoining"
+    "featuring" "intersects" "inverting" "member" "multiplicity"
+    "of" "redefinition" "specializes" "subclassifier" "subsets"
+    "subtype" "typed" "unions")
   "Relationship and constraint keywords.")
 
 (defconst sysml2-visibility-keywords
@@ -95,7 +114,8 @@
 
 (defconst sysml2-modifier-keywords
   '("abstract" "variation" "variant" "individual" "readonly"
-    "derived" "nonunique" "ordered" "in" "out" "inout" "return")
+    "derived" "nonunique" "ordered" "in" "out" "inout" "return"
+    "composite" "conjugate" "const" "disjoint" "portion" "var")
   "Modifier keywords.")
 
 (defconst sysml2-literal-keywords
@@ -104,7 +124,7 @@
 
 (defconst sysml2-operator-keywords
   '("not" "or" "and" "xor" "implies" "hastype" "istype" "as"
-    "meta" "@")
+    "meta" "@" "new")
   "Operator and type-test keywords.")
 
 ;; === Computed Regexps ===
@@ -167,15 +187,24 @@ The regexp uses a capture group for the matched keyword.")
 ;; === Multi-Word Keyword Handling ===
 
 (defconst sysml2-multi-word-keywords
-  '("part def" "action def" "state def" "port def"
+  '(;; SysML v2 definition keywords
+    "part def" "action def" "state def" "port def"
     "connection def" "attribute def" "item def"
     "requirement def" "constraint def" "view def"
     "viewpoint def" "rendering def" "concern def"
-    "use case def" "analysis case def" "verification case def"
-    "allocation def" "interface def" "flow connection def"
-    "enumeration def" "occurrence def" "metadata def"
-    "calc def" "use case" "analysis case" "verification case"
-    "flow connection" "succession flow connection def"
+    "use case def" "analysis def" "verification def"
+    "allocation def" "interface def" "flow def"
+    "enum def" "occurrence def" "metadata def"
+    "calc def" "case def"
+    ;; KerML definition keywords
+    "assoc def" "assoc struct def" "behavior def" "class def"
+    "classifier def" "connector def" "datatype def" "expr def"
+    "feature def" "function def" "interaction def" "metaclass def"
+    "namespace def" "predicate def" "step def" "struct def"
+    "type def"
+    ;; Multi-word usage keywords
+    "use case"
+    ;; Other multi-word
     "standard library")
   "Keywords that contain spaces.
 Must be matched before single-word keywords in font-lock rules.")
@@ -192,16 +221,27 @@ Match BEFORE single-word keywords to prevent partial matches.")
     "connection def" "attribute def" "item def"
     "requirement def" "constraint def" "view def"
     "viewpoint def" "rendering def" "concern def"
-    "use case def" "analysis case def" "verification case def"
-    "allocation def" "interface def" "enumeration def"
-    "occurrence def" "metadata def" "calc def"
-    "flow connection def"
+    "use case def" "analysis def" "verification def"
+    "allocation def" "interface def" "enum def"
+    "occurrence def" "metadata def" "calc def" "flow def"
+    "case def"
+    ;; KerML definition keywords
+    "assoc def" "assoc struct def" "behavior def" "class def"
+    "classifier def" "connector def" "datatype def" "expr def"
+    "feature def" "function def" "interaction def" "metaclass def"
+    "namespace def" "predicate def" "step def" "struct def"
+    "type def"
+    ;; Usage keywords
     "part" "action" "state" "port" "connection"
     "attribute" "item" "requirement" "constraint"
     "view" "viewpoint" "rendering" "concern"
-    "use case" "analysis case" "verification case"
-    "allocation" "interface" "enumeration" "occurrence"
-    "metadata" "calc" "ref" "flow connection")
+    "use case" "analysis" "verification"
+    "allocation" "interface" "enum" "occurrence"
+    "metadata" "calc" "ref" "flow"
+    ;; KerML usage keywords
+    "assoc" "behavior" "class" "classifier" "connector"
+    "datatype" "feature" "function" "interaction"
+    "metaclass" "namespace" "predicate" "step" "struct" "type")
   "Keywords that can precede a `{' to open a body block.")
 
 (defconst sysml2-block-opening-keywords-regexp
@@ -213,7 +253,8 @@ Match BEFORE single-word keywords to prevent partial matches.")
 (defconst sysml2-operators
   '(":>" ":>>" "~" "::" "." ".." "==" "!=" "<" ">" "<=" ">="
     "+" "-" "*" "/" "%" "**" "," ";" "=" ":=" "??"
-    "->" "#" "[" "]" "{" "}" "(" ")")
+    "->" "#" "[" "]" "{" "}" "(" ")"
+    "@@" "::>" "=>" "===" "!==" ".?" "^" "|" "&" "$")
   "SysML v2 operators and punctuation characters.")
 
 ;; === File Extensions ===
@@ -232,7 +273,18 @@ Match BEFORE single-word keywords to prevent partial matches.")
     "Views" "Metadata" "StatePerformances"
     "ISQ" "SI" "USCustomaryUnits"
     "Quantities" "MeasurementReferences" "TriggerActions"
-    "SysML")
+    "SysML"
+    ;; KerML packages
+    "Performances" "Features" "Classifiers" "KerML" "Enumerations"
+    "Events" "Messages" "Geometries" "SpatialFrames" "Transfers"
+    ;; Function library packages
+    "BaseFunctions" "BooleanFunctions" "IntegerFunctions"
+    "NaturalFunctions" "NumericalFunctions" "RationalFunctions"
+    "RealFunctions" "ComplexFunctions" "StringFunctions"
+    "CollectionFunctions" "ControlFunctions" "TrigFunctions"
+    "SequenceFunctions" "DataFunctions"
+    ;; Other
+    "Links" "Clocks" "Observation")
   "Known standard library package names for completion.")
 
 ;; === Definition Name Pattern ===

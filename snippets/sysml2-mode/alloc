@@ -1,0 +1,6 @@
+# -*- mode: snippet; require-final-newline: nil -*-
+# name: Allocation Usage
+# key: alloc
+# --
+allocation ${1:name}
+    allocate ${2:source} to ${3:target};

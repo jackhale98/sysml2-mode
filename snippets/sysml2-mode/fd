@@ -1,0 +1,8 @@
+# -*- mode: snippet; require-final-newline: nil -*-
+# name: Flow Definition
+# key: fd
+# --
+flow def ${1:Name} {
+    end ${2:source} : ${3:SourceType};
+    end ${4:target} : ${5:TargetType};
+}

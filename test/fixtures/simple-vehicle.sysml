@@ -11,7 +11,7 @@ package VehicleModel {
     attribute def VolumeValue :> ISQ::VolumeValue;
 
     // Enumeration
-    enumeration def FuelType {
+    enum def FuelType {
         enum gasoline;
         enum diesel;
         enum electric;
@@ -151,7 +151,7 @@ package VehicleModel {
     constraint def MassConstraint {
         in massActual : MassValue;
         in massLimit : MassValue;
-        massActual <= massLimit
+        massActual <= massLimit;
     }
 
     // Use case

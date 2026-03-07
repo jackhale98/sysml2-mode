@@ -32,6 +32,15 @@
 (defvar sysml2-mode-syntax-table)
 (defvar sysml2-mode-map)
 
+;; Silence byte-compiler warnings for treesit functions
+(declare-function treesit-ready-p "treesit")
+(declare-function treesit-parser-create "treesit")
+(declare-function treesit-font-lock-rules "treesit")
+(declare-function treesit-node-text "treesit")
+(declare-function treesit-node-child-by-field-name "treesit")
+(declare-function treesit-major-mode-setup "treesit")
+(declare-function sysml2-ts--defun-name "sysml2-ts")
+
 ;; Only define the tree-sitter mode when tree-sitter is available
 (when (and (fboundp 'treesit-available-p)
            (treesit-available-p))
@@ -54,20 +63,41 @@
 
      :language 'sysml
      :feature 'keyword
-     '(["package" "import" "alias" "comment" "doc" "about" "rep"
-        "language" "library" "filter" "standard"
-        "entry" "exit" "do" "first" "then" "accept" "send" "assign"
-        "if" "else" "while" "for" "loop" "merge" "decide" "join" "fork"
-        "transition" "trigger" "guard" "effect"
-        "specialization" "subset" "redefines" "references" "chains"
-        "conjugates" "inverse" "featured" "typing" "satisfy"
-        "assert" "assume" "require" "subject" "objective"
-        "stakeholder" "actor" "bind" "connect" "to" "from"
-        "end" "all" "default"
+     '(;; Structural keywords
+       ["package" "import" "alias" "comment" "doc" "about" "filter"
+        ;; Definition keyword
+        "def"
+        ;; Usage/definition type keywords
+        "part" "action" "state" "port" "connection" "attribute"
+        "item" "requirement" "constraint" "view" "viewpoint"
+        "rendering" "concern" "allocation" "interface"
+        "occurrence" "metadata" "calc"
+        "ref" "exhibit" "perform" "include"
+        "enum" "enumeration" "flow"
+        ;; KerML keywords
+        "assoc" "behavior" "class" "connector"
+        "datatype" "feature" "function" "interaction"
+        "namespace" "predicate" "struct" "type"
+        ;; Behavioral keywords
+        "entry" "first" "then" "accept"
+        "for" "transition"
+        "if" "else" "while" "do" "assign" "send"
+        "merge" "decide" "fork" "join"
+        ;; Relationship keywords
+        "satisfy" "require" "subject" "objective"
+        "actor" "connect" "to"
+        "end" "all" "default" "by"
+        "use" "case" "analysis" "verification"
+        "snapshot" "timeslice"
+        "render" "expose" "stakeholder" "frame"
+        "event" "return" "redefines" "subsets" "via"
+        ;; Visibility
         "public" "private" "protected"
+        ;; Modifiers
         "abstract" "variation" "variant" "individual" "readonly"
-        "derived" "nonunique" "ordered" "in" "out" "inout" "return"
-        "def"] @font-lock-keyword-face)
+        "derived" "nonunique" "ordered" "in" "out" "inout"
+        "composite" "conjugate" "const" "disjoint" "portion" "var"
+        ] @font-lock-keyword-face)
 
      :language 'sysml
      :feature 'definition
@@ -77,6 +107,7 @@
        (state_definition name: (identifier) @sysml2-definition-name-face)
        (port_definition name: (identifier) @sysml2-definition-name-face)
        (connection_definition name: (identifier) @sysml2-definition-name-face)
+       (flow_definition name: (identifier) @sysml2-definition-name-face)
        (attribute_definition name: (identifier) @sysml2-definition-name-face)
        (item_definition name: (identifier) @sysml2-definition-name-face)
        (requirement_definition name: (identifier) @sysml2-definition-name-face)
@@ -91,9 +122,24 @@
        (allocation_definition name: (identifier) @sysml2-definition-name-face)
        (interface_definition name: (identifier) @sysml2-definition-name-face)
        (enumeration_definition name: (identifier) @sysml2-definition-name-face)
+       (individual_definition name: (identifier) @sysml2-definition-name-face)
        (occurrence_definition name: (identifier) @sysml2-definition-name-face)
        (metadata_definition name: (identifier) @sysml2-definition-name-face)
        (calc_definition name: (identifier) @sysml2-definition-name-face)
+       ;; KerML definitions
+       (case_definition name: (identifier) @sysml2-definition-name-face)
+       (class_definition name: (identifier) @sysml2-definition-name-face)
+       (struct_definition name: (identifier) @sysml2-definition-name-face)
+       (assoc_definition name: (identifier) @sysml2-definition-name-face)
+       (behavior_definition name: (identifier) @sysml2-definition-name-face)
+       (datatype_definition name: (identifier) @sysml2-definition-name-face)
+       (feature_definition name: (identifier) @sysml2-definition-name-face)
+       (function_definition name: (identifier) @sysml2-definition-name-face)
+       (predicate_definition name: (identifier) @sysml2-definition-name-face)
+       (connector_definition name: (identifier) @sysml2-definition-name-face)
+       (interaction_definition name: (identifier) @sysml2-definition-name-face)
+       (type_definition name: (identifier) @sysml2-definition-name-face)
+       (namespace_definition name: (identifier) @sysml2-definition-name-face)
        (package_declaration name: (identifier) @sysml2-definition-name-face))
 
      :language 'sysml
@@ -109,10 +155,10 @@
 
      :language 'sysml
      :feature 'operator
-     '([":>" ":>>" "~" "::" "==" "!=" "<=" ">="
+     '(["~" "::" "==" "!=" "<=" ">="
         "+" "-" "*" "/" "%" "**" "=" ":="
         "not" "or" "and" "xor" "implies"
-        "hastype" "istype" "as" "meta" "@"] @font-lock-operator-face)
+        "hastype" "istype" "as" "@"] @font-lock-operator-face)
 
      :language 'sysml
      :feature 'variable
@@ -124,7 +170,18 @@
        (item_usage name: (identifier) @font-lock-variable-name-face)
        (connection_usage name: (identifier) @font-lock-variable-name-face)
        (constraint_usage name: (identifier) @font-lock-variable-name-face)
-       (requirement_usage name: (identifier) @font-lock-variable-name-face)))
+       (requirement_usage name: (identifier) @font-lock-variable-name-face)
+       (snapshot_usage name: (identifier) @font-lock-variable-name-face)
+       (timeslice_usage name: (identifier) @font-lock-variable-name-face)
+       (calc_usage name: (identifier) @font-lock-variable-name-face)
+       (view_usage name: (identifier) @font-lock-variable-name-face)
+       (viewpoint_usage name: (identifier) @font-lock-variable-name-face)
+       (rendering_usage name: (identifier) @font-lock-variable-name-face)
+       (concern_usage name: (identifier) @font-lock-variable-name-face)
+       (use_case_usage name: (identifier) @font-lock-variable-name-face)
+       (analysis_usage name: (identifier) @font-lock-variable-name-face)
+       (verification_usage name: (identifier) @font-lock-variable-name-face)
+       (metadata_usage name: (identifier) @font-lock-variable-name-face)))
     "Tree-sitter font-lock settings for SysML v2.")
 
   ;; --- Indentation rules ---
@@ -137,13 +194,10 @@
        ((parent-is "source_file") column-0 0)
        ((parent-is "package_body") parent-bol ,sysml2-indent-offset)
        ((parent-is "definition_body") parent-bol ,sysml2-indent-offset)
-       ((parent-is "usage_body") parent-bol ,sysml2-indent-offset)
        ((parent-is "enumeration_body") parent-bol ,sysml2-indent-offset)
        ((parent-is "state_body") parent-bol ,sysml2-indent-offset)
-       ((parent-is "action_body") parent-bol ,sysml2-indent-offset)
        ((parent-is "requirement_body") parent-bol ,sysml2-indent-offset)
        ((parent-is "constraint_body") parent-bol ,sysml2-indent-offset)
-       ((parent-is "block") parent-bol ,sysml2-indent-offset)
        (no-node parent-bol ,sysml2-indent-offset)))
     "Tree-sitter indentation rules for SysML v2.")
 
@@ -153,14 +207,16 @@
     (regexp-opt '("package_declaration"
                   "part_definition" "action_definition"
                   "state_definition" "port_definition"
-                  "connection_definition" "attribute_definition"
+                  "connection_definition" "flow_definition"
+                  "attribute_definition"
                   "item_definition" "requirement_definition"
                   "constraint_definition" "view_definition"
                   "viewpoint_definition" "rendering_definition"
                   "concern_definition" "use_case_definition"
                   "analysis_case_definition" "verification_case_definition"
                   "allocation_definition" "interface_definition"
-                  "enumeration_definition" "occurrence_definition"
+                  "enumeration_definition" "individual_definition"
+                  "occurrence_definition"
                   "metadata_definition" "calc_definition"))
     "Regexp matching tree-sitter node types that are defun-like.")
 
@@ -172,9 +228,26 @@
       ("Action" "\\`action_definition\\'" nil nil)
       ("State" "\\`state_definition\\'" nil nil)
       ("Port" "\\`port_definition\\'" nil nil)
+      ("Connection" "\\`connection_definition\\'" nil nil)
+      ("Flow" "\\`flow_definition\\'" nil nil)
+      ("Attribute" "\\`attribute_definition\\'" nil nil)
+      ("Item" "\\`item_definition\\'" nil nil)
       ("Requirement" "\\`requirement_definition\\'" nil nil)
       ("Constraint" "\\`constraint_definition\\'" nil nil)
-      ("Attribute" "\\`attribute_definition\\'" nil nil))
+      ("View" "\\`view_definition\\'" nil nil)
+      ("Viewpoint" "\\`viewpoint_definition\\'" nil nil)
+      ("Rendering" "\\`rendering_definition\\'" nil nil)
+      ("Concern" "\\`concern_definition\\'" nil nil)
+      ("Use Case" "\\`use_case_definition\\'" nil nil)
+      ("Analysis" "\\`analysis_case_definition\\'" nil nil)
+      ("Verification" "\\`verification_case_definition\\'" nil nil)
+      ("Allocation" "\\`allocation_definition\\'" nil nil)
+      ("Interface" "\\`interface_definition\\'" nil nil)
+      ("Enumeration" "\\`enumeration_definition\\'" nil nil)
+      ("Individual" "\\`individual_definition\\'" nil nil)
+      ("Occurrence" "\\`occurrence_definition\\'" nil nil)
+      ("Metadata" "\\`metadata_definition\\'" nil nil)
+      ("Calculation" "\\`calc_definition\\'" nil nil))
     "Imenu category settings for tree-sitter SysML v2 mode.")
 
   ;; --- Mode definition ---

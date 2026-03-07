@@ -11,35 +11,7 @@
 ;;; Code:
 
 (require 'ert)
-(require 'sysml2-mode)
-
-(defvar sysml2-test--fixtures-dir
-  (expand-file-name "fixtures"
-                    (file-name-directory
-                     (or load-file-name buffer-file-name)))
-  "Directory containing test fixtures.")
-
-(defun sysml2-test--fontify-string (str)
-  "Fontify STR in a temporary sysml2-mode buffer and return it."
-  (with-temp-buffer
-    (insert str)
-    (sysml2-mode)
-    (font-lock-ensure)
-    (buffer-string)))
-
-(defun sysml2-test--face-at (str pos)
-  "Return the face at POS in STR after fontification in sysml2-mode."
-  (let ((fontified (sysml2-test--fontify-string str)))
-    (get-text-property (1- pos) 'face fontified)))
-
-(defun sysml2-test--face-at-search (str search-string)
-  "Return the face at the start of SEARCH-STRING in STR after fontification."
-  (let ((fontified (sysml2-test--fontify-string str)))
-    (with-temp-buffer
-      (insert fontified)
-      (goto-char (point-min))
-      (when (search-forward search-string nil t)
-        (get-text-property (match-beginning 0) 'face)))))
+(require 'test-helper)
 
 ;; --- Multi-word definition keywords ---
 
@@ -72,7 +44,7 @@
   "Test that usage keywords are highlighted."
   (let ((face (sysml2-test--face-at-search
                "    part engine : Engine;" "part")))
-    (should face)))
+    (should (memq face '(sysml2-keyword-face)))))
 
 ;; --- Structural keywords ---
 
@@ -137,10 +109,9 @@
 ;; --- Metadata annotations ---
 
 (ert-deftest sysml2-test-font-lock-metadata ()
-  "Test that #MetadataName is highlighted."
+  "Test that @SysML qualified name is highlighted."
   (let ((face (sysml2-test--face-at-search "filter @SysML::PartUsage;" "SysML")))
-    ;; @ is an operator keyword, we check what follows
-    (should face)))
+    (should (memq face '(sysml2-package-face sysml2-operator-face)))))
 
 ;; --- Comments ---
 
@@ -180,24 +151,77 @@
 (ert-deftest sysml2-test-font-lock-fixture-loads ()
   "Test that the fixture file loads in sysml2-mode without errors."
   (let ((fixture (expand-file-name "simple-vehicle.sysml"
-                                   sysml2-test--fixtures-dir)))
-    (when (file-exists-p fixture)
-      (with-temp-buffer
-        (insert-file-contents fixture)
-        (sysml2-mode)
-        (font-lock-ensure)
-        (should (eq major-mode 'sysml2-mode))))))
+                                   sysml2-test-fixtures-dir)))
+    (skip-unless (file-exists-p fixture))
+    (with-temp-buffer
+      (insert-file-contents fixture)
+      (sysml2-mode)
+      (font-lock-ensure)
+      (should (eq major-mode 'sysml2-mode)))))
 
 (ert-deftest sysml2-test-font-lock-kerml-loads ()
   "Test that the KerML fixture loads in kerml-mode without errors."
   (let ((fixture (expand-file-name "kerml-basic.kerml"
-                                   sysml2-test--fixtures-dir)))
-    (when (file-exists-p fixture)
-      (with-temp-buffer
-        (insert-file-contents fixture)
-        (kerml-mode)
-        (font-lock-ensure)
-        (should (eq major-mode 'kerml-mode))))))
+                                   sysml2-test-fixtures-dir)))
+    (skip-unless (file-exists-p fixture))
+    (with-temp-buffer
+      (insert-file-contents fixture)
+      (kerml-mode)
+      (font-lock-ensure)
+      (should (eq major-mode 'kerml-mode)))))
+
+;; --- BNF-corrected keywords ---
+
+(ert-deftest sysml2-test-font-lock-enum-def-keyword ()
+  "Test that `enum def' is highlighted as a keyword."
+  (let ((face (sysml2-test--face-at-search "enum def Colors {}" "enum def")))
+    (should (memq face '(sysml2-keyword-face)))))
+
+(ert-deftest sysml2-test-font-lock-flow-def-keyword ()
+  "Test that `flow def' is highlighted as a keyword."
+  (let ((face (sysml2-test--face-at-search "flow def DataFlow {}" "flow def")))
+    (should (memq face '(sysml2-keyword-face)))))
+
+(ert-deftest sysml2-test-font-lock-analysis-def-keyword ()
+  "Test that `analysis def' is highlighted as a keyword."
+  (let ((face (sysml2-test--face-at-search "analysis def ThermalAnalysis {}" "analysis def")))
+    (should (memq face '(sysml2-keyword-face)))))
+
+(ert-deftest sysml2-test-font-lock-verification-def-keyword ()
+  "Test that `verification def' is highlighted as a keyword."
+  (let ((face (sysml2-test--face-at-search "verification def TestPlan {}" "verification def")))
+    (should (memq face '(sysml2-keyword-face)))))
+
+;; --- KerML definition keywords ---
+
+(ert-deftest sysml2-test-font-lock-class-def-keyword ()
+  "Test that `class def' is highlighted as a keyword."
+  (let ((face (sysml2-test--face-at-search "class def MyClass {}" "class def")))
+    (should (memq face '(sysml2-keyword-face)))))
+
+(ert-deftest sysml2-test-font-lock-struct-def-keyword ()
+  "Test that `struct def' is highlighted as a keyword."
+  (let ((face (sysml2-test--face-at-search "struct def MyStruct {}" "struct def")))
+    (should (memq face '(sysml2-keyword-face)))))
+
+;; --- Multi-word keyword priority ---
+
+(ert-deftest sysml2-test-font-lock-part-in-part-def ()
+  "Test that `part' in `part def' gets keyword face, not usage face."
+  (let ((face (sysml2-test--face-at-search "part def Vehicle {}" "part def")))
+    (should (memq face '(sysml2-keyword-face)))))
+
+;; --- New behavioral keywords ---
+
+(ert-deftest sysml2-test-font-lock-event-keyword ()
+  "Test that `event' is highlighted as a keyword."
+  (let ((face (sysml2-test--face-at-search "    event occurrence;" "event")))
+    (should (memq face '(sysml2-keyword-face)))))
+
+(ert-deftest sysml2-test-font-lock-parallel-keyword ()
+  "Test that `parallel' is highlighted as a keyword."
+  (let ((face (sysml2-test--face-at-search "    parallel {}" "parallel")))
+    (should (memq face '(sysml2-keyword-face)))))
 
 (provide 'test-font-lock)
 ;;; test-font-lock.el ends here

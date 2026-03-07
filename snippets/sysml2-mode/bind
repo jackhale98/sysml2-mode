@@ -1,0 +1,5 @@
+# -*- mode: snippet; require-final-newline: nil -*-
+# name: Binding Connector
+# key: bind
+# --
+bind ${1:source} = ${2:target};

@@ -34,6 +34,12 @@
 (require 'sysml2-vars)
 (require 'sysml2-plantuml)
 
+(defvar url-http-end-of-headers)
+(defvar url-request-method)
+(defvar url-request-data)
+(defvar url-request-extra-headers)
+(declare-function sysml2-mode "sysml2-mode")
+
 ;; --- PlantUML Resolution ---
 
 (defun sysml2--diagram-resolve-plantuml ()
@@ -103,9 +109,9 @@ CALLBACK receives (SUCCESS DATA-OR-ERROR)."
 (defun sysml2--diagram-invoke-jar (puml-string format callback command)
   "Invoke PlantUML jar COMMAND on PUML-STRING for FORMAT.
 CALLBACK receives (SUCCESS DATA-OR-ERROR)."
-  (let ((proc-buf (generate-new-buffer " *sysml2-plantuml*"))
-        (fmt-arg (concat "-t" format))
-        (args (append command (list fmt-arg "-pipe"))))
+  (let* ((proc-buf (generate-new-buffer " *sysml2-plantuml*"))
+         (fmt-arg (concat "-t" format))
+         (args (append command (list fmt-arg "-pipe"))))
     (set-process-sentinel
      (apply #'start-process "sysml2-plantuml" proc-buf
             (car args) (cdr args))
@@ -238,7 +244,8 @@ Bound to `C-c C-d t'."
   (interactive
    (list (intern (completing-read "Diagram type: "
                                   '("tree" "interconnection" "state-machine"
-                                    "action-flow" "requirement-tree")
+                                    "action-flow" "requirement-tree"
+                                    "use-case" "package")
                                   nil t))))
   (let* ((scope (when (memq type '(interconnection state-machine action-flow))
                   (read-string "Scope (definition name): ")))
@@ -421,6 +428,8 @@ the result to examples/plantuml/.  Works interactively and in batch:
     count))
 
 ;; --- Preview Minor Mode ---
+
+(defvar sysml2-diagram-preview-mode)
 
 (defun sysml2--diagram-preview-on-save ()
   "Hook to regenerate diagram preview after save."

@@ -16,11 +16,15 @@
 ;; Supports both eglot (built-in since Emacs 29) and lsp-mode.
 ;;
 ;; Supported servers:
-;;   - SySide LSP (Sensmetry) — `syside-lsp' executable
-;;   - SysML v2 Pilot Implementation — Java jar
+;;   - SySide LSP (Sensmetry) — ARCHIVED since Oct 2025
+;;   - SysML v2 Pilot Implementation — Java jar (recommended)
+;;   - Eclipse SysON LSP — VS Code-oriented, experimental
 ;;
 ;; Server auto-detection tries custom path, then $PATH, then known jars.
 ;; Integration uses `with-eval-after-load' to avoid hard dependencies.
+;;
+;; Note: The Syside (Sensmetry) LSP server was archived in October 2025.
+;; The recommended server is now the Pilot Implementation Xtext-based server.
 
 ;;; Code:
 
@@ -56,12 +60,18 @@ Checks in order:
    ((and sysml2-lsp-server-path
          (file-executable-p sysml2-lsp-server-path))
     (list sysml2-lsp-server-path))
-   ;; Syside LSP
-   ((and (memq sysml2-lsp-server '(syside nil))
+   ;; Pilot Implementation (Java jar)
+   ((and (memq sysml2-lsp-server '(pilot nil))
+         (executable-find "java")
+         sysml2-lsp-server-path
+         (file-exists-p sysml2-lsp-server-path))
+    (list (executable-find "java") "-jar" sysml2-lsp-server-path))
+   ;; Syside LSP (archived)
+   ((and (eq sysml2-lsp-server 'syside)
          (executable-find "syside-lsp"))
     (list (executable-find "syside-lsp") "--stdio"))
-   ;; Pilot Implementation (Java jar)
-   ((and (eq sysml2-lsp-server 'pilot)
+   ;; Eclipse SysON (Java jar)
+   ((and (eq sysml2-lsp-server 'syson)
          (executable-find "java")
          sysml2-lsp-server-path
          (file-exists-p sysml2-lsp-server-path))

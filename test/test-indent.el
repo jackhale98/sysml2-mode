@@ -11,7 +11,7 @@
 ;;; Code:
 
 (require 'ert)
-(require 'sysml2-mode)
+(require 'test-helper)
 
 (defun sysml2-test--indent-string (str)
   "Re-indent STR in sysml2-mode and return the result."
@@ -140,6 +140,36 @@
                  "package Foo {\n  part def Bar {\n      attribute x;\n  }\n}")))
     (should (string-match-p "^    part def Bar {" result))
     (should (string-match-p "^        attribute x;" result))))
+
+;; --- Case 12: Requirement body indentation ---
+
+(ert-deftest sysml2-test-indent-requirement-body ()
+  "Test indentation inside requirement body."
+  (should (= 4 (sysml2-test--indent-line-at
+                 "requirement def Req {\nsubject x : Foo;\n}" 2))))
+
+;; --- Case 13: Constraint body indentation ---
+
+(ert-deftest sysml2-test-indent-constraint-body ()
+  "Test indentation inside constraint body."
+  (should (= 4 (sysml2-test--indent-line-at
+                 "constraint def Con {\nmassActual <= massLimit\n}" 2))))
+
+;; --- Case 14: Comment-aware indentation ---
+
+(ert-deftest sysml2-test-indent-after-comment ()
+  "Test indentation after a comment line."
+  (should (= 4 (sysml2-test--indent-line-at
+                 "part def Foo {\n// a comment\nattribute x;\n}" 3))))
+
+;; --- Case 15: Paren alignment ---
+
+(ert-deftest sysml2-test-indent-paren-alignment ()
+  "Test that continuation after open paren aligns correctly."
+  (let ((indent (sysml2-test--indent-line-at
+                  "calc def F (\nin x : Real\n) {}" 2)))
+    ;; Should indent inside the parens
+    (should (> indent 0))))
 
 (provide 'test-indent)
 ;;; test-indent.el ends here

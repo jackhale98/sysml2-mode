@@ -1,0 +1,6 @@
+# -*- mode: snippet; require-final-newline: nil -*-
+# name: Interface Usage
+# key: ifc
+# --
+interface ${1:name} : ${2:InterfaceType}
+    connect ${3:source} to ${4:target};

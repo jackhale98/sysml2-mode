@@ -1,0 +1,6 @@
+test/
+examples/
+tree-sitter-sysml/
+.github/
+Makefile
+CHANGELOG.md
