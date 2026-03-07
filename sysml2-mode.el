@@ -135,6 +135,14 @@
 ;; Forward declarations for functions used in keymap
 (declare-function sysml2-goto-definition "sysml2-navigation")
 (declare-function sysml2-rename-symbol "sysml2-navigation")
+(declare-function hs-minor-mode "hideshow")
+(declare-function hs-toggle-hiding "hideshow")
+(declare-function hs-hide-block "hideshow")
+(declare-function hs-show-block "hideshow")
+(declare-function hs-hide-all "hideshow")
+(declare-function hs-show-all "hideshow")
+(declare-function hs-hide-level "hideshow")
+(defvar hs-special-modes-alist)
 
 ;; --- Keymap ---
 
@@ -180,6 +188,13 @@
     (define-key map (kbd "C-c C-s r") #'sysml2-cosim-run)
     (define-key map (kbd "C-c C-s p") #'sysml2-cosim-results)
     (define-key map (kbd "C-c C-s c") #'sysml2-cosim-verify-requirements)
+    ;; Code folding
+    (define-key map (kbd "C-c C-f t") #'hs-toggle-hiding)
+    (define-key map (kbd "C-c C-f h") #'hs-hide-block)
+    (define-key map (kbd "C-c C-f s") #'hs-show-block)
+    (define-key map (kbd "C-c C-f H") #'hs-hide-all)
+    (define-key map (kbd "C-c C-f S") #'hs-show-all)
+    (define-key map (kbd "C-c C-f l") #'hs-hide-level)
     map)
   "Keymap for `sysml2-mode'.")
 
@@ -250,6 +265,11 @@
               (append '((?{ . ?}) (?\( . ?\)) (?\[ . ?\]))
                       (when (boundp 'electric-pair-pairs)
                         electric-pair-pairs)))
+
+  ;; Code folding (hideshow)
+  (add-to-list 'hs-special-modes-alist
+               '(sysml2-mode "{" "}" "/[*/]" nil nil))
+  (hs-minor-mode 1)
 
   ;; Flymake
   (sysml2-flymake-setup)

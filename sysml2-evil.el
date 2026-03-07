@@ -133,7 +133,15 @@
      "s g" '(sysml2-cosim-generate-ssp :which-key "generate SSP")
      "s r" '(sysml2-cosim-run :which-key "run simulation")
      "s p" '(sysml2-cosim-results :which-key "plot results")
-     "s c" '(sysml2-cosim-verify-requirements :which-key "verify requirements"))))
+     "s c" '(sysml2-cosim-verify-requirements :which-key "verify requirements")
+     ;; Code folding
+     "f"   '(:ignore t :which-key "fold")
+     "f t" '(hs-toggle-hiding :which-key "toggle")
+     "f h" '(hs-hide-block :which-key "hide block")
+     "f s" '(hs-show-block :which-key "show block")
+     "f H" '(hs-hide-all :which-key "hide all")
+     "f S" '(hs-show-all :which-key "show all")
+     "f l" '(hs-hide-level :which-key "hide level"))))
 
 (provide 'sysml2-evil)
 ;;; sysml2-evil.el ends here

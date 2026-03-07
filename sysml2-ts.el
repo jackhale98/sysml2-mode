@@ -32,6 +32,7 @@
 ;; Forward-declare variables defined in sysml2-mode.el
 (defvar sysml2-mode-syntax-table)
 (defvar sysml2-mode-map)
+(defvar hs-special-modes-alist)
 
 ;; Silence byte-compiler warnings for treesit functions/variables
 (declare-function treesit-ready-p "treesit")
@@ -57,6 +58,7 @@
 (declare-function sysml2-ts--search-definition-in-buffer "sysml2-ts")
 (declare-function sysml2-ts--rename-symbol "sysml2-ts")
 (declare-function sysml2-completion-at-point "sysml2-completion")
+(declare-function hs-minor-mode "hideshow")
 (defvar treesit-language-source-alist)
 
 ;; Only define the tree-sitter mode when tree-sitter is available
@@ -578,6 +580,28 @@ preserve positions.  Prompts for the new name interactively."
                    old-name new-name count
                    (if (= count 1) "" "s"))))))
 
+  ;; --- Code folding (tree-sitter) ---
+
+  (defvar sysml2-ts--fold-node-types
+    '("package_body" "definition_body" "enumeration_body"
+      "state_body" "requirement_body" "constraint_body"
+      "block_comment" "doc_comment")
+    "Tree-sitter node types that can be folded.")
+
+  (defun sysml2-ts--hs-forward-sexp (&optional _arg)
+    "Move forward over a foldable block using tree-sitter.
+For use as `hs-forward-sexp-func' in `hs-minor-mode'."
+    (let* ((node (treesit-node-at (point)))
+           (body (treesit-parent-until
+                  node
+                  (lambda (n)
+                    (member (treesit-node-type n)
+                            sysml2-ts--fold-node-types)))))
+      (if body
+          (goto-char (treesit-node-end body))
+        ;; Fallback: use forward-sexp
+        (forward-sexp 1))))
+
   ;; --- Mode definition ---
 
   ;;;###autoload
@@ -626,6 +650,12 @@ the tree-sitter incremental parser for better accuracy.
     ;; Electric
     (setq-local electric-indent-chars
                 (append '(?{ ?} ?\; ?\n) electric-indent-chars))
+
+    ;; Code folding (hideshow with tree-sitter)
+    (add-to-list 'hs-special-modes-alist
+                 '(sysml2-ts-mode "{" "}" "/[*/]"
+                   sysml2-ts--hs-forward-sexp nil))
+    (hs-minor-mode 1)
 
     ;; Keymap
     (use-local-map sysml2-mode-map)
