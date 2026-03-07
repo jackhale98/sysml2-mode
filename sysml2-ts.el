@@ -5,7 +5,7 @@
 ;; Version: 0.1.0
 ;; Package-Requires: ((emacs "29.1"))
 ;; Keywords: languages, systems-engineering, sysml
-;; URL: https://github.com/sysml2-mode/sysml2-mode
+;; URL: https://github.com/jackhale98/sysml2-mode
 
 ;; This file is part of sysml2-mode.
 ;; SPDX-License-Identifier: GPL-3.0-or-later
@@ -32,7 +32,7 @@
 (defvar sysml2-mode-syntax-table)
 (defvar sysml2-mode-map)
 
-;; Silence byte-compiler warnings for treesit functions
+;; Silence byte-compiler warnings for treesit functions/variables
 (declare-function treesit-ready-p "treesit")
 (declare-function treesit-parser-create "treesit")
 (declare-function treesit-font-lock-rules "treesit")
@@ -40,6 +40,7 @@
 (declare-function treesit-node-child-by-field-name "treesit")
 (declare-function treesit-major-mode-setup "treesit")
 (declare-function sysml2-ts--defun-name "sysml2-ts")
+(defvar treesit-language-source-alist)
 
 ;; Only define the tree-sitter mode when tree-sitter is available
 (when (and (fboundp 'treesit-available-p)
@@ -78,9 +79,10 @@
         "assoc" "behavior" "class" "connector"
         "datatype" "feature" "function" "interaction"
         "namespace" "predicate" "struct" "type"
+        "classifier" "metaclass" "expr" "step"
         ;; Behavioral keywords
         "entry" "first" "then" "accept"
-        "for" "transition"
+        "for" "transition" "loop" "until"
         "if" "else" "while" "do" "assign" "send"
         "merge" "decide" "fork" "join"
         ;; Relationship keywords
@@ -91,6 +93,8 @@
         "snapshot" "timeslice"
         "render" "expose" "stakeholder" "frame"
         "event" "return" "redefines" "subsets" "via"
+        "conjugates" "references" "chains" "inverse"
+        "library" "standard"
         ;; Visibility
         "public" "private" "protected"
         ;; Modifiers
@@ -140,6 +144,10 @@
        (interaction_definition name: (identifier) @sysml2-definition-name-face)
        (type_definition name: (identifier) @sysml2-definition-name-face)
        (namespace_definition name: (identifier) @sysml2-definition-name-face)
+       (classifier_definition name: (identifier) @sysml2-definition-name-face)
+       (metaclass_definition name: (identifier) @sysml2-definition-name-face)
+       (expr_definition name: (identifier) @sysml2-definition-name-face)
+       (step_definition name: (identifier) @sysml2-definition-name-face)
        (package_declaration name: (identifier) @sysml2-definition-name-face))
 
      :language 'sysml
@@ -181,7 +189,11 @@
        (use_case_usage name: (identifier) @font-lock-variable-name-face)
        (analysis_usage name: (identifier) @font-lock-variable-name-face)
        (verification_usage name: (identifier) @font-lock-variable-name-face)
-       (metadata_usage name: (identifier) @font-lock-variable-name-face)))
+       (metadata_usage name: (identifier) @font-lock-variable-name-face)
+       (classifier_usage name: (identifier) @font-lock-variable-name-face)
+       (metaclass_usage name: (identifier) @font-lock-variable-name-face)
+       (expr_usage name: (identifier) @font-lock-variable-name-face)
+       (step_usage name: (identifier) @font-lock-variable-name-face)))
     "Tree-sitter font-lock settings for SysML v2.")
 
   ;; --- Indentation rules ---
@@ -217,7 +229,9 @@
                   "allocation_definition" "interface_definition"
                   "enumeration_definition" "individual_definition"
                   "occurrence_definition"
-                  "metadata_definition" "calc_definition"))
+                  "metadata_definition" "calc_definition"
+                  "classifier_definition" "metaclass_definition"
+                  "expr_definition" "step_definition"))
     "Regexp matching tree-sitter node types that are defun-like.")
 
   ;; --- Imenu ---
@@ -247,7 +261,11 @@
       ("Individual" "\\`individual_definition\\'" nil nil)
       ("Occurrence" "\\`occurrence_definition\\'" nil nil)
       ("Metadata" "\\`metadata_definition\\'" nil nil)
-      ("Calculation" "\\`calc_definition\\'" nil nil))
+      ("Calculation" "\\`calc_definition\\'" nil nil)
+      ("Classifier" "\\`classifier_definition\\'" nil nil)
+      ("Metaclass" "\\`metaclass_definition\\'" nil nil)
+      ("Expression" "\\`expr_definition\\'" nil nil)
+      ("Step" "\\`step_definition\\'" nil nil))
     "Imenu category settings for tree-sitter SysML v2 mode.")
 
   ;; --- Mode definition ---
@@ -304,6 +322,12 @@ the tree-sitter incremental parser for better accuracy.
     (treesit-node-text
      (treesit-node-child-by-field-name node "name")
      t))
+
+  ;; --- Grammar source for treesit-install-language-grammar ---
+
+  (add-to-list 'treesit-language-source-alist
+               '(sysml "https://github.com/jackhale98/sysml2-mode"
+                       nil "tree-sitter-sysml/src"))
 
   ;; --- Auto-remap when grammar is available ---
 

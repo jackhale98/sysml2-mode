@@ -5,9 +5,6 @@
       "camelCase": false,
       "scope": "source.sysml",
       "path": ".",
-      "external-scanner": {
-        "path": "src/scanner.c"
-      },
       "file-types": ["sysml", "kerml"]
     }
   ],

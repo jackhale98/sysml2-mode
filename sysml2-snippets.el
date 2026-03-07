@@ -5,7 +5,7 @@
 ;; Version: 0.1.0
 ;; Package-Requires: ((emacs "29.1"))
 ;; Keywords: languages, systems-engineering, sysml
-;; URL: https://github.com/sysml2-mode/sysml2-mode
+;; URL: https://github.com/jackhale98/sysml2-mode
 
 ;; This file is part of sysml2-mode.
 ;; SPDX-License-Identifier: GPL-3.0-or-later

@@ -66,6 +66,7 @@ module.exports = grammar({
     package_declaration: ($) =>
       seq(
         optional($.visibility),
+        optional(choice(seq("standard", "library"), "library")),
         "package",
         field("name", $.identifier),
         $.package_body,
@@ -166,6 +167,11 @@ module.exports = grammar({
         $.interaction_definition,
         $.type_definition,
         $.namespace_definition,
+        // Additional KerML definitions
+        $.classifier_definition,
+        $.metaclass_definition,
+        $.expr_definition,
+        $.step_definition,
       ),
 
     part_definition: ($) =>
@@ -504,6 +510,44 @@ module.exports = grammar({
         choice($.definition_body, ";"),
       ),
 
+    // Additional KerML definitions
+
+    classifier_definition: ($) =>
+      seq(
+        "classifier", "def",
+        optional($.short_name),
+        field("name", $.identifier),
+        optional($._type_relationships),
+        choice($.definition_body, ";"),
+      ),
+
+    metaclass_definition: ($) =>
+      seq(
+        "metaclass", "def",
+        optional($.short_name),
+        field("name", $.identifier),
+        optional($._type_relationships),
+        choice($.definition_body, ";"),
+      ),
+
+    expr_definition: ($) =>
+      seq(
+        "expr", "def",
+        optional($.short_name),
+        field("name", $.identifier),
+        optional($._type_relationships),
+        choice($.definition_body, ";"),
+      ),
+
+    step_definition: ($) =>
+      seq(
+        "step", "def",
+        optional($.short_name),
+        field("name", $.identifier),
+        optional($._type_relationships),
+        choice($.definition_body, ";"),
+      ),
+
     // --- Definition body ---
 
     definition_body: ($) =>
@@ -553,6 +597,11 @@ module.exports = grammar({
         $.analysis_usage,
         $.verification_usage,
         $.metadata_usage,
+        // Additional KerML usages
+        $.classifier_usage,
+        $.metaclass_usage,
+        $.expr_usage,
+        $.step_usage,
         // Behavioral (unique keywords, no modifier prefix needed)
         $.succession_statement,
         $.perform_statement,
@@ -567,6 +616,7 @@ module.exports = grammar({
         $.for_action,
         $.assign_action,
         $.send_action,
+        $.loop_action,
         $.merge_node,
         $.decide_node,
         $.fork_node,
@@ -841,6 +891,48 @@ module.exports = grammar({
         choice($._body, ";"),
       ),
 
+    // Additional KerML usages
+
+    classifier_usage: ($) =>
+      seq(
+        "classifier",
+        optional(field("name", $.identifier)),
+        optional($._type_relationships),
+        optional($.multiplicity),
+        optional($.value_assignment),
+        choice($._body, ";"),
+      ),
+
+    metaclass_usage: ($) =>
+      seq(
+        "metaclass",
+        optional(field("name", $.identifier)),
+        optional($._type_relationships),
+        optional($.multiplicity),
+        optional($.value_assignment),
+        choice($._body, ";"),
+      ),
+
+    expr_usage: ($) =>
+      seq(
+        "expr",
+        optional(field("name", $.identifier)),
+        optional($._type_relationships),
+        optional($.multiplicity),
+        optional($.value_assignment),
+        choice($._body, ";"),
+      ),
+
+    step_usage: ($) =>
+      seq(
+        "step",
+        optional(field("name", $.identifier)),
+        optional($._type_relationships),
+        optional($.multiplicity),
+        optional($.value_assignment),
+        choice($._body, ";"),
+      ),
+
     end_feature: ($) =>
       seq(
         "end",
@@ -994,6 +1086,16 @@ module.exports = grammar({
         "assign", $._feature_ref,
         ":=", $._expression,
         ";",
+      ),
+
+    loop_action: ($) =>
+      seq(
+        "loop",
+        optional("action"),
+        optional(field("name", $.identifier)),
+        optional($._type_relationships),
+        optional(seq("until", $._expression)),
+        choice($._body, ";"),
       ),
 
     merge_node: ($) =>
@@ -1249,6 +1351,10 @@ module.exports = grammar({
         $._colon_type_rel,
         $.redefines_keyword,
         $.subsets_keyword,
+        $.conjugates_keyword,
+        $.references_keyword,
+        $.chains_keyword,
+        $.inverse_keyword,
       ),
 
     _colon_type_rel: ($) =>
@@ -1278,6 +1384,18 @@ module.exports = grammar({
 
     subsets_keyword: ($) =>
       seq("subsets", field("target", $._feature_ref)),
+
+    conjugates_keyword: ($) =>
+      seq("conjugates", field("target", $._feature_ref)),
+
+    references_keyword: ($) =>
+      seq("references", field("target", $._feature_ref)),
+
+    chains_keyword: ($) =>
+      seq("chains", field("target", $._feature_ref)),
+
+    inverse_keyword: ($) =>
+      seq("inverse", "of", field("target", $._feature_ref)),
 
     multiplicity: ($) =>
       seq("[", choice("*", seq($._expression, optional(seq("..", choice("*", $._expression))))), "]",
@@ -1362,6 +1480,7 @@ module.exports = grammar({
         $.invocation_expression,
         $.new_expression,
         $.meta_expression,
+        $.conditional_expression,
       ),
 
     binary_expression: ($) =>
@@ -1406,6 +1525,13 @@ module.exports = grammar({
 
     meta_expression: ($) =>
       seq($._feature_ref, "meta", $._feature_ref),
+
+    conditional_expression: ($) =>
+      prec.right(1, seq(
+        "if", $._expression,
+        "?", $._expression,
+        "else", $._expression,
+      )),
 
     // --- Names ---
 

@@ -2,5 +2,8 @@ test/
 examples/
 tree-sitter-sysml/
 .github/
+.dir-locals.el
 Makefile
 CHANGELOG.md
+claude_continue.txt
+*.elc

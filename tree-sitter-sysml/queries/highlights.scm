@@ -55,6 +55,10 @@
 (interaction_definition name: (identifier) @type.definition)
 (type_definition name: (identifier) @type.definition)
 (namespace_definition name: (identifier) @type.definition)
+(classifier_definition name: (identifier) @type.definition)
+(metaclass_definition name: (identifier) @type.definition)
+(expr_definition name: (identifier) @type.definition)
+(step_definition name: (identifier) @type.definition)
 
 ; Package names
 (package_declaration name: (identifier) @module)
@@ -80,6 +84,10 @@
 (analysis_usage name: (identifier) @variable)
 (verification_usage name: (identifier) @variable)
 (metadata_usage name: (identifier) @variable)
+(classifier_usage name: (identifier) @variable)
+(metaclass_usage name: (identifier) @variable)
+(expr_usage name: (identifier) @variable)
+(step_usage name: (identifier) @variable)
 
 
 ; Type references
@@ -117,6 +125,7 @@
  "assoc" "behavior" "class" "connector"
  "datatype" "feature" "function" "interaction"
  "namespace" "predicate" "struct" "type"
+ "classifier" "metaclass" "expr" "step"
  ] @keyword
 
 ; Behavioral keywords
@@ -133,7 +142,9 @@
  "use" "case" "analysis" "verification"
  "snapshot" "timeslice"
  "render" "expose" "stakeholder" "frame"
- "event" "return" "redefines" "subsets" "via"] @keyword
+ "event" "return" "redefines" "subsets" "via"
+ "conjugates" "references" "chains" "inverse"
+ "library" "standard" "loop" "until"] @keyword
 
 ; Punctuation
 ["{" "}"] @punctuation.bracket

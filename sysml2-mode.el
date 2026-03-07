@@ -5,7 +5,7 @@
 ;; Version: 0.1.0
 ;; Package-Requires: ((emacs "29.1"))
 ;; Keywords: languages, systems-engineering, sysml
-;; URL: https://github.com/sysml2-mode/sysml2-mode
+;; URL: https://github.com/jackhale98/sysml2-mode
 
 ;; This file is part of sysml2-mode.
 ;; SPDX-License-Identifier: GPL-3.0-or-later
@@ -13,11 +13,30 @@
 ;;; Commentary:
 
 ;; Major mode for editing SysML v2 (.sysml) and KerML (.kerml) textual
-;; notation files.  Provides syntax highlighting, indentation, completion,
-;; navigation, and snippet support.
+;; notation files per the OMG SysML v2 / KerML specifications.
 ;;
-;; Entry point for the sysml2-mode package.  Requires all internal modules
-;; and defines the mode, syntax table, and keymap.
+;; Features:
+;; - Syntax highlighting (regex and tree-sitter backends)
+;; - Indentation
+;; - Completion with context-aware candidates (CAPF)
+;; - Smart connection insertion (C-c C-c prefix)
+;; - Navigation: imenu, which-function, outline, beginning/end-of-defun
+;; - PlantUML diagram generation (7 types: tree, IBD, state, action,
+;;   requirement, use-case, package)
+;; - LSP support (eglot + lsp-mode; pilot, syson servers)
+;; - YASnippet snippets (32 templates)
+;; - Org-Babel integration
+;; - FMI 3.0 / co-simulation integration
+;; - Evil mode support
+;;
+;; Tree-sitter support:
+;; When Emacs is compiled with tree-sitter and the `sysml' grammar is
+;; installed, `sysml2-ts-mode' activates automatically via
+;; `major-mode-remap-alist' for enhanced accuracy.
+;;
+;; Quick start:
+;;   (require 'sysml2-mode)
+;;   ;; .sysml and .kerml files auto-activate the mode
 
 ;;; Code:
 

@@ -109,4 +109,9 @@ clean:
 test:
 	$(TS) test
 
-.PHONY: all install uninstall clean test
+# Emacs-specific target: build shared library for Emacs tree-sitter
+emacs:
+	$(CC) -shared -fPIC -I$(SRC_DIR) $(SRC_DIR)/parser.c -O2 -o $(LANGUAGE_NAME).$(SOEXT)
+	@echo "Install with: cp $(LANGUAGE_NAME).$(SOEXT) ~/.emacs.d/tree-sitter/libtree-sitter-sysml.$(SOEXT)"
+
+.PHONY: all install uninstall clean test emacs
