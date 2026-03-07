@@ -1,0 +1,6 @@
+*.elc
+*~
+\#*\#
+.#*
+claude_continue.txt
+melpa-recipe.el
