@@ -25,8 +25,13 @@
 ;;   `sysml2-which-function' -- Return name of enclosing definition
 ;;   `sysml2-beginning-of-defun' -- Move to beginning of current definition
 ;;   `sysml2-end-of-defun' -- Move to end of current definition
+;;   `sysml2-goto-definition' -- Jump to definition (current buffer + project)
+;;   `sysml2-rename-symbol' -- Rename symbol in current buffer
 
 (require 'sysml2-lang)
+
+(declare-function sysml2-project-root "sysml2-project")
+(declare-function sysml2-project-find-sysml-files "sysml2-project")
 
 ;; --- Imenu ---
 
@@ -238,41 +243,150 @@ With ARG, move forward ARG definitions."
 
 ;; --- Go to Definition ---
 
+(defun sysml2--search-definition-in-buffer (sym)
+  "Search for a definition of SYM in the current buffer.
+Returns the position of the match, or nil if not found."
+  (let ((def-re (concat "\\b\\(?:"
+                        (regexp-opt sysml2-definition-keywords)
+                        "\\)\\s-+"
+                        (regexp-quote sym)
+                        "\\_>"))
+        (pkg-re (concat "\\bpackage\\s-+" (regexp-quote sym) "\\_>"))
+        (found nil))
+    (save-excursion
+      (goto-char (point-min))
+      (while (and (not found)
+                  (re-search-forward def-re nil t))
+        (unless (sysml2--nav-in-comment-or-string-p)
+          (setq found (match-beginning 0))))
+      (unless found
+        (goto-char (point-min))
+        (while (and (not found)
+                    (re-search-forward pkg-re nil t))
+          (unless (sysml2--nav-in-comment-or-string-p)
+            (setq found (match-beginning 0))))))
+    found))
+
+(defun sysml2--search-definition-in-file (file def-re pkg-re)
+  "Search FILE for definitions matching DEF-RE and PKG-RE.
+Returns a list of (FILE . LINE-NUMBER) for each match found, or nil."
+  (let ((hits nil))
+    (with-temp-buffer
+      (insert-file-contents file)
+      (goto-char (point-min))
+      (while (re-search-forward def-re nil t)
+        (push (cons file (line-number-at-pos (match-beginning 0))) hits))
+      (goto-char (point-min))
+      (while (re-search-forward pkg-re nil t)
+        (push (cons file (line-number-at-pos (match-beginning 0))) hits)))
+    (nreverse hits)))
+
+(defun sysml2--search-definition-in-project (sym)
+  "Search all project SysML/KerML files for a definition of SYM.
+Returns a list of (FILE . LINE-NUMBER) entries."
+  (require 'sysml2-project)
+  (let* ((root (sysml2-project-root))
+         (files (when root (sysml2-project-find-sysml-files root)))
+         (current (buffer-file-name))
+         (def-re (concat "\\b\\(?:"
+                         (regexp-opt sysml2-definition-keywords)
+                         "\\)\\s-+"
+                         (regexp-quote sym)
+                         "\\_>"))
+         (pkg-re (concat "\\bpackage\\s-+" (regexp-quote sym) "\\_>"))
+         (results nil))
+    (dolist (file files)
+      ;; Skip the current buffer's file (already searched)
+      (unless (and current (string= (expand-file-name file)
+                                    (expand-file-name current)))
+        (let ((hits (sysml2--search-definition-in-file
+                     file def-re pkg-re)))
+          (setq results (nconc results hits)))))
+    results))
+
+(defun sysml2--goto-file-line (file line)
+  "Open FILE and go to LINE."
+  (find-file file)
+  (goto-char (point-min))
+  (forward-line (1- line))
+  (recenter))
+
 (defun sysml2-goto-definition ()
   "Jump to the definition of the identifier at point.
-Searches the current buffer for a definition matching the symbol
+First searches the current buffer for a definition matching the symbol
 under the cursor (e.g. `part def NAME', `port def NAME', etc.).
+If not found locally, searches all `.sysml' and `.kerml' files in the
+project root.  If multiple definitions are found across files, prompts
+with `completing-read' to select one.
 Pushes the current position onto the mark ring for easy return
 with \\[pop-global-mark]."
   (interactive)
   (let ((sym (thing-at-point 'symbol t)))
     (unless sym
       (user-error "No identifier at point"))
-    (let ((def-re (concat "\\b\\(?:"
-                          (regexp-opt sysml2-definition-keywords)
-                          "\\)\\s-+"
-                          (regexp-quote sym)
-                          "\\_>"))
-          (pkg-re (concat "\\bpackage\\s-+" (regexp-quote sym) "\\_>"))
-          (found nil))
-      (save-excursion
-        (goto-char (point-min))
-        (while (and (not found)
-                    (re-search-forward def-re nil t))
-          (unless (sysml2--nav-in-comment-or-string-p)
-            (setq found (match-beginning 0))))
-        (unless found
-          (goto-char (point-min))
-          (while (and (not found)
-                      (re-search-forward pkg-re nil t))
-            (unless (sysml2--nav-in-comment-or-string-p)
-              (setq found (match-beginning 0))))))
-      (if found
+    ;; 1. Search the current buffer first
+    (let ((local-pos (sysml2--search-definition-in-buffer sym)))
+      (if local-pos
           (progn
             (push-mark nil t)
-            (goto-char found)
+            (goto-char local-pos)
             (recenter))
-        (user-error "No definition found for `%s'" sym)))))
+        ;; 2. Search project files
+        (let ((hits (sysml2--search-definition-in-project sym)))
+          (cond
+           ((null hits)
+            (message "No definition found for `%s'" sym))
+           ((= (length hits) 1)
+            (push-mark nil t)
+            (sysml2--goto-file-line (car (car hits)) (cdr (car hits))))
+           (t
+            ;; Multiple matches -- let user pick
+            (let* ((candidates
+                    (mapcar (lambda (hit)
+                              (cons (format "%s:%d"
+                                           (file-relative-name (car hit))
+                                           (cdr hit))
+                                    hit))
+                            hits))
+                   (choice (completing-read
+                            (format "Definition of `%s': " sym)
+                            (mapcar #'car candidates)
+                            nil t))
+                   (selected (cdr (assoc choice candidates))))
+              (when selected
+                (push-mark nil t)
+                (sysml2--goto-file-line
+                 (car selected) (cdr selected)))))))))))
+
+;; --- Rename Symbol ---
+
+(defun sysml2-rename-symbol ()
+  "Rename the symbol at point throughout the current buffer.
+Prompts for a new name and replaces all occurrences, skipping
+those inside comments and strings.  Only modifies the current
+buffer for safety."
+  (interactive)
+  (let ((old-name (thing-at-point 'symbol t)))
+    (unless old-name
+      (user-error "No symbol at point"))
+    (let ((new-name (read-string
+                     (format "Rename `%s' to: " old-name)
+                     old-name)))
+      (when (string-empty-p new-name)
+        (user-error "New name must not be empty"))
+      (when (string= old-name new-name)
+        (user-error "New name is the same as the old name"))
+      (let ((count 0)
+            (re (concat "\\_<" (regexp-quote old-name) "\\_>")))
+        (save-excursion
+          (goto-char (point-min))
+          (while (re-search-forward re nil t)
+            (unless (sysml2--nav-in-comment-or-string-p)
+              (replace-match new-name t t)
+              (setq count (1+ count)))))
+        (message "Renamed `%s' -> `%s' (%d occurrence%s)"
+                 old-name new-name count
+                 (if (= count 1) "" "s"))))))
 
 (provide 'sysml2-navigation)
 ;;; sysml2-navigation.el ends here

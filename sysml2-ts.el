@@ -40,7 +40,21 @@
 (declare-function treesit-node-text "treesit")
 (declare-function treesit-node-child-by-field-name "treesit")
 (declare-function treesit-major-mode-setup "treesit")
+(declare-function treesit-node-at "treesit")
+(declare-function treesit-node-parent "treesit")
+(declare-function treesit-node-type "treesit")
+(declare-function treesit-parent-until "treesit")
+(declare-function treesit-buffer-root-node "treesit")
+(declare-function treesit-node-start "treesit")
+(declare-function treesit-node-end "treesit")
+(declare-function treesit-query-capture "treesit")
 (declare-function sysml2-ts--defun-name "sysml2-ts")
+(declare-function sysml2-ts--which-function "sysml2-ts")
+(declare-function sysml2-ts--completion-at-point "sysml2-ts")
+(declare-function sysml2-ts--parent-context "sysml2-ts")
+(declare-function sysml2-ts--collect-definition-names "sysml2-ts")
+(declare-function sysml2-ts--collect-usage-names "sysml2-ts")
+(declare-function sysml2-completion-at-point "sysml2-completion")
 (defvar treesit-language-source-alist)
 
 ;; Only define the tree-sitter mode when tree-sitter is available
@@ -269,6 +283,179 @@
       ("Step" "\\`step_definition\\'" nil nil))
     "Imenu category settings for tree-sitter SysML v2 mode.")
 
+  ;; --- Which-function support ---
+
+  (defun sysml2-ts--which-function ()
+    "Return the name of the enclosing definition at point using tree-sitter.
+Walks up from the current node to find the nearest defun-like node
+and returns its name field."
+    (let* ((node (treesit-node-at (point)))
+           (defun-node
+            (treesit-parent-until
+             node
+             (lambda (n)
+               (string-match-p sysml2-ts--defun-type-regexp
+                               (treesit-node-type n))))))
+      (when defun-node
+        (let ((name-node (treesit-node-child-by-field-name defun-node "name")))
+          (when name-node
+            (treesit-node-text name-node t))))))
+
+  ;; --- Tree-sitter completion support ---
+
+  (defvar sysml2-ts--definition-node-types
+    '("part_definition" "action_definition" "state_definition"
+      "port_definition" "connection_definition" "flow_definition"
+      "attribute_definition" "item_definition" "requirement_definition"
+      "constraint_definition" "view_definition" "viewpoint_definition"
+      "rendering_definition" "concern_definition" "use_case_definition"
+      "analysis_case_definition" "verification_case_definition"
+      "allocation_definition" "interface_definition"
+      "enumeration_definition" "individual_definition"
+      "occurrence_definition" "metadata_definition" "calc_definition"
+      "case_definition" "class_definition" "struct_definition"
+      "assoc_definition" "behavior_definition" "datatype_definition"
+      "feature_definition" "function_definition" "predicate_definition"
+      "connector_definition" "interaction_definition" "type_definition"
+      "namespace_definition" "classifier_definition"
+      "metaclass_definition" "expr_definition" "step_definition")
+    "Tree-sitter node types that represent definitions.")
+
+  (defvar sysml2-ts--usage-node-types
+    '("part_usage" "action_usage" "state_usage" "port_usage"
+      "connection_usage" "attribute_usage" "item_usage"
+      "requirement_usage" "constraint_usage" "view_usage"
+      "viewpoint_usage" "rendering_usage" "concern_usage"
+      "use_case_usage" "analysis_usage" "verification_usage"
+      "snapshot_usage" "timeslice_usage" "calc_usage"
+      "metadata_usage" "classifier_usage" "metaclass_usage"
+      "expr_usage" "step_usage")
+    "Tree-sitter node types that represent usages.")
+
+  (defvar sysml2-ts--body-node-types
+    '("definition_body" "state_body" "requirement_body"
+      "constraint_body" "package_body" "enumeration_body")
+    "Tree-sitter node types that represent body blocks.")
+
+  (defun sysml2-ts--collect-definition-names ()
+    "Collect all definition names from the tree-sitter parse tree.
+Returns a list of name strings for all definition nodes in the buffer."
+    (let ((root (treesit-buffer-root-node))
+          (names nil))
+      (dolist (node-type sysml2-ts--definition-node-types)
+        (let ((query (format "((%s name: (identifier) @name))" node-type)))
+          (condition-case nil
+              (let ((captures (treesit-query-capture root query)))
+                (dolist (cap captures)
+                  (when (eq (car cap) 'name)
+                    (let ((text (treesit-node-text (cdr cap) t)))
+                      (unless (member text names)
+                        (push text names))))))
+            (treesit-query-error nil))))
+      (nreverse names)))
+
+  (defun sysml2-ts--collect-usage-names ()
+    "Collect all named usage elements from the tree-sitter parse tree.
+Returns a list of name strings for connectable elements (parts, ports, etc.)."
+    (let ((root (treesit-buffer-root-node))
+          (names nil))
+      (dolist (node-type sysml2-ts--usage-node-types)
+        (let ((query (format "((%s name: (identifier) @name))" node-type)))
+          (condition-case nil
+              (let ((captures (treesit-query-capture root query)))
+                (dolist (cap captures)
+                  (when (eq (car cap) 'name)
+                    (let ((text (treesit-node-text (cdr cap) t)))
+                      (unless (member text names)
+                        (push text names))))))
+            (treesit-query-error nil))))
+      (nreverse names)))
+
+  (defun sysml2-ts--parent-context ()
+    "Determine the completion context by examining the tree-sitter node at point.
+Returns one of: `typed-by', `specialization', `body', `connect', or nil."
+    (let* ((node (treesit-node-at (point)))
+           (parent (and node (treesit-node-parent node)))
+           (grandparent (and parent (treesit-node-parent parent)))
+           (parent-type (and parent (treesit-node-type parent)))
+           (grandparent-type (and grandparent (treesit-node-type grandparent))))
+      (cond
+       ;; Inside a typed_by clause — suggest definition names
+       ((or (equal parent-type "typed_by")
+            (equal grandparent-type "typed_by"))
+        'typed-by)
+       ;; Inside a specialization clause — suggest definition names
+       ((or (equal parent-type "specialization")
+            (equal grandparent-type "specialization"))
+        'specialization)
+       ;; Inside a connect clause or after "to" — suggest usage names
+       ((or (equal parent-type "connect_clause")
+            (equal grandparent-type "connect_clause"))
+        'connect)
+       ;; Inside a body block — suggest usage keywords
+       ((or (member parent-type sysml2-ts--body-node-types)
+            (member grandparent-type sysml2-ts--body-node-types))
+        'body)
+       ;; Default — no special tree-sitter context
+       (t nil))))
+
+  (defun sysml2-ts--completion-at-point ()
+    "Completion-at-point function using tree-sitter for SysML v2 buffers.
+Provides context-aware completion by examining the parse tree.
+Falls back to `sysml2-completion-at-point' when no tree-sitter
+context is identified."
+    (let ((context (sysml2-ts--parent-context))
+          (end (point))
+          (start (save-excursion
+                   (skip-chars-backward "A-Za-z0-9_:.*")
+                   (point))))
+      (pcase context
+        ('typed-by
+         (let ((candidates (append (sysml2-ts--collect-definition-names)
+                                   sysml2-standard-library-packages)))
+           (when candidates
+             (list start end candidates
+                   :exclusive 'no
+                   :annotation-function
+                   (lambda (cand)
+                     (if (member cand sysml2-standard-library-packages)
+                         " <lib>"
+                       " <def>"))))))
+        ('specialization
+         (let ((candidates (append (sysml2-ts--collect-definition-names)
+                                   sysml2-standard-library-packages)))
+           (when candidates
+             (list start end candidates
+                   :exclusive 'no
+                   :annotation-function
+                   (lambda (cand)
+                     (if (member cand sysml2-standard-library-packages)
+                         " <lib>"
+                       " <def>"))))))
+        ('connect
+         (let ((candidates (sysml2-ts--collect-usage-names)))
+           (when candidates
+             (list start end candidates
+                   :exclusive 'no
+                   :annotation-function
+                   (lambda (_cand) " <usage>")))))
+        ('body
+         (let ((candidates (append sysml2-usage-keywords
+                                   sysml2-behavioral-keywords
+                                   sysml2-modifier-keywords)))
+           (list start end candidates
+                 :exclusive 'no
+                 :annotation-function
+                 (lambda (cand)
+                   (cond
+                    ((member cand sysml2-usage-keywords) " <usage>")
+                    ((member cand sysml2-behavioral-keywords) " <behav>")
+                    ((member cand sysml2-modifier-keywords) " <mod>")
+                    (t nil))))))
+        (_
+         ;; Fall back to the regex-based CAPF
+         (sysml2-completion-at-point)))))
+
   ;; --- Mode definition ---
 
   ;;;###autoload
@@ -307,6 +494,12 @@ the tree-sitter incremental parser for better accuracy.
 
     ;; Imenu
     (setq-local treesit-simple-imenu-settings sysml2-ts--imenu-settings)
+
+    ;; Which-function
+    (add-hook 'which-func-functions #'sysml2-ts--which-function nil t)
+
+    ;; Completion
+    (add-hook 'completion-at-point-functions #'sysml2-ts--completion-at-point nil t)
 
     ;; Electric
     (setq-local electric-indent-chars

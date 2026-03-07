@@ -28,6 +28,15 @@
 (declare-function flymake-make-diagnostic "flymake")
 (declare-function flymake-diagnostic-functions "flymake")
 
+;; Tree-sitter forward declarations
+(declare-function treesit-available-p "treesit")
+(declare-function treesit-ready-p "treesit")
+(declare-function treesit-buffer-root-node "treesit")
+(declare-function treesit-query-capture "treesit")
+(declare-function treesit-node-start "treesit")
+(declare-function treesit-node-end "treesit")
+(declare-function treesit-node-type "treesit")
+
 ;; --- Delimiter matching ---
 
 (defun sysml2--check-unmatched-delimiters ()
@@ -140,6 +149,30 @@ Returns a list of Flymake diagnostics."
                       diagnostics)))))))
     diagnostics))
 
+;; --- Tree-sitter Flymake backend ---
+
+(defun sysml2-ts--flymake-backend (report-fn &rest _args)
+  "Flymake backend using tree-sitter to report syntax errors.
+Queries the tree-sitter parse tree for ERROR and MISSING nodes
+and reports them as Flymake diagnostics via REPORT-FN."
+  (when (and (fboundp 'treesit-available-p)
+             (treesit-available-p)
+             (treesit-ready-p 'sysml t))
+    (let* ((root (treesit-buffer-root-node 'sysml))
+           (errors (treesit-query-capture root '((ERROR) @error)))
+           (diagnostics nil))
+      (dolist (err errors)
+        (let ((node (cdr err)))
+          (push (flymake-make-diagnostic
+                 (current-buffer)
+                 (treesit-node-start node)
+                 (treesit-node-end node)
+                 :error
+                 (format "Tree-sitter syntax error (%s)"
+                         (treesit-node-type node)))
+                diagnostics)))
+      (funcall report-fn diagnostics))))
+
 ;; --- Flymake backend ---
 
 (defun sysml2--flymake-backend (report-fn &rest _args)
@@ -153,8 +186,16 @@ Calls REPORT-FN with collected diagnostics from all checks."
 ;; --- Setup ---
 
 (defun sysml2-flymake-setup ()
-  "Set up the Flymake backend for the current SysML v2 buffer."
-  (add-hook 'flymake-diagnostic-functions #'sysml2--flymake-backend nil t))
+  "Set up the Flymake backend for the current SysML v2 buffer.
+Registers the regexp-based backend unconditionally, and also
+registers the tree-sitter backend when tree-sitter is available
+and the `sysml' grammar is installed."
+  (add-hook 'flymake-diagnostic-functions #'sysml2--flymake-backend nil t)
+  (when (and (fboundp 'treesit-available-p)
+             (treesit-available-p)
+             (treesit-ready-p 'sysml t))
+    (add-hook 'flymake-diagnostic-functions
+              #'sysml2-ts--flymake-backend nil t)))
 
 (provide 'sysml2-flymake)
 ;;; sysml2-flymake.el ends here

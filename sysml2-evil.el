@@ -50,6 +50,7 @@
 (declare-function sysml2--outline-goto "sysml2-outline")
 (declare-function sysml2--outline-goto-and-close "sysml2-outline")
 (declare-function sysml2-goto-definition "sysml2-navigation")
+(declare-function sysml2-rename-symbol "sysml2-navigation")
 (declare-function sysml2-connect "sysml2-completion")
 (declare-function sysml2-insert-flow "sysml2-completion")
 (declare-function sysml2-insert-binding "sysml2-completion")
@@ -87,6 +88,7 @@
      "n"   '(:ignore t :which-key "navigate")
      "n o" '(imenu :which-key "outline (imenu)")
      "n d" '(sysml2-goto-definition :which-key "go to definition")
+     "r" '(sysml2-rename-symbol :which-key "rename symbol")
      "o"   '(sysml2-outline-toggle :which-key "outline panel")
      ;; Connections
      "c"   '(:ignore t :which-key "connect")

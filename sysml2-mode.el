@@ -134,6 +134,7 @@
 
 ;; Forward declarations for functions used in keymap
 (declare-function sysml2-goto-definition "sysml2-navigation")
+(declare-function sysml2-rename-symbol "sysml2-navigation")
 
 ;; --- Keymap ---
 
@@ -143,6 +144,7 @@
     (define-key map (kbd "C-c C-n o") #'imenu)
     (define-key map (kbd "C-c C-n t") #'sysml2-outline-toggle)
     (define-key map (kbd "M-.") #'sysml2-goto-definition)
+    (define-key map (kbd "C-c C-r") #'sysml2-rename-symbol)
     ;; LSP
     (define-key map (kbd "C-c C-l s") #'sysml2-lsp-ensure)
     (define-key map (kbd "C-c C-l r") #'sysml2-lsp-restart)
