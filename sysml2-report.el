@@ -29,8 +29,26 @@
 ;; Functions:
 ;;   `sysml2-report-summary' -- Show model statistics in a summary buffer
 ;;   `sysml2-report-traceability' -- Show requirement traceability matrix
+;;   `sysml2-report-export-markdown' -- Export model report as Markdown file
+;;   `sysml2-report-export' -- Export via Pandoc (PDF/HTML/DOCX)
 
 (require 'sysml2-lang)
+(require 'sysml2-vars)
+
+;; Forward declarations for plantuml extractors
+(declare-function sysml2--puml-extract-part-defs "sysml2-plantuml")
+(declare-function sysml2--puml-extract-typed-defs "sysml2-plantuml")
+(declare-function sysml2--puml-extract-enum-defs "sysml2-plantuml")
+(declare-function sysml2--puml-extract-port-usages "sysml2-plantuml")
+(declare-function sysml2--puml-extract-connections "sysml2-plantuml")
+(declare-function sysml2--puml-extract-requirements "sysml2-plantuml")
+(declare-function sysml2--puml-extract-requirement-usages "sysml2-plantuml")
+(declare-function sysml2--puml-extract-states "sysml2-plantuml")
+(declare-function sysml2--puml-extract-transitions "sysml2-plantuml")
+(declare-function sysml2--puml-extract-actions "sysml2-plantuml")
+(declare-function sysml2--puml-extract-successions "sysml2-plantuml")
+(declare-function sysml2--puml-extract-satisfactions "sysml2-plantuml")
+(declare-function sysml2--puml-find-def-bounds "sysml2-plantuml")
 
 ;; ---------------------------------------------------------------------------
 ;; Helper: comment/string check
@@ -429,6 +447,504 @@ satisfy and verify relationships, and coverage status.  The buffer uses
         (insert "=== SysML v2 Traceability Matrix ===\n\n")))
     (display-buffer buf)
     buf))
+
+;; ---------------------------------------------------------------------------
+;; Markdown export — section renderers
+;; ---------------------------------------------------------------------------
+
+(defconst sysml2--report-md-sections
+  '(("summary"        . "Model Summary")
+    ("part-decomp"    . "Part Decomposition (BOM)")
+    ("interfaces"     . "Interface Table")
+    ("connections"    . "Connection Matrix")
+    ("requirements"   . "Requirements Specification")
+    ("traceability"   . "Traceability Matrix")
+    ("states"         . "State Machines")
+    ("actions"        . "Action Flows")
+    ("enumerations"   . "Enumerations"))
+  "Available Markdown report sections as (ID . TITLE) pairs.")
+
+(defun sysml2--report-md-heading (level text)
+  "Return a Markdown heading at LEVEL with TEXT."
+  (concat (make-string level ?#) " " text "\n\n"))
+
+(defun sysml2--report-md-summary (source-buf)
+  "Render the Model Summary section from SOURCE-BUF."
+  (with-current-buffer source-buf
+    (let* ((definitions (sysml2--report-collect-definitions))
+           (usages (sysml2--report-count-usages))
+           (relationships (sysml2--report-count-relationships))
+           (satisfy-pairs (sysml2--report-collect-satisfy))
+           (verify-pairs (sysml2--report-collect-verify))
+           (pkg-count (sysml2--report-count-packages))
+           (import-count (sysml2--report-count-imports))
+           (req-defs (cdr (assoc "requirement def" definitions)))
+           (req-total (length req-defs))
+           (num-satisfied (length (delete-dups (mapcar #'car satisfy-pairs))))
+           (num-verified (length (delete-dups (mapcar #'car verify-pairs))))
+           (lines nil))
+      (push (sysml2--report-md-heading 2 "Model Summary") lines)
+      ;; Definitions table
+      (push "### Definitions\n\n" lines)
+      (push "| Type | Count |\n|------|-------|\n" lines)
+      (let ((def-total 0))
+        (dolist (entry definitions)
+          (let ((count (length (cdr entry))))
+            (setq def-total (+ def-total count))
+            (push (format "| %s | %d |\n" (car entry) count) lines)))
+        (push (format "| **Total** | **%d** |\n" def-total) lines))
+      ;; Usages table
+      (push "\n### Usages\n\n" lines)
+      (push "| Type | Count |\n|------|-------|\n" lines)
+      (let ((usage-total 0))
+        (dolist (entry usages)
+          (setq usage-total (+ usage-total (cdr entry)))
+          (push (format "| %s | %d |\n" (car entry) (cdr entry)) lines))
+        (push (format "| **Total** | **%d** |\n" usage-total) lines))
+      ;; Relationships
+      (when relationships
+        (push "\n### Relationships\n\n" lines)
+        (push "| Type | Count |\n|------|-------|\n" lines)
+        (dolist (entry relationships)
+          (push (format "| %s | %d |\n" (car entry) (cdr entry)) lines)))
+      ;; Coverage
+      (push "\n### Coverage\n\n" lines)
+      (if (> req-total 0)
+          (let ((sat-pct (/ (* 100.0 num-satisfied) req-total))
+                (ver-pct (/ (* 100.0 num-verified) req-total)))
+            (push (format "- **Requirements:** %d defined, %d satisfied (%.0f%%), %d verified (%.0f%%)\n"
+                          req-total num-satisfied sat-pct num-verified ver-pct) lines))
+        (push "- **Requirements:** 0 defined\n" lines))
+      (push (format "- **Packages:** %d\n" pkg-count) lines)
+      (push (format "- **Imports:** %d\n" import-count) lines)
+      (push "\n" lines)
+      (apply #'concat (nreverse lines)))))
+
+(defun sysml2--report-md-part-decomp (source-buf)
+  "Render the Part Decomposition / BOM section from SOURCE-BUF."
+  (require 'sysml2-plantuml)
+  (with-current-buffer source-buf
+    (let ((part-defs (sysml2--puml-extract-part-defs))
+          (lines nil))
+      (push (sysml2--report-md-heading 2 "Part Decomposition (BOM)") lines)
+      (if (null part-defs)
+          (push "*No part definitions found.*\n\n" lines)
+        (dolist (def part-defs)
+          (let ((name (plist-get def :name))
+                (super (plist-get def :super))
+                (abstract (plist-get def :abstract))
+                (attrs (plist-get def :attributes))
+                (parts (plist-get def :parts)))
+            (push (format "### %s%s\n\n"
+                          (if abstract "*abstract* " "")
+                          name) lines)
+            (when super
+              (push (format "- **Specializes:** %s\n" super) lines))
+            ;; Attributes
+            (when attrs
+              (push "\n**Attributes:**\n\n" lines)
+              (dolist (attr attrs)
+                (push (format "- `%s`\n" attr) lines)))
+            ;; Sub-parts (BOM entries)
+            (when parts
+              (push "\n**Parts (BOM):**\n\n" lines)
+              (push "| Part | Type | Multiplicity |\n|------|------|------|\n" lines)
+              (dolist (p parts)
+                (push (format "| %s | %s | %s |\n"
+                              (plist-get p :name)
+                              (plist-get p :type)
+                              (or (plist-get p :multiplicity) "1")) lines)))
+            (push "\n" lines))))
+      (apply #'concat (nreverse lines)))))
+
+(defun sysml2--report-md-interfaces (source-buf)
+  "Render the Interface Table section from SOURCE-BUF."
+  (require 'sysml2-plantuml)
+  (with-current-buffer source-buf
+    (let ((part-defs (sysml2--puml-extract-part-defs))
+          (lines nil)
+          (found nil))
+      (push (sysml2--report-md-heading 2 "Interface Table") lines)
+      ;; For each part def, extract its ports
+      (dolist (def part-defs)
+        (let* ((name (plist-get def :name))
+               (bounds (sysml2--puml-find-def-bounds "part def" name))
+               (ports (when bounds
+                        (sysml2--puml-extract-port-usages (car bounds) (cdr bounds)))))
+          (when ports
+            (setq found t)
+            (push (format "### %s\n\n" name) lines)
+            (push "| Port | Type | Conjugated | Direction |\n" lines)
+            (push "|------|------|------------|----------|\n" lines)
+            (dolist (p ports)
+              (push (format "| %s | %s | %s | %s |\n"
+                            (plist-get p :name)
+                            (plist-get p :type)
+                            (if (plist-get p :conjugated) "~" "")
+                            (or (plist-get p :direction) "—")) lines))
+            (push "\n" lines))))
+      ;; Also check port defs at top level
+      (let ((port-defs (sysml2--puml-extract-typed-defs "port def" "port")))
+        (when port-defs
+          (setq found t)
+          (push "### Port Definitions\n\n" lines)
+          (push "| Name | Attributes |\n|------|------------|\n" lines)
+          (dolist (pd port-defs)
+            (push (format "| %s | %s |\n"
+                          (plist-get pd :name)
+                          (if (plist-get pd :attributes)
+                              (mapconcat #'identity (plist-get pd :attributes) ", ")
+                            "—")) lines))
+          (push "\n" lines)))
+      (unless found
+        (push "*No ports or interfaces found.*\n\n" lines))
+      (apply #'concat (nreverse lines)))))
+
+(defun sysml2--report-md-connections (source-buf)
+  "Render the Connection Matrix section from SOURCE-BUF."
+  (require 'sysml2-plantuml)
+  (with-current-buffer source-buf
+    (let ((connections (sysml2--puml-extract-connections))
+          (lines nil))
+      (push (sysml2--report-md-heading 2 "Connection Matrix") lines)
+      (if (null connections)
+          (push "*No connections found.*\n\n" lines)
+        (push "| Connection | Source | Target |\n" lines)
+        (push "|------------|--------|--------|\n" lines)
+        (dolist (c connections)
+          (push (format "| %s | %s | %s |\n"
+                        (plist-get c :name)
+                        (plist-get c :source)
+                        (plist-get c :target)) lines))
+        (push "\n" lines))
+      (apply #'concat (nreverse lines)))))
+
+(defun sysml2--report-md-requirements (source-buf)
+  "Render the Requirements Specification section from SOURCE-BUF."
+  (require 'sysml2-plantuml)
+  (with-current-buffer source-buf
+    (let ((req-defs (sysml2--puml-extract-requirements))
+          (req-usages (sysml2--puml-extract-requirement-usages))
+          (lines nil))
+      (push (sysml2--report-md-heading 2 "Requirements Specification") lines)
+      (if (and (null req-defs) (null req-usages))
+          (push "*No requirements found.*\n\n" lines)
+        ;; Requirement definitions
+        (when req-defs
+          (push "### Requirement Definitions\n\n" lines)
+          (dolist (r req-defs)
+            (let ((name (plist-get r :name))
+                  (doc (plist-get r :doc))
+                  (subject (plist-get r :subject)))
+              (push (format "#### %s\n\n" name) lines)
+              (when doc
+                (push (format "> %s\n\n" doc) lines))
+              (when subject
+                (push (format "- **Subject:** %s\n" subject) lines))
+              (push "\n" lines))))
+        ;; Requirement usages (instances with hierarchy)
+        (when req-usages
+          (push "### Requirement Instances\n\n" lines)
+          (push "| Requirement | Type | Description |\n" lines)
+          (push "|-------------|------|-------------|\n" lines)
+          (dolist (r req-usages)
+            (let ((name (plist-get r :name))
+                  (type (plist-get r :type))
+                  (doc (plist-get r :doc))
+                  (children (plist-get r :children)))
+              (push (format "| **%s** | %s | %s |\n"
+                            name
+                            (or type "—")
+                            (or doc "—")) lines)
+              (dolist (child children)
+                (push (format "| &nbsp;&nbsp;%s | %s | %s |\n"
+                              (plist-get child :name)
+                              (or (plist-get child :type) "—")
+                              (or (plist-get child :doc) "—")) lines))))
+          (push "\n" lines)))
+      (apply #'concat (nreverse lines)))))
+
+(defun sysml2--report-md-traceability (source-buf)
+  "Render the Traceability Matrix section from SOURCE-BUF."
+  (with-current-buffer source-buf
+    (let* ((definitions (sysml2--report-collect-definitions))
+           (satisfy-pairs (sysml2--report-collect-satisfy))
+           (verify-pairs (sysml2--report-collect-verify))
+           (req-names (or (cdr (assoc "requirement def" definitions)) '()))
+           (satisfy-map (make-hash-table :test 'equal))
+           (verify-map (make-hash-table :test 'equal))
+           (lines nil))
+      ;; Build lookup tables
+      (dolist (pair satisfy-pairs)
+        (puthash (car pair) (cons (cdr pair) (gethash (car pair) satisfy-map))
+                 satisfy-map))
+      (dolist (pair verify-pairs)
+        (puthash (car pair) (cons (cdr pair) (gethash (car pair) verify-map))
+                 verify-map))
+      (push (sysml2--report-md-heading 2 "Traceability Matrix") lines)
+      (if (null req-names)
+          (push "*No requirement definitions found.*\n\n" lines)
+        (push "| Requirement | Satisfied By | Verified By | Status |\n" lines)
+        (push "|-------------|-------------|-------------|--------|\n" lines)
+        (dolist (req-name req-names)
+          (let* ((satisfied-by (gethash req-name satisfy-map))
+                 (verified-by (gethash req-name verify-map))
+                 (sat-str (if satisfied-by
+                              (mapconcat #'identity (nreverse satisfied-by) ", ")
+                            "—"))
+                 (ver-str (if verified-by
+                              (mapconcat (lambda (v) (or v "standalone"))
+                                         (nreverse verified-by) ", ")
+                            "—"))
+                 (status (cond
+                          ((and satisfied-by verified-by) "✓ Full")
+                          (satisfied-by                   "△ No test")
+                          (t                              "✗ Gap"))))
+            (push (format "| %s | %s | %s | %s |\n"
+                          req-name sat-str ver-str status) lines)))
+        (push "\n" lines))
+      (apply #'concat (nreverse lines)))))
+
+(defun sysml2--report-md-states (source-buf)
+  "Render the State Machines section from SOURCE-BUF."
+  (require 'sysml2-plantuml)
+  (with-current-buffer source-buf
+    (let ((definitions (sysml2--report-collect-definitions))
+          (lines nil)
+          (found nil))
+      (push (sysml2--report-md-heading 2 "State Machines") lines)
+      ;; Find state defs and extract their states/transitions
+      (let ((state-def-names (cdr (assoc "state def" definitions))))
+        (dolist (sname state-def-names)
+          (let ((bounds (sysml2--puml-find-def-bounds "state def" sname)))
+            (when bounds
+              (setq found t)
+              (let ((states (sysml2--puml-extract-states (car bounds) (cdr bounds)))
+                    (transitions (sysml2--puml-extract-transitions (car bounds) (cdr bounds))))
+                (push (format "### %s\n\n" sname) lines)
+                (when states
+                  (push "**States:**\n\n" lines)
+                  (dolist (s states)
+                    (push (format "- %s\n" (plist-get s :name)) lines))
+                  (push "\n" lines))
+                (when transitions
+                  (push "**Transitions:**\n\n" lines)
+                  (push "| Name | From | Trigger | To |\n" lines)
+                  (push "|------|------|---------|----|\n" lines)
+                  (dolist (tr transitions)
+                    (push (format "| %s | %s | %s | %s |\n"
+                                  (plist-get tr :name)
+                                  (plist-get tr :from)
+                                  (or (plist-get tr :trigger) "—")
+                                  (plist-get tr :to)) lines))
+                  (push "\n" lines)))))))
+      (unless found
+        (push "*No state machine definitions found.*\n\n" lines))
+      (apply #'concat (nreverse lines)))))
+
+(defun sysml2--report-extract-successions (beg end)
+  "Extract all `first X then Y' successions in region BEG..END.
+Unlike the plantuml extractor, this does not filter by brace depth,
+making it suitable for successions nested inside action def bodies."
+  (let ((results nil))
+    (save-excursion
+      (goto-char beg)
+      (while (re-search-forward
+              (concat "\\bfirst[ \t]+"
+                      "\\(" sysml2--identifier-regexp "\\)"
+                      "[ \t]+then[ \t]+"
+                      "\\(" sysml2--identifier-regexp "\\)[ \t]*;")
+              end t)
+        (unless (sysml2--report-in-comment-or-string-p)
+          (push (list :from (match-string-no-properties 1)
+                      :to (match-string-no-properties 2))
+                results))))
+    (nreverse results)))
+
+(defun sysml2--report-md-actions (source-buf)
+  "Render the Action Flows section from SOURCE-BUF."
+  (require 'sysml2-plantuml)
+  (with-current-buffer source-buf
+    (let ((definitions (sysml2--report-collect-definitions))
+          (lines nil)
+          (found nil))
+      (push (sysml2--report-md-heading 2 "Action Flows") lines)
+      (let ((action-def-names (cdr (assoc "action def" definitions))))
+        (dolist (aname action-def-names)
+          (let ((bounds (sysml2--puml-find-def-bounds "action def" aname)))
+            (when bounds
+              (setq found t)
+              (let ((actions (sysml2--puml-extract-actions (car bounds) (cdr bounds)))
+                    (successions (sysml2--report-extract-successions (car bounds) (cdr bounds))))
+                (push (format "### %s\n\n" aname) lines)
+                (when actions
+                  (push "**Actions:**\n\n" lines)
+                  (push "| Action | Type |\n|--------|------|\n" lines)
+                  (dolist (a actions)
+                    (push (format "| %s | %s |\n"
+                                  (plist-get a :name)
+                                  (plist-get a :type)) lines))
+                  (push "\n" lines))
+                (when successions
+                  (push "**Sequence:**\n\n" lines)
+                  (dolist (s successions)
+                    (push (format "- %s → %s\n"
+                                  (plist-get s :from)
+                                  (plist-get s :to)) lines))
+                  (push "\n" lines)))))))
+      (unless found
+        (push "*No action definitions found.*\n\n" lines))
+      (apply #'concat (nreverse lines)))))
+
+(defun sysml2--report-md-enumerations (source-buf)
+  "Render the Enumerations section from SOURCE-BUF."
+  (require 'sysml2-plantuml)
+  (with-current-buffer source-buf
+    (let ((enum-defs (sysml2--puml-extract-enum-defs))
+          (lines nil))
+      (push (sysml2--report-md-heading 2 "Enumerations") lines)
+      (if (null enum-defs)
+          (push "*No enumerations found.*\n\n" lines)
+        (dolist (def enum-defs)
+          (let ((name (plist-get def :name))
+                (super (plist-get def :super))
+                (literals (plist-get def :attributes)))
+            (push (format "### %s\n\n" name) lines)
+            (when super
+              (push (format "- **Specializes:** %s\n" super) lines))
+            (if literals
+                (progn
+                  (push "\n**Literals:**\n\n" lines)
+                  (dolist (lit literals)
+                    (push (format "- `%s`\n" lit) lines)))
+              (push "*No literals defined.*\n" lines))
+            (push "\n" lines))))
+      (apply #'concat (nreverse lines)))))
+
+;; ---------------------------------------------------------------------------
+;; Section dispatcher
+;; ---------------------------------------------------------------------------
+
+(defun sysml2--report-md-render-section (section-id source-buf)
+  "Render SECTION-ID from SOURCE-BUF and return a Markdown string."
+  (pcase section-id
+    ("summary"      (sysml2--report-md-summary source-buf))
+    ("part-decomp"  (sysml2--report-md-part-decomp source-buf))
+    ("interfaces"   (sysml2--report-md-interfaces source-buf))
+    ("connections"   (sysml2--report-md-connections source-buf))
+    ("requirements" (sysml2--report-md-requirements source-buf))
+    ("traceability" (sysml2--report-md-traceability source-buf))
+    ("states"       (sysml2--report-md-states source-buf))
+    ("actions"      (sysml2--report-md-actions source-buf))
+    ("enumerations" (sysml2--report-md-enumerations source-buf))
+    (_ (format "<!-- Unknown section: %s -->\n\n" section-id))))
+
+;; ---------------------------------------------------------------------------
+;; Interactive Markdown export
+;; ---------------------------------------------------------------------------
+
+;;;###autoload
+(defun sysml2-report-export-markdown (output-file sections)
+  "Export a model report as a Markdown file.
+OUTPUT-FILE is the path to write.  SECTIONS is a list of section IDs
+to include (see `sysml2--report-md-sections' for valid IDs).
+When called interactively, prompts for sections and output file."
+  (interactive
+   (let* ((all-ids (mapcar #'car sysml2--report-md-sections))
+          (all-labels (mapcar (lambda (s)
+                                (format "%s (%s)" (cdr s) (car s)))
+                              sysml2--report-md-sections))
+          (chosen (completing-read-multiple
+                   "Sections (comma-separated, RET for all): "
+                   all-labels))
+          (selected (if (null chosen)
+                        all-ids
+                      (mapcar (lambda (label)
+                                (car (seq-find
+                                      (lambda (s)
+                                        (string= label
+                                                 (format "%s (%s)" (cdr s) (car s))))
+                                      sysml2--report-md-sections)))
+                              chosen)))
+          (default-name (concat (file-name-sans-extension
+                                 (or (buffer-file-name)
+                                     (buffer-name)))
+                                "-report.md"))
+          (out (read-file-name "Output file: " nil default-name nil
+                               (file-name-nondirectory default-name))))
+     (list out selected)))
+  (let* ((source-buf (current-buffer))
+         (file-name (or (buffer-file-name) (buffer-name)))
+         (md (concat
+              (sysml2--report-md-heading 1
+                                         (format "SysML v2 Model Report — %s"
+                                                 (file-name-nondirectory file-name)))
+              (format "*Generated: %s*\n\n---\n\n"
+                      (format-time-string "%Y-%m-%d %H:%M"))
+              ;; Table of contents
+              "## Table of Contents\n\n"
+              (mapconcat
+               (lambda (id)
+                 (let ((title (cdr (assoc id sysml2--report-md-sections))))
+                   (format "- [%s](#%s)" title
+                           (replace-regexp-in-string
+                            "[^a-z0-9 -]" ""
+                            (replace-regexp-in-string
+                             " " "-" (downcase title))))))
+               sections "\n")
+              "\n\n---\n\n"
+              ;; Render each section
+              (mapconcat
+               (lambda (id)
+                 (sysml2--report-md-render-section id source-buf))
+               sections ""))))
+    (with-temp-file output-file
+      (insert md))
+    (message "Report written to %s" output-file)
+    (find-file-other-window output-file)))
+
+;; ---------------------------------------------------------------------------
+;; Pandoc export wrapper
+;; ---------------------------------------------------------------------------
+
+;;;###autoload
+(defun sysml2-report-export (format)
+  "Export the model report via Pandoc to FORMAT.
+FORMAT is one of \"pdf\", \"html\", or \"docx\".
+First generates a Markdown report in a temp file, then converts
+it using Pandoc.  Requires Pandoc to be installed."
+  (interactive
+   (list (completing-read "Export format: " '("pdf" "html" "docx") nil t)))
+  (let* ((pandoc (or sysml2-report-pandoc-executable
+                     (executable-find "pandoc")))
+         (base (file-name-sans-extension
+                (or (buffer-file-name) (buffer-name))))
+         (output-file (concat base "-report." format))
+         (md-file (make-temp-file "sysml2-report-" nil ".md"))
+         (all-ids (mapcar #'car sysml2--report-md-sections)))
+    (unless pandoc
+      (user-error "Pandoc not found; install it or set `sysml2-report-pandoc-executable'"))
+    ;; Generate the Markdown first
+    (sysml2-report-export-markdown md-file all-ids)
+    ;; Kill the temp markdown buffer that export-markdown opened
+    (when-let ((md-buf (get-file-buffer md-file)))
+      (kill-buffer md-buf))
+    ;; Convert with Pandoc
+    (let ((exit-code
+           (call-process pandoc nil "*SysML2 Pandoc*" nil
+                         md-file "-o" output-file
+                         "--standalone"
+                         (format "--metadata=title:%s"
+                                 (file-name-nondirectory
+                                  (or (buffer-file-name) (buffer-name)))))))
+      (delete-file md-file)
+      (if (= exit-code 0)
+          (progn
+            (message "Report exported to %s" output-file)
+            (when (string= format "html")
+              (browse-url (concat "file://" (expand-file-name output-file)))))
+        (pop-to-buffer "*SysML2 Pandoc*")
+        (user-error "Pandoc conversion failed (exit code %d)" exit-code)))))
 
 (provide 'sysml2-report)
 ;;; sysml2-report.el ends here

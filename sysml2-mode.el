@@ -145,6 +145,8 @@
 (declare-function hs-hide-level "hideshow")
 (declare-function sysml2-report-summary "sysml2-report")
 (declare-function sysml2-report-traceability "sysml2-report")
+(declare-function sysml2-report-export-markdown "sysml2-report")
+(declare-function sysml2-report-export "sysml2-report")
 (defvar hs-special-modes-alist)
 
 ;; --- Keymap ---
@@ -196,6 +198,8 @@
     ;; Inspect / Report
     (define-key map (kbd "C-c C-i s") #'sysml2-report-summary)
     (define-key map (kbd "C-c C-i t") #'sysml2-report-traceability)
+    (define-key map (kbd "C-c C-i m") #'sysml2-report-export-markdown)
+    (define-key map (kbd "C-c C-i e") #'sysml2-report-export)
     ;; Code folding
     (define-key map (kbd "C-c C-f t") #'hs-toggle-hiding)
     (define-key map (kbd "C-c C-f h") #'hs-hide-block)

@@ -68,6 +68,8 @@
 (declare-function sysml2-lsp-restart "sysml2-lsp")
 (declare-function sysml2-report-summary "sysml2-report")
 (declare-function sysml2-report-traceability "sysml2-report")
+(declare-function sysml2-report-export-markdown "sysml2-report")
+(declare-function sysml2-report-export "sysml2-report")
 
 (defvar sysml2-mode-map)
 (defvar sysml2-outline-mode-map)
@@ -143,6 +145,8 @@
      "i"   '(:ignore t :which-key "inspect")
      "i s" '(sysml2-report-summary :which-key "model summary")
      "i t" '(sysml2-report-traceability :which-key "traceability matrix")
+     "i m" '(sysml2-report-export-markdown :which-key "export Markdown")
+     "i e" '(sysml2-report-export :which-key "export (Pandoc)")
      ;; Code folding
      "f"   '(:ignore t :which-key "fold")
      "f t" '(hs-toggle-hiding :which-key "toggle")

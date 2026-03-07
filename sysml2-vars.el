@@ -273,6 +273,15 @@ These override the built-in default mapping."
   :type '(choice (const "csv") (const "mat"))
   :group 'sysml2-fmi)
 
+;; --- Report / Export ---
+
+(defcustom sysml2-report-pandoc-executable nil
+  "Path to Pandoc executable for report format conversion.
+When nil, searches `exec-path' for `pandoc'."
+  :type '(choice (const :tag "Search exec-path" nil)
+                 (file :tag "Pandoc path"))
+  :group 'sysml2)
+
 ;; --- Faces ---
 
 (defface sysml2-keyword-face
