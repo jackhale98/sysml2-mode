@@ -480,7 +480,7 @@
 ;; --- Report Enhancements ---
 
 (ert-deftest sysml2-test-md-traceability-has-id-column ()
-  "Test that markdown traceability includes requirement IDs."
+  "Test that markdown traceability includes requirement IDs and Derived From."
   (with-temp-buffer
     (insert "requirement def MassReq {\n"
             "    doc /* mass ok */\n"
@@ -490,8 +490,10 @@
             "}\n")
     (sysml2-mode)
     (let ((md (sysml2--report-md-traceability (current-buffer))))
-      ;; Header should include ID column
+      ;; Header should include ID, Derived From, and Refined To columns
       (should (string-match-p "| Requirement | ID |" md))
+      (should (string-match-p "Derived From" md))
+      (should (string-match-p "Refined To" md))
       ;; Row should include the ID value
       (should (string-match-p "REQ-001" md)))))
 
@@ -512,6 +514,233 @@
 (ert-deftest sysml2-test-allocations-section-registered ()
   "Test that the allocations section is registered."
   (should (assoc "allocations" sysml2--report-md-sections)))
+
+;; --- Derivation Extraction ---
+
+(ert-deftest sysml2-test-extract-derivations-basic ()
+  "Test derivation connection extraction."
+  (with-temp-buffer
+    (insert "#derivation connection {\n"
+            "    end #original ::> vehicleMassRequirement;\n"
+            "    end #derive ::> engineMassRequirement;\n"
+            "}\n")
+    (sysml2-mode)
+    (let ((derivs (sysml2--model-extract-derivations)))
+      (should (= 1 (length derivs)))
+      (should (string= "vehicleMassRequirement"
+                        (plist-get (car derivs) :original)))
+      (should (string= "engineMassRequirement"
+                        (plist-get (car derivs) :derived))))))
+
+(ert-deftest sysml2-test-extract-derivations-annex-a ()
+  "Test derivation extraction against annex-a fixture."
+  (with-temp-buffer
+    (insert-file-contents
+     (expand-file-name "test/fixtures/annex-a-simple-vehicle-model.sysml"
+                       (or (locate-dominating-file default-directory "test")
+                           default-directory)))
+    (sysml2-mode)
+    (let ((derivs (sysml2--model-extract-derivations)))
+      (should (>= (length derivs) 1))
+      ;; engineMassRequirement is derived from vehicleMassRequirement
+      (let ((d (car derivs)))
+        (should (string-match-p "vehicleMassRequirement"
+                                (plist-get d :original)))
+        (should (string-match-p "engineMassRequirement"
+                                (plist-get d :derived)))))))
+
+(ert-deftest sysml2-test-traceability-hierarchy ()
+  "Test that traceability shows parent-child decomposition."
+  (with-temp-buffer
+    (insert "requirement def MassReq {\n"
+            "    doc /* mass ok */\n"
+            "}\n"
+            "requirement vehicleSpec {\n"
+            "    doc /* vehicle requirements */\n"
+            "    requirement <'1'> massReq : MassReq {\n"
+            "        doc /* mass under 2000 */\n"
+            "    }\n"
+            "    requirement <'2'> fuelReq {\n"
+            "        doc /* fuel economy */\n"
+            "    }\n"
+            "}\n")
+    (sysml2-mode)
+    (let ((md (sysml2--report-md-traceability (current-buffer))))
+      ;; Parent should be bold
+      (should (string-match-p "\\*\\*vehicleSpec\\*\\*" md))
+      ;; Children should appear (indented with spaces)
+      (should (string-match-p "massReq" md))
+      (should (string-match-p "fuelReq" md)))))
+
+(ert-deftest sysml2-test-traceability-derived-from ()
+  "Test that traceability shows derivation relationships."
+  (with-temp-buffer
+    (insert "requirement vehicleMassReq {\n"
+            "    doc /* vehicle mass */\n"
+            "}\n"
+            "requirement engineMassReq {\n"
+            "    doc /* engine mass */\n"
+            "}\n"
+            "#derivation connection {\n"
+            "    end #original ::> vehicleMassReq;\n"
+            "    end #derive ::> engineMassReq;\n"
+            "}\n")
+    (sysml2-mode)
+    (let ((md (sysml2--report-md-traceability (current-buffer))))
+      ;; engineMassReq should show vehicleMassReq in Derived From column
+      (should (string-match-p "engineMassReq.*vehicleMassReq" md)))))
+
+;; --- Analysis Extraction ---
+
+(ert-deftest sysml2-test-extract-analyses-basic ()
+  "Test extraction of analysis usages."
+  (with-temp-buffer
+    (insert "analysis fuelEconomyAnalysis {\n"
+            "    subject = vehicle_b;\n"
+            "    objective fuelEconObjective {\n"
+            "        doc /* estimate fuel economy */\n"
+            "    }\n"
+            "    in attribute scenario : Scenario;\n"
+            "}\n")
+    (sysml2-mode)
+    (let ((analyses (sysml2--model-extract-analyses)))
+      (should (= 1 (length analyses)))
+      (let ((a (car analyses)))
+        (should (equal (plist-get a :name) "fuelEconomyAnalysis"))
+        (should (equal (plist-get a :subject) "vehicle_b"))
+        (should (equal (plist-get a :objective) "fuelEconObjective"))
+        (should (>= (length (plist-get a :params)) 1))))))
+
+(ert-deftest sysml2-test-extract-analyses-annex-a ()
+  "Test analysis extraction against annex-a fixture."
+  (with-temp-buffer
+    (insert-file-contents
+     (expand-file-name "test/fixtures/annex-a-simple-vehicle-model.sysml"
+                       (or (locate-dominating-file default-directory "test")
+                           default-directory)))
+    (sysml2-mode)
+    (let ((analyses (sysml2--model-extract-analyses)))
+      (should (>= (length analyses) 2))
+      (should (seq-find (lambda (a)
+                          (equal (plist-get a :name) "fuelEconomyAnalysis"))
+                        analyses))
+      (should (seq-find (lambda (a)
+                          (equal (plist-get a :name) "engineTradeOffAnalysis"))
+                        analyses)))))
+
+;; --- Constraint Extraction ---
+
+(ert-deftest sysml2-test-extract-constraints-basic ()
+  "Test extraction of constraint definitions."
+  (with-temp-buffer
+    (insert "constraint def MassConstraint {\n"
+            "    in massActual : MassValue;\n"
+            "    in massLimit : MassValue;\n"
+            "    massActual <= massLimit;\n"
+            "}\n")
+    (sysml2-mode)
+    (let ((constraints (sysml2--model-extract-constraints)))
+      (should (= 1 (length constraints)))
+      (let ((c (car constraints)))
+        (should (equal (plist-get c :name) "MassConstraint"))
+        (should (= 2 (length (plist-get c :params))))
+        (should (string-match-p "massActual <= massLimit"
+                                (plist-get c :expression)))))))
+
+(ert-deftest sysml2-test-extract-constraints-fixture ()
+  "Test constraint extraction against simple-vehicle fixture."
+  (with-temp-buffer
+    (insert-file-contents
+     (expand-file-name "test/fixtures/simple-vehicle.sysml"
+                       (or (locate-dominating-file default-directory "test")
+                           default-directory)))
+    (sysml2-mode)
+    (let ((constraints (sysml2--model-extract-constraints)))
+      (should (>= (length constraints) 1))
+      (should (seq-find (lambda (c)
+                          (equal (plist-get c :name) "MassConstraint"))
+                        constraints)))))
+
+;; --- Refinement Extraction ---
+
+(ert-deftest sysml2-test-extract-refinements-basic ()
+  "Test extraction of refinement dependencies."
+  (with-temp-buffer
+    (insert "#refinement dependency engine4Cyl to vehicle_b::engine;\n")
+    (sysml2-mode)
+    (let ((refs (sysml2--model-extract-refinements)))
+      (should (= 1 (length refs)))
+      (should (equal (plist-get (car refs) :name) "engine4Cyl"))
+      (should (equal (plist-get (car refs) :target) "vehicle_b::engine")))))
+
+(ert-deftest sysml2-test-extract-refinements-annex-a ()
+  "Test refinement extraction against annex-a fixture."
+  (with-temp-buffer
+    (insert-file-contents
+     (expand-file-name "test/fixtures/annex-a-simple-vehicle-model.sysml"
+                       (or (locate-dominating-file default-directory "test")
+                           default-directory)))
+    (sysml2-mode)
+    (let ((refs (sysml2--model-extract-refinements)))
+      (should (>= (length refs) 1))
+      (should (seq-find (lambda (r)
+                          (equal (plist-get r :name) "engine4Cyl"))
+                        refs)))))
+
+;; --- Report Section Registration ---
+
+(ert-deftest sysml2-test-analyses-section-registered ()
+  "Test that the analyses section is registered."
+  (should (assoc "analyses" sysml2--report-md-sections)))
+
+(ert-deftest sysml2-test-constraints-section-registered ()
+  "Test that the constraints section is registered."
+  (should (assoc "constraints" sysml2--report-md-sections)))
+
+;; --- Report Section Rendering ---
+
+(ert-deftest sysml2-test-md-analyses-section ()
+  "Test analysis cases markdown rendering."
+  (with-temp-buffer
+    (insert "analysis fuelAnalysis {\n"
+            "    subject = vehicle;\n"
+            "    objective fuelObj {\n"
+            "        doc /* estimate */\n"
+            "    }\n"
+            "}\n")
+    (sysml2-mode)
+    (let ((md (sysml2--report-md-analyses (current-buffer))))
+      (should (string-match-p "Analysis Cases" md))
+      (should (string-match-p "fuelAnalysis" md))
+      (should (string-match-p "vehicle" md))
+      (should (string-match-p "fuelObj" md)))))
+
+(ert-deftest sysml2-test-md-constraints-section ()
+  "Test constraint definitions markdown rendering."
+  (with-temp-buffer
+    (insert "constraint def MassConstraint {\n"
+            "    in massActual : MassValue;\n"
+            "    in massLimit : MassValue;\n"
+            "    massActual <= massLimit;\n"
+            "}\n")
+    (sysml2-mode)
+    (let ((md (sysml2--report-md-constraints (current-buffer))))
+      (should (string-match-p "Constraint Definitions" md))
+      (should (string-match-p "MassConstraint" md))
+      (should (string-match-p "massActual" md))
+      (should (string-match-p "MassValue" md)))))
+
+(ert-deftest sysml2-test-traceability-refined-to ()
+  "Test that traceability shows refinement relationships."
+  (with-temp-buffer
+    (insert "requirement vehicleMassReq {\n"
+            "    doc /* vehicle mass */\n"
+            "}\n"
+            "#refinement dependency vehicleMassReq to vehicle_b::engine;\n")
+    (sysml2-mode)
+    (let ((md (sysml2--report-md-traceability (current-buffer))))
+      (should (string-match-p "Refined To" md))
+      (should (string-match-p "engine" md)))))
 
 (provide 'test-diagram)
 ;;; test-diagram.el ends here

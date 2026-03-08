@@ -20,8 +20,19 @@
   stable git diffs
 - `sysml2-diagram-view` command (`C-c C-d v`): generate diagrams from `view def`
   filter and render clauses
-- 15 new tests: verification/allocation extraction, requirement IDs,
-  hierarchical tree layout, view filter parsing, report enhancements
+- Model extraction: analysis cases (`sysml2--model-extract-analyses`) with
+  subject, objective, and parameter extraction; constraint definitions
+  (`sysml2--model-extract-constraints`) with parameters and constraint
+  expression; refinement dependencies (`sysml2--model-extract-refinements`)
+  for `#refinement dependency NAME to TARGET;` patterns
+- Report sections: Analysis Cases table (name, type, subject, objective),
+  Constraint Definitions table (name, parameters, expression)
+- Traceability: "Refined To" column in both interactive and Markdown export
+  showing `#refinement dependency` relationships; requirement decomposition
+  hierarchy with parent-child indentation; derivation chain tracking
+- 28 new tests: verification/allocation extraction, requirement IDs,
+  hierarchical tree layout, view filter parsing, report enhancements,
+  analysis/constraint/refinement extraction and rendering
 
 ### Fixed
 - Byte-compilation: added missing `(require 'cl-lib)` in 5 modules

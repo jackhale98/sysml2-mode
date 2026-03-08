@@ -393,10 +393,12 @@ relationships, packages, imports, and requirement coverage analysis."
 Provides a sortable table of requirements with their satisfy and verify
 relationships."
   (setq tabulated-list-format
-        [("Requirement" 20 t)
+        [("Requirement" 25 t)
          ("ID" 10 t)
          ("Satisfied By" 20 t)
          ("Verified By" 20 t)
+         ("Derived From" 20 t)
+         ("Refined To" 20 t)
          ("Status" 12 t)])
   (setq tabulated-list-padding 2)
   (tabulated-list-init-header))
@@ -423,7 +425,13 @@ satisfy and verify relationships, and coverage status.  The buffer uses
          ;; Build ID lookup: req-name -> short-name ID
          (req-usages-data (with-current-buffer source-buf
                             (sysml2--model-extract-requirement-usages)))
+         (derivations (with-current-buffer source-buf
+                        (sysml2--model-extract-derivations)))
+         (refinements (with-current-buffer source-buf
+                        (sysml2--model-extract-refinements)))
          (id-map (make-hash-table :test 'equal))
+         (derive-map (make-hash-table :test 'equal))
+         (refine-map (make-hash-table :test 'equal))
          ;; Build lookup tables: req-name -> list of targets / verifiers
          (satisfy-map (make-hash-table :test 'equal))
          (verify-map (make-hash-table :test 'equal))
@@ -436,14 +444,26 @@ satisfy and verify relationships, and coverage status.  The buffer uses
       (dolist (child (plist-get r :children))
         (when (plist-get child :id)
           (puthash (plist-get child :name) (plist-get child :id) id-map))))
+    ;; Populate derive map: derived-name -> original-name
+    (dolist (d derivations)
+      (let ((orig (replace-regexp-in-string "\\`.*[:.]" ""
+                                            (plist-get d :original)))
+            (derv (replace-regexp-in-string "\\`.*[:.]" ""
+                                            (plist-get d :derived))))
+        (puthash derv orig derive-map)))
+    ;; Populate refine map: name -> target
+    (dolist (r refinements)
+      (let ((name (replace-regexp-in-string "\\`.*[:.]" ""
+                                            (plist-get r :name)))
+            (target (replace-regexp-in-string "\\`.*[:.]" ""
+                                              (plist-get r :target))))
+        (puthash name target refine-map)))
     ;; Populate satisfy map (normalize qualified names to simple names)
     (dolist (pair satisfy-pairs)
       (let* ((req-full (car pair))
              (target (cdr pair))
-             ;; Strip package prefixes: Requirements::foo -> foo, a.b -> b
              (req (replace-regexp-in-string "\\`.*[:.]" "" req-full)))
         (puthash req (cons target (gethash req satisfy-map)) satisfy-map)
-        ;; Also store under full name for qualified lookups
         (puthash req-full (cons target (gethash req-full satisfy-map)) satisfy-map)))
     ;; Populate verify map (normalize qualified names)
     (dolist (pair verify-pairs)
@@ -457,19 +477,24 @@ satisfy and verify relationships, and coverage status.  The buffer uses
       (let* ((req-id (or (gethash req-name id-map) "—"))
              (satisfied-by (gethash req-name satisfy-map))
              (verified-by (gethash req-name verify-map))
+             (derived-from (or (gethash req-name derive-map) "—"))
+             (refined-to (or (gethash req-name refine-map) "—"))
              (sat-str (if satisfied-by
-                         (mapconcat #'identity (nreverse satisfied-by) ", ")
+                         (mapconcat #'identity
+                                    (nreverse (copy-sequence satisfied-by)) ", ")
                        "\u2014"))
              (ver-str (if verified-by
                          (mapconcat (lambda (v) (or v "standalone"))
-                                    (nreverse verified-by) ", ")
+                                    (nreverse (copy-sequence verified-by)) ", ")
                        "\u2014"))
              (status (cond
                       ((and satisfied-by verified-by) "\u2713 Full")
                       (satisfied-by                   "\u25B3 No test")
                       (verified-by                    "\u25B3 No satisfy")
                       (t                              "\u2717 Gap"))))
-        (push (list req-name (vector req-name req-id sat-str ver-str status))
+        (push (list req-name
+                    (vector req-name req-id sat-str ver-str
+                            derived-from refined-to status))
               entries)))
     (setq entries (nreverse entries))
     (with-current-buffer buf
@@ -498,6 +523,8 @@ satisfy and verify relationships, and coverage status.  The buffer uses
     ("states"         . "State Machines")
     ("actions"        . "Action Flows")
     ("calculations"   . "Calculations")
+    ("analyses"       . "Analysis Cases")
+    ("constraints"    . "Constraint Definitions")
     ("enumerations"   . "Enumerations"))
   "Available Markdown report sections as (ID . TITLE) pairs.")
 
@@ -747,66 +774,137 @@ satisfy and verify relationships, and coverage status.  The buffer uses
           (push "\n" lines)))
       (apply #'concat (nreverse lines)))))
 
+(defun sysml2--report-md-traceability-row (req-name indent id-map
+                                                      satisfy-map verify-map
+                                                      derive-map
+                                                      &optional refine-map)
+  "Render one traceability row for REQ-NAME at INDENT level.
+REFINE-MAP maps element names to their refinement targets.
+Returns a Markdown table row string."
+  (let* ((prefix (make-string (* indent 2) ?\s))
+         (display-name (if (> indent 0)
+                           (concat prefix req-name)
+                         (format "**%s**" req-name)))
+         (req-id (or (gethash req-name id-map) "—"))
+         (satisfied-by (gethash req-name satisfy-map))
+         (verified-by (gethash req-name verify-map))
+         (derived-from (gethash req-name derive-map))
+         (refined-to (when refine-map (gethash req-name refine-map)))
+         (sat-str (if satisfied-by
+                      (mapconcat #'identity
+                                 (nreverse (copy-sequence satisfied-by)) ", ")
+                    "—"))
+         (ver-str (if verified-by
+                      (mapconcat (lambda (v) (or v "standalone"))
+                                 (nreverse (copy-sequence verified-by)) ", ")
+                    "—"))
+         (der-str (or derived-from "—"))
+         (ref-str (or refined-to "—"))
+         (status (cond
+                  ((and satisfied-by verified-by) "✓ Full")
+                  (satisfied-by                   "△ No test")
+                  (verified-by                    "△ No satisfy")
+                  (t                              "✗ Gap"))))
+    (format "| %s | %s | %s | %s | %s | %s | %s |\n"
+            display-name req-id sat-str ver-str der-str ref-str status)))
+
 (defun sysml2--report-md-traceability (source-buf)
-  "Render the Traceability Matrix section from SOURCE-BUF."
+  "Render the Traceability Matrix section from SOURCE-BUF.
+Shows requirement decomposition hierarchy with children indented
+under parents.  Includes derivation relationships."
   (with-current-buffer source-buf
     (let* ((definitions (sysml2--report-collect-definitions))
            (satisfy-pairs (sysml2--report-collect-satisfy))
            (verify-pairs (sysml2--report-collect-verify))
            (req-def-names (or (cdr (assoc "requirement def" definitions)) '()))
            (req-usage-names (sysml2--report-collect-requirement-usages))
-           (req-names (sort (delete-dups (append req-def-names req-usage-names))
-                          #'string<))
-           ;; Build ID lookup from model extractor
+           (all-req-names (delete-dups (append req-def-names req-usage-names)))
+           ;; Model data for hierarchy and IDs
            (req-usages-data (sysml2--model-extract-requirement-usages))
+           (derivations (sysml2--model-extract-derivations))
+           (refinements (sysml2--model-extract-refinements))
            (id-map (make-hash-table :test 'equal))
+           (parent-map (make-hash-table :test 'equal))
+           (children-map (make-hash-table :test 'equal))
+           (derive-map (make-hash-table :test 'equal))
+           (refine-map (make-hash-table :test 'equal))
            (satisfy-map (make-hash-table :test 'equal))
            (verify-map (make-hash-table :test 'equal))
            (lines nil))
-      ;; Populate ID map
+      ;; Build ID map and parent-child maps
       (dolist (r req-usages-data)
-        (when (plist-get r :id)
-          (puthash (plist-get r :name) (plist-get r :id) id-map))
-        (dolist (child (plist-get r :children))
-          (when (plist-get child :id)
-            (puthash (plist-get child :name) (plist-get child :id) id-map))))
-      ;; Build lookup tables (normalize qualified names)
+        (let ((pname (plist-get r :name)))
+          (when (plist-get r :id)
+            (puthash pname (plist-get r :id) id-map))
+          (let ((child-names nil))
+            (dolist (child (plist-get r :children))
+              (let ((cname (plist-get child :name)))
+                (when (plist-get child :id)
+                  (puthash cname (plist-get child :id) id-map))
+                (puthash cname pname parent-map)
+                (push cname child-names)))
+            (when child-names
+              (puthash pname (sort (nreverse child-names) #'string<)
+                       children-map)))))
+      ;; Build derive map: derived-name -> original-name
+      (dolist (d derivations)
+        (let ((orig (replace-regexp-in-string "\\`.*[:.]" ""
+                                              (plist-get d :original)))
+              (derv (replace-regexp-in-string "\\`.*[:.]" ""
+                                              (plist-get d :derived))))
+          (puthash derv orig derive-map)))
+      ;; Build refine map: name -> target
+      (dolist (r refinements)
+        (let ((name (replace-regexp-in-string "\\`.*[:.]" ""
+                                              (plist-get r :name)))
+              (target (replace-regexp-in-string "\\`.*[:.]" ""
+                                                (plist-get r :target))))
+          (puthash name target refine-map)))
+      ;; Build satisfy/verify lookup tables
       (dolist (pair satisfy-pairs)
         (let* ((req-full (car pair))
                (target (cdr pair))
                (req (replace-regexp-in-string "\\`.*[:.]" "" req-full)))
           (puthash req (cons target (gethash req satisfy-map)) satisfy-map)
-          (puthash req-full (cons target (gethash req-full satisfy-map)) satisfy-map)))
+          (puthash req-full (cons target (gethash req-full satisfy-map))
+                   satisfy-map)))
       (dolist (pair verify-pairs)
         (let* ((req-full (car pair))
                (verifier (cdr pair))
                (req (replace-regexp-in-string "\\`.*[:.]" "" req-full)))
           (puthash req (cons verifier (gethash req verify-map)) verify-map)
-          (puthash req-full (cons verifier (gethash req-full verify-map)) verify-map)))
-      (push (sysml2--report-md-heading 2 "Traceability Matrix") lines)
-      (if (null req-names)
-          (push "*No requirement definitions found.*\n\n" lines)
-        (push "| Requirement | ID | Satisfied By | Verified By | Status |\n" lines)
-        (push "|-------------|-----|-------------|-------------|--------|\n" lines)
-        (dolist (req-name req-names)
-          (let* ((req-id (or (gethash req-name id-map) "—"))
-                 (satisfied-by (gethash req-name satisfy-map))
-                 (verified-by (gethash req-name verify-map))
-                 (sat-str (if satisfied-by
-                              (mapconcat #'identity (nreverse satisfied-by) ", ")
-                            "—"))
-                 (ver-str (if verified-by
-                              (mapconcat (lambda (v) (or v "standalone"))
-                                         (nreverse verified-by) ", ")
-                            "—"))
-                 (status (cond
-                          ((and satisfied-by verified-by) "✓ Full")
-                          (satisfied-by                   "△ No test")
-                          (verified-by                    "△ No satisfy")
-                          (t                              "✗ Gap"))))
-            (push (format "| %s | %s | %s | %s | %s |\n"
-                          req-name req-id sat-str ver-str status) lines)))
-        (push "\n" lines))
+          (puthash req-full (cons verifier (gethash req-full verify-map))
+                   verify-map)))
+      ;; Build ordered list: parents first, children indented beneath
+      (let ((top-level (sort (seq-filter
+                              (lambda (n) (not (gethash n parent-map)))
+                              all-req-names)
+                             #'string<))
+            (ordered nil))
+        (dolist (name top-level)
+          (push (cons name 0) ordered)
+          (dolist (child (gethash name children-map))
+            (push (cons child 1) ordered)))
+        ;; Add any orphans not covered by the hierarchy
+        (let ((seen (make-hash-table :test 'equal)))
+          (dolist (entry ordered)
+            (puthash (car entry) t seen))
+          (dolist (name (sort (copy-sequence all-req-names) #'string<))
+            (unless (gethash name seen)
+              (push (cons name 0) ordered))))
+        (setq ordered (nreverse ordered))
+        ;; Render
+        (push (sysml2--report-md-heading 2 "Traceability Matrix") lines)
+        (if (null ordered)
+            (push "*No requirement definitions found.*\n\n" lines)
+          (push "| Requirement | ID | Satisfied By | Verified By | Derived From | Refined To | Status |\n" lines)
+          (push "|-------------|-----|-------------|-------------|--------------|------------|--------|\n" lines)
+          (dolist (entry ordered)
+            (push (sysml2--report-md-traceability-row
+                   (car entry) (cdr entry)
+                   id-map satisfy-map verify-map derive-map refine-map)
+                  lines))
+          (push "\n" lines)))
       (apply #'concat (nreverse lines)))))
 
 (defun sysml2--report-md-allocations (source-buf)
@@ -975,6 +1073,58 @@ making it suitable for successions nested inside action def bodies."
                     lines)))))
       (apply #'concat (nreverse lines)))))
 
+(defun sysml2--report-md-analyses (source-buf)
+  "Render the Analysis Cases section from SOURCE-BUF."
+  (with-current-buffer source-buf
+    (let ((analyses (sort (copy-sequence (sysml2--model-extract-analyses))
+                          (lambda (a b) (string< (plist-get a :name)
+                                                 (plist-get b :name)))))
+          (lines nil))
+      (push (sysml2--report-md-heading 2 "Analysis Cases") lines)
+      (if (null analyses)
+          (push "*No analysis cases found.*\n\n" lines)
+        (push "| Analysis | Type | Subject | Objective |\n" lines)
+        (push "|----------|------|---------|----------|\n" lines)
+        (dolist (a analyses)
+          (push (format "| %s | %s | %s | %s |\n"
+                        (plist-get a :name)
+                        (or (plist-get a :type) "—")
+                        (or (plist-get a :subject) "—")
+                        (or (plist-get a :objective) "—"))
+                lines))
+        (push "\n" lines))
+      (apply #'concat (nreverse lines)))))
+
+(defun sysml2--report-md-constraints (source-buf)
+  "Render the Constraint Definitions section from SOURCE-BUF."
+  (with-current-buffer source-buf
+    (let ((constraints (sort (copy-sequence (sysml2--model-extract-constraints))
+                             (lambda (a b) (string< (plist-get a :name)
+                                                    (plist-get b :name)))))
+          (lines nil))
+      (push (sysml2--report-md-heading 2 "Constraint Definitions") lines)
+      (if (null constraints)
+          (push "*No constraint definitions found.*\n\n" lines)
+        (push "| Constraint | Parameters | Expression |\n" lines)
+        (push "|------------|-----------|------------|\n" lines)
+        (dolist (c constraints)
+          (let ((params-str (if (plist-get c :params)
+                                (mapconcat
+                                 (lambda (p)
+                                   (let ((n (plist-get p :name))
+                                         (ty (plist-get p :type)))
+                                     (if ty (format "`%s : %s`" n ty)
+                                       (format "`%s`" n))))
+                                 (plist-get c :params) ", ")
+                              "—")))
+            (push (format "| %s | %s | %s |\n"
+                          (plist-get c :name)
+                          params-str
+                          (or (plist-get c :expression) "—"))
+                  lines)))
+        (push "\n" lines))
+      (apply #'concat (nreverse lines)))))
+
 ;; ---------------------------------------------------------------------------
 ;; Section dispatcher
 ;; ---------------------------------------------------------------------------
@@ -992,6 +1142,8 @@ making it suitable for successions nested inside action def bodies."
     ("states"       (sysml2--report-md-states source-buf))
     ("actions"      (sysml2--report-md-actions source-buf))
     ("calculations" (sysml2--report-md-calculations source-buf))
+    ("analyses"     (sysml2--report-md-analyses source-buf))
+    ("constraints"  (sysml2--report-md-constraints source-buf))
     ("enumerations" (sysml2--report-md-enumerations source-buf))
     (_ (format "<!-- Unknown section: %s -->\n\n" section-id))))
 

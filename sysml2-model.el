@@ -873,6 +873,43 @@ Returns list of (:source :target)."
                   results)))
         (nreverse results)))))
 
+(defun sysml2--model-extract-derivations (&optional buffer)
+  "Extract derive relationships from BUFFER.
+Returns list of (:original :derived) plists.
+Matches `#derivation connection { end #original ::> A; end #derive ::> B; }'."
+  (with-current-buffer (or buffer (current-buffer))
+    (save-excursion
+      (goto-char (point-min))
+      (let ((results nil)
+            (re "#derivation[ \t]+connection[ \t]*{"))
+        (while (re-search-forward re nil t)
+          (unless (let ((ppss (syntax-ppss)))
+                    (or (nth 3 ppss) (nth 4 ppss)))
+            (let ((block-start (match-end 0))
+                  (block-end nil)
+                  (original nil) (derived nil))
+              (goto-char (1- (match-end 0)))
+              (condition-case nil
+                  (progn (forward-sexp 1) (setq block-end (point)))
+                (scan-error (setq block-end (point-max))))
+              (save-excursion
+                (goto-char block-start)
+                (when (re-search-forward
+                       (concat "#original[ \t]+::>[ \t]+"
+                               "\\(" sysml2--qualified-name-regexp "\\)")
+                       block-end t)
+                  (setq original (match-string-no-properties 1))))
+              (save-excursion
+                (goto-char block-start)
+                (when (re-search-forward
+                       (concat "#derive[ \t]+::>[ \t]+"
+                               "\\(" sysml2--qualified-name-regexp "\\)")
+                       block-end t)
+                  (setq derived (match-string-no-properties 1))))
+              (when (and original derived)
+                (push (list :original original :derived derived) results)))))
+        (nreverse results)))))
+
 ;; ---------------------------------------------------------------------------
 ;; Use case extractor
 ;; ---------------------------------------------------------------------------
@@ -1078,6 +1115,150 @@ Returns plist (:packages :imports)."
         (when (and (< pkg-pos pos) (> pkg-pos best-pos))
           (setq best pkg-name best-pos pkg-pos))))
     best))
+
+;; ---------------------------------------------------------------------------
+;; Analysis extractor
+;; ---------------------------------------------------------------------------
+
+(defun sysml2--model-extract-analyses (&optional buffer)
+  "Extract analysis usages and defs from BUFFER.
+Returns list of plists (:name :type :subject :objective :params)."
+  (with-current-buffer (or buffer (current-buffer))
+    (save-excursion
+      (goto-char (point-min))
+      (let ((results nil)
+            (re (concat "\\banalysis[ \t]+"
+                        "\\(?:def[ \t]+\\)?"
+                        "\\(" sysml2--identifier-regexp "\\)"
+                        "\\(?:[ \t]*:>?[ \t]*"
+                        "\\(" sysml2--qualified-name-regexp "\\)\\)?")))
+        (while (re-search-forward re nil t)
+          (let ((name (match-string-no-properties 1))
+                (type (match-string-no-properties 2))
+                (pos (match-beginning 0)))
+            (save-excursion
+              (goto-char pos)
+              (unless (let ((ppss (syntax-ppss)))
+                        (or (nth 3 ppss) (nth 4 ppss)))
+                (let ((subject nil) (objective nil) (params nil))
+                  (when (re-search-forward "{" (line-end-position 3) t)
+                    (let ((body-start (point))
+                          (body-end nil))
+                      (goto-char (1- (point)))
+                      (condition-case nil
+                          (progn (forward-sexp 1) (setq body-end (point)))
+                        (scan-error (setq body-end (point-max))))
+                      (when body-end
+                        ;; Extract subject
+                        (goto-char body-start)
+                        (when (re-search-forward
+                               (concat "\\bsubject\\b[= \t]+"
+                                       "\\(" sysml2--qualified-name-regexp "\\)")
+                               body-end t)
+                          (setq subject (match-string-no-properties 1)))
+                        ;; Extract objective
+                        (goto-char body-start)
+                        (when (re-search-forward
+                               (concat "\\bobjective[ \t]+"
+                                       "\\(" sysml2--identifier-regexp "\\)")
+                               body-end t)
+                          (setq objective (match-string-no-properties 1)))
+                        ;; Extract in parameters
+                        (goto-char body-start)
+                        (while (re-search-forward
+                                (concat "\\bin[ \t]+"
+                                        "\\(?:attribute[ \t]+\\)?"
+                                        "\\(" sysml2--identifier-regexp "\\)"
+                                        "\\(?:[ \t]*:>?[ \t]*"
+                                        "\\(" sysml2--qualified-name-regexp "\\)\\)?")
+                                body-end t)
+                          (push (list :name (match-string-no-properties 1)
+                                      :type (match-string-no-properties 2))
+                                params)))))
+                  (push (list :name name :type type
+                              :subject subject :objective objective
+                              :params (nreverse params))
+                        results))))))
+        (nreverse results)))))
+
+;; ---------------------------------------------------------------------------
+;; Constraint extractor
+;; ---------------------------------------------------------------------------
+
+(defun sysml2--model-extract-constraints (&optional buffer)
+  "Extract constraint definitions from BUFFER.
+Returns list of plists (:name :params :expression)."
+  (with-current-buffer (or buffer (current-buffer))
+    (save-excursion
+      (goto-char (point-min))
+      (let ((results nil)
+            (re (concat "\\bconstraint[ \t]+def[ \t]+"
+                        "\\(" sysml2--identifier-regexp "\\)")))
+        (while (re-search-forward re nil t)
+          (let ((name (match-string-no-properties 1))
+                (pos (match-beginning 0)))
+            (save-excursion
+              (goto-char pos)
+              (unless (let ((ppss (syntax-ppss)))
+                        (or (nth 3 ppss) (nth 4 ppss)))
+                (let ((params nil) (expr nil))
+                  (when (re-search-forward "{" (line-end-position 3) t)
+                    (let ((body-start (point))
+                          (body-end nil))
+                      (goto-char (1- (point)))
+                      (condition-case nil
+                          (progn (forward-sexp 1) (setq body-end (point)))
+                        (scan-error (setq body-end (point-max))))
+                      (when body-end
+                        ;; Extract in parameters
+                        (goto-char body-start)
+                        (while (re-search-forward
+                                (concat "\\bin[ \t]+"
+                                        "\\(" sysml2--identifier-regexp "\\)"
+                                        "\\(?:[ \t]*:>?[ \t]*"
+                                        "\\(" sysml2--qualified-name-regexp "\\)\\)?")
+                                body-end t)
+                          (push (list :name (match-string-no-properties 1)
+                                      :type (match-string-no-properties 2))
+                                params))
+                        ;; Extract constraint expression (last non-param line)
+                        (goto-char body-start)
+                        (let ((last-expr nil))
+                          (while (re-search-forward
+                                  "^[ \t]*\\([a-zA-Z_][^ \t\n]*.*[<>=!]+.*\\);[ \t]*$"
+                                  body-end t)
+                            (setq last-expr
+                                  (string-trim (match-string-no-properties 1))))
+                          (setq expr last-expr)))))
+                  (push (list :name name
+                              :params (nreverse params)
+                              :expression expr)
+                        results))))))
+        (nreverse results)))))
+
+;; ---------------------------------------------------------------------------
+;; Refinement extractor
+;; ---------------------------------------------------------------------------
+
+(defun sysml2--model-extract-refinements (&optional buffer)
+  "Extract refinement dependency statements from BUFFER.
+Matches `#refinement dependency NAME to TARGET;'.
+Returns list of plists (:name :target)."
+  (with-current-buffer (or buffer (current-buffer))
+    (save-excursion
+      (goto-char (point-min))
+      (let ((results nil)
+            (re (concat "#refinement[ \t]+dependency[ \t]+"
+                        "\\(" sysml2--qualified-name-regexp "\\)"
+                        "[ \t]+to[ \t]+"
+                        "\\(" sysml2--qualified-name-regexp "\\)[ \t]*;")))
+        (while (re-search-forward re nil t)
+          (unless (let ((ppss (syntax-ppss)))
+                    (or (nth 3 ppss) (nth 4 ppss)))
+            (push (list :name (match-string-no-properties 1)
+                        :target (match-string-no-properties 2))
+                  results)))
+        (nreverse results)))))
 
 ;; ---------------------------------------------------------------------------
 ;; Diagram type detection

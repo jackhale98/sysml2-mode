@@ -560,12 +560,12 @@ sysml2-snippets.el      Yasnippet template registration
 sysml2-project.el       Project root detection, library resolution
 sysml2-lsp.el           LSP client config (eglot + lsp-mode)
 sysml2-flymake.el       In-buffer diagnostics (syntax + semantic)
-sysml2-model.el         Shared model extraction layer (backend-agnostic)
+sysml2-model.el         Shared model extraction (parts, ports, reqs, analyses, constraints, refinements)
 sysml2-svg.el           Direct SVG generation (tree, requirement diagrams)
 sysml2-d2.el            D2 language generation (IBD, state, action, etc.)
 sysml2-plantuml.el      SysML-to-PlantUML transformation (legacy backend)
 sysml2-diagram.el       Diagram dispatch, preview, export, org-babel
-sysml2-report.el        Model summary, traceability (with IDs), allocations, Markdown/Pandoc export
+sysml2-report.el        Model summary, traceability (IDs, derivations, refinements), analyses, constraints, allocations, Markdown/Pandoc export
 sysml2-api.el           Systems Modeling API REST client
 sysml2-fmi.el           FMU inspector, interface extraction, Modelica gen
 sysml2-cosim.el         SSP generation, simulation, results, verification
@@ -578,7 +578,7 @@ sysml2-mode.el          Entry point, syntax table, keymap, mode definition
 
 ## Testing
 
-225 ERT tests across 16 test files:
+240 ERT tests across 16 test files:
 
 ```bash
 make test
