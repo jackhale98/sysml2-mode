@@ -412,6 +412,7 @@ When nil, searches `exec-path' for `pandoc'."
 (defvar sysml2--diagram-source-buffer nil
   "Source SysML buffer for the current diagram preview.")
 
+
 (defvar sysml2--api-auth-token nil
   "Optional authentication token for the Systems Modeling API.")
 

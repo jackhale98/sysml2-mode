@@ -164,9 +164,16 @@ CALLBACK receives (SUCCESS DATA-OR-ERROR)."
 ;; --- D2 Invocation ---
 
 (defun sysml2--diagram-resolve-d2 ()
-  "Return the D2 executable path, or nil if not found."
+  "Return the D2 executable path, or nil if not found.
+Checks `sysml2-d2-executable-path', then `exec-path' via
+`executable-find', then common installation directories that
+GUI Emacs may not have in its PATH."
   (or sysml2-d2-executable-path
-      (executable-find "d2")))
+      (executable-find "d2")
+      (cl-find-if #'file-executable-p
+                  (list (expand-file-name "~/.local/bin/d2")
+                        "/usr/local/bin/d2"
+                        "/opt/homebrew/bin/d2"))))
 
 (defun sysml2--diagram-invoke-d2 (d2-string format callback)
   "Invoke D2 on D2-STRING for FORMAT, call CALLBACK with result.
@@ -259,8 +266,10 @@ Uses the backend selected by `sysml2-diagram-backend'."
                   (message "D2 error: %s" data)))))
          ;; No local D2 — fall back to SVG for types that support it
          (if (memq type sysml2--diagram-svg-types)
-             (let ((svg-data (sysml2-svg-generate type scope)))
-               (sysml2--diagram-display-image svg-data "svg"))
+             (progn
+               (message "D2 not found; using SVG fallback. Install D2 or set `sysml2-d2-executable-path'.")
+               (let ((svg-data (sysml2-svg-generate type scope)))
+                 (sysml2--diagram-display-image svg-data "svg")))
            ;; No SVG fallback — open in web playground
            (let* ((d2-src (sysml2-d2-generate type scope))
                   (encoded (sysml2--d2-playground-encode d2-src))
@@ -288,20 +297,30 @@ Uses the backend selected by `sysml2-diagram-backend'."
     buf))
 
 (defun sysml2--diagram-display-image (image-data format)
-  "Display IMAGE-DATA as FORMAT in the preview buffer."
+  "Display IMAGE-DATA as FORMAT in the preview buffer.
+Scales the image to fit the preview window dimensions."
   (let ((buf (sysml2--diagram-get-preview-buffer))
         (img-type (pcase format
                     ("svg" 'svg)
                     ("png" 'png)
                     (_ 'png))))
-    (with-current-buffer buf
-      (let ((inhibit-read-only t))
-        (erase-buffer)
-        (if (display-graphic-p)
-            (insert-image (create-image image-data img-type t))
-          (insert image-data))
-        (goto-char (point-min))))
-    (sysml2--diagram-show-preview-window)))
+    ;; Show the window first so we can measure it
+    (sysml2--diagram-show-preview-window)
+    (let* ((win (get-buffer-window buf))
+           (max-w (when win
+                    (- (window-body-width win t) 10)))
+           (max-h (when win
+                    (- (window-body-height win t) 10)))
+           (img-props (append (list image-data img-type t)
+                              (when max-w (list :max-width max-w))
+                              (when max-h (list :max-height max-h)))))
+      (with-current-buffer buf
+        (let ((inhibit-read-only t))
+          (erase-buffer)
+          (if (display-graphic-p)
+              (insert-image (apply #'create-image img-props))
+            (insert image-data))
+          (goto-char (point-min)))))))
 
 (defun sysml2--diagram-show-preview-window ()
   "Display the preview buffer according to `sysml2-diagram-preview-window'."
@@ -452,15 +471,28 @@ Auto-detects scope from enclosing definition, or prompts."
   (interactive)
   (sysml2--diagram-generate-and-show 'package nil))
 
-(defun sysml2-diagram-export (filename)
-  "Export diagram to FILENAME; format derived from extension.
+(defun sysml2-diagram-export (dtype scope filename)
+  "Export diagram of type DTYPE with SCOPE to FILENAME.
+Format is derived from the file extension (default svg).
+Prompts for diagram type, scope (when applicable), and output path.
 Bound to `C-c C-d e'."
-  (interactive "FExport diagram to file: ")
+  (interactive
+   (let* ((type (intern (completing-read "Diagram type: "
+                                         '("tree" "interconnection" "state-machine"
+                                           "action-flow" "requirement-tree"
+                                           "use-case" "package")
+                                         nil t)))
+          (scope (when (memq type '(interconnection state-machine action-flow))
+                   (sysml2--diagram-read-scope
+                    (pcase type
+                      ('interconnection "IBD")
+                      ('state-machine "State machine")
+                      ('action-flow "Action flow")))))
+          (file (read-file-name "Export to file: " nil nil nil
+                                (format "%s.svg" type))))
+     (list type scope file)))
   (let* ((ext (or (file-name-extension filename) "svg"))
-         (format ext)
-         (detected (sysml2--model-detect-diagram-type-at-point))
-         (dtype (car detected))
-         (scope (cdr detected)))
+         (format ext))
     (pcase sysml2-diagram-backend
       ('native
        (cond

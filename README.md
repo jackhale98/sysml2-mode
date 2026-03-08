@@ -216,7 +216,10 @@ Generate diagrams from SysML v2 models with a dual-backend architecture. Seven d
 | `C-c C-d w` | `sysml2-diagram-open-in-playground` | Open in D2 web playground |
 
 Scoped diagrams (IBD, state machine, action flow) auto-detect the
-enclosing definition or prompt for a scope name.
+enclosing definition or prompt for a scope name. Diagram export
+(`C-c C-d e`) prompts for diagram type, scope, and output file.
+
+Diagrams are automatically scaled to fit the preview window.
 
 View-filtered diagrams (`C-c C-d v`) parse `view def` declarations with
 `render` clauses, `filter @SysML::...` metatype filters, and `:>`
@@ -226,8 +229,8 @@ inheritance to determine the diagram type automatically.
 
 The native backend (`sysml2-diagram-backend` = `native`) uses two rendering engines:
 
-- **Direct SVG** (zero dependencies) for deterministic layouts: tree/BDD diagrams (hierarchical depth-based layout with L-shaped connectors) and requirement trees (with verify/satisfy annotations, requirement IDs, and color-coded coverage status)
-- **[D2](https://d2lang.com)** for graph layouts: IBD, state machine, action flow, use case, and package diagrams
+- **[D2](https://d2lang.com)** for all seven diagram types: tree/BDD, requirements, IBD, state machine, action flow, use case, and package
+- **Direct SVG** (zero-dependency fallback) for tree and requirement diagrams when D2 is not installed
 
 When D2 is not installed locally, graph diagrams automatically fall back to opening in the [D2 Playground](https://play.d2lang.com) in your browser — no local installation required. Changes in the playground do NOT update the SysML model; this is a one-way, read-only visualization.
 
@@ -509,7 +512,7 @@ The simulation engine supports:
 
 - **Constraints**: Boolean expression evaluation with comparison, logical, and arithmetic operators
 - **Calculations**: Expression evaluation with parameterized inputs and built-in functions (`abs`, `sqrt`, `min`, `max`, etc.)
-- **State machines**: Entry state, signal triggers, guard conditions, entry/exit actions, effects, deadlock detection
+- **State machines**: Entry state, signal triggers, guard conditions, entry/exit actions, effects, deadlock detection. Supports `state def`, `exhibit state`, and nested state regions (e.g. parallel orthogonal states)
 - **Action flows**: Sequential execution, fork/join, if/else, while loops, assign, send actions
 
 ### Customization

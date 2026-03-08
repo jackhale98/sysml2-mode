@@ -1,5 +1,20 @@
 # Changelog
 
+## 0.2.1 — 2026-03-08
+
+### Added
+- Diagram export now prompts for diagram type, scope, and output file
+  (`C-c C-d e`) instead of relying on auto-detection at point
+- Diagram preview scales to fit the preview window using `:max-width`
+  and `:max-height` image properties
+
+### Fixed
+- D2 executable resolution: now checks common installation paths
+  (`~/.local/bin/d2`, `/usr/local/bin/d2`, `/opt/homebrew/bin/d2`) as
+  fallback when GUI Emacs does not inherit the shell PATH
+- D2 fallback messaging: displays a user-visible message when falling
+  back to SVG rendering because D2 was not found
+
 ## 0.2.0 — 2026-03-07
 
 ### Added
