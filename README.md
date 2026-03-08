@@ -4,9 +4,16 @@ An Emacs major mode for editing [SysML v2](https://www.omgsysml.org/SysML-2.htm)
 
 Provides syntax highlighting, indentation, completion, navigation, diagram generation, native simulation, FMI/FMU integration, co-simulation orchestration, and LSP support.
 
-**Requires:** Emacs 29.1+
+**Requires:** Emacs 29.1+ | **Platforms:** Linux, macOS, Windows
 
-**[Tutorial](TUTORIAL.md)** — Step-by-step guide to building a complete SysML v2 model with sysml2-mode (drone system example covering all 20 SysML v2 concepts).
+## Documentation
+
+| Document | Description |
+|----------|-------------|
+| **[Tutorial](TUTORIAL.md)** | Step-by-step guide to building a complete SysML v2 model (drone system example covering all 20 SysML v2 concepts) |
+| **[SysML v2 Syntax Reference](SYNTAX-REFERENCE.md)** | Language syntax reference and best practices for SysML v2 textual notation |
+| **[FMI Integration Guide](examples/fmi-integration.md)** | Complete workflow for SysML v2 + Modelica/FMI co-simulation (8-step process from model to results) |
+| **[Changelog](CHANGELOG.md)** | Release history and version notes |
 
 ## Table of Contents
 
@@ -345,7 +352,8 @@ Generate partial Modelica models from SysML part definitions:
 | Binding | Command | Description |
 |---------|---------|-------------|
 | `C-c C-s m` | `sysml2-fmi-generate-modelica` | Generate `.mo` file from part def |
-| `C-c C-s M` | `sysml2-fmi-generate-all-modelica` | Generate `.mo` files for all exportable parts |
+| `C-c C-s M` | `sysml2-fmi-generate-all-modelica` | Generate `.mo` files for all parts in current file |
+| `C-c C-s F` | `sysml2-fmi-batch-generate-modelica` | Generate `.mo` files for all parts across multiple SysML files |
 
 ```modelica
 partial model Engine
@@ -384,7 +392,7 @@ Compile Modelica models to FMUs via OpenModelica:
 
 ## Co-Simulation
 
-Orchestrate co-simulation runs with FMPy or OMSimulator.
+Orchestrate co-simulation runs with FMPy or OMSimulator. See the **[FMI Integration Guide](examples/fmi-integration.md)** for a complete end-to-end walkthrough.
 
 ### SSP Generation
 
@@ -436,9 +444,11 @@ Built-in SysML v2 behavioral simulation powered by [sysml2-cli](https://github.c
 |---------|---------|-------------|
 | `C-c C-x s` | `sysml2-simulate` | Open simulation dispatch menu |
 | `C-c C-x l` | `sysml2-simulate-list` | List all simulatable constructs in the current file |
-| `C-c C-x e` | `sysml2-simulate-eval` | Evaluate a constraint or calculation with variable bindings |
-| `C-c C-x m` | `sysml2-simulate-state-machine` | Simulate a state machine with event injection |
+| `C-c C-x e` | `sysml2-simulate-eval` | Evaluate a constraint or calculation (with parameter completion) |
+| `C-c C-x m` | `sysml2-simulate-state-machine` | Simulate a state machine (with trigger signal completion) |
 | `C-c C-x a` | `sysml2-simulate-action-flow` | Execute an action flow |
+
+All simulation commands offer model-aware completion: construct names, trigger signals for state machines, and parameter names for constraints and calculations are extracted from the model and presented as candidates.
 
 ### Listing Constructs
 
@@ -663,6 +673,7 @@ Plus `gd` for goto-definition in normal state. Neither evil nor general.el is a 
 | `C-c C-s e` | `sysml2-fmi-extract-interfaces` |
 | `C-c C-s m` | `sysml2-fmi-generate-modelica` |
 | `C-c C-s M` | `sysml2-fmi-generate-all-modelica` |
+| `C-c C-s F` | `sysml2-fmi-batch-generate-modelica` |
 | `C-c C-s b` | `sysml2-fmi-compile-fmu` |
 | `C-c C-s B` | `sysml2-fmi-compile-all-fmus` |
 | `C-c C-s v` | `sysml2-fmi-validate-interfaces` |
