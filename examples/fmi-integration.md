@@ -370,18 +370,58 @@ EfficiencyReq                                        MANUAL     Complex constrai
 Requirements with simple `SIGNAL OP VALUE` patterns in their `doc` comments are
 automatically checked. Complex constraints are flagged for manual review.
 
+## One-Command Pipeline
+
+For rapid iteration, use the full pipeline command to run all steps automatically:
+
+From Emacs, press `C-c C-s P` (or `SPC m s P`). This runs:
+
+1. Generate Modelica stubs for all exportable parts
+2. Compile all stubs to FMUs via OpenModelica (async)
+3. Auto-discover FMUs and package SSP
+4. Run co-simulation and display results
+
+You'll be prompted for an output directory, then the pipeline runs each step
+in sequence with progress messages in the minibuffer.
+
+### FMI Dashboard
+
+Press `C-c C-s d` (or `SPC m s d`) to see the current export status at a glance:
+
+```
+FMI Export Dashboard
+------------------------------------------------------------
+
+Source: thermal-system.sysml
+Output: ~/models/modelica/
+
+Part Definition           Ports  Attrs  Modelica     FMU
+-----------------------------------------------------------------
+Heater                    2      2      generated    compiled
+HeatExchanger             3      2      generated    compiled
+Controller                2      2      generated    missing
+
+Total: 3 parts | 3 Modelica stubs | 2 FMUs
+```
+
 ## Key Bindings Reference
 
 | Binding | Doom | Command | Description |
 |---------|------|---------|-------------|
 | `C-c C-s e` | `SPC m s e` | `sysml2-fmi-extract-interfaces` | Extract FMI interfaces |
 | `C-c C-s m` | `SPC m s m` | `sysml2-fmi-generate-modelica` | Generate Modelica stub |
+| `C-c C-s M` | `SPC m s M` | `sysml2-fmi-generate-all-modelica` | Generate all Modelica stubs |
+| `C-c C-s b` | `SPC m s b` | `sysml2-fmi-compile-fmu` | Compile .mo to FMU |
+| `C-c C-s B` | `SPC m s B` | `sysml2-fmi-compile-all-fmus` | Compile all FMUs |
 | `C-c C-s v` | `SPC m s v` | `sysml2-fmi-validate-interfaces` | Validate FMU interfaces |
+| `C-c C-s V` | `SPC m s V` | `sysml2-fmi-validate-all` | Validate all FMUs |
+| `C-c C-s d` | `SPC m s d` | `sysml2-fmi-dashboard` | FMI export dashboard |
 | `C-c C-s i` | `SPC m s i` | `sysml2-fmi-inspect-fmu` | Inspect FMU contents |
 | `C-c C-s g` | `SPC m s g` | `sysml2-cosim-generate-ssp` | Generate SSP package |
 | `C-c C-s r` | `SPC m s r` | `sysml2-cosim-run` | Run co-simulation |
 | `C-c C-s p` | `SPC m s p` | `sysml2-cosim-results` | View results |
 | `C-c C-s c` | `SPC m s c` | `sysml2-cosim-verify-requirements` | Verify requirements |
+| `C-c C-s P` | `SPC m s P` | `sysml2-cosim-pipeline` | Full pipeline (end-to-end) |
 
 ## Configuration
 
@@ -394,6 +434,9 @@ automatically checked. Complex constraints are flagged for manual review.
 ;; Output paths
 (setq sysml2-fmi-modelica-output-dir "~/models/modelica/")
 (setq sysml2-cosim-output-dir "~/models/results/")
+
+;; OpenModelica path (for FMU compilation)
+(setq sysml2-fmi-openmodelica-path "/opt/openmodelica/")
 
 ;; Custom type mapping (extend the built-in SysML → FMI map)
 (setq sysml2-fmi-type-mapping-alist

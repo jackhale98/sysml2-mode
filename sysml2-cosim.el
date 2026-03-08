@@ -28,6 +28,7 @@
 ;;   `sysml2-cosim-stop' -- Stop running simulation
 ;;   `sysml2-cosim-results' -- Display simulation results
 ;;   `sysml2-cosim-verify-requirements' -- Verify requirements against results
+;;   `sysml2-cosim-pipeline' -- End-to-end: generate → compile → SSP → run
 
 (require 'cl-lib)
 (require 'sysml2-vars)
@@ -516,6 +517,147 @@ Interactive: prompts for CSV file and uses current buffer."
     (let ((ver-results (nreverse verification)))
       (sysml2--cosim-display-verification ver-results)
       ver-results)))
+
+;; --- Auto-discover FMUs ---
+
+(defun sysml2--cosim-discover-fmus (directory &optional buffer)
+  "Find FMU files in DIRECTORY matching part defs in BUFFER.
+Returns list of absolute FMU paths."
+  (let* ((buf (or buffer (current-buffer)))
+         (fmu-files (directory-files (expand-file-name directory) t "\\.fmu\\'" t)))
+    (when fmu-files
+      ;; If we have part info, filter to matching FMUs; otherwise return all
+      (let ((parts (when (fboundp 'sysml2--fmi-list-exportable-parts)
+                     (sysml2--fmi-list-exportable-parts buf))))
+        (if parts
+            (let ((part-names (mapcar (lambda (p)
+                                        (downcase (plist-get p :name)))
+                                      parts)))
+              (cl-remove-if-not
+               (lambda (fmu)
+                 (member (downcase (file-name-sans-extension
+                                    (file-name-nondirectory fmu)))
+                         part-names))
+               fmu-files))
+          fmu-files)))))
+
+;; --- End-to-End Pipeline ---
+
+(declare-function sysml2-fmi-generate-all-modelica "sysml2-fmi")
+(declare-function sysml2-fmi-compile-all-fmus "sysml2-fmi")
+(declare-function sysml2--fmi-resolve-omc "sysml2-fmi")
+(declare-function sysml2--fmi-list-exportable-parts "sysml2-fmi")
+(declare-function sysml2--fmi-extract-part-interface "sysml2-fmi")
+(declare-function sysml2--fmi-extract-typed-attributes "sysml2-fmi")
+(declare-function sysml2--fmi-generate-mo-string "sysml2-fmi")
+
+;;;###autoload
+(defun sysml2-cosim-pipeline (&optional buffer)
+  "Run the full co-simulation pipeline on the current SysML file.
+Steps:
+  1. Generate Modelica stubs for all exportable parts
+  2. Compile all stubs to FMUs via OpenModelica
+  3. Generate SSP with auto-discovered FMUs
+  4. Run co-simulation
+
+Each step waits for the previous to complete.  FMU compilation
+and co-simulation run asynchronously."
+  (interactive)
+  (let* ((buf (or buffer (current-buffer)))
+         (file (buffer-file-name buf))
+         (output-dir (read-directory-name
+                      "Pipeline output directory: "
+                      (or sysml2-fmi-modelica-output-dir
+                          (when file (file-name-directory file)))))
+         ;; Pre-check tools
+         (_omc (sysml2--fmi-resolve-omc))
+         (ssp-path (expand-file-name "system.ssp" output-dir)))
+    (make-directory output-dir t)
+
+    ;; Step 1: Generate Modelica stubs
+    (message "[Pipeline 1/4] Generating Modelica stubs...")
+    (let* ((parts (sysml2--fmi-list-exportable-parts buf))
+           (mo-files nil))
+      (unless parts
+        (user-error "No exportable part definitions found"))
+      (dolist (part parts)
+        (let* ((name (plist-get part :name))
+               (mo-path (expand-file-name (concat name ".mo") output-dir))
+               (mo-string
+                (if (and file (sysml2--cli-available-p))
+                    (sysml2--cli-call-text "export" "modelica" file
+                                           "--part" name)
+                  (let* ((contract (sysml2--fmi-extract-part-interface name buf))
+                         (bounds (with-current-buffer buf
+                                   (sysml2--model-find-def-bounds "part def" name)))
+                         (attributes (when bounds
+                                       (with-current-buffer buf
+                                         (sysml2--fmi-extract-typed-attributes
+                                          (car bounds) (cdr bounds))))))
+                    (sysml2--fmi-generate-mo-string name contract attributes)))))
+          (with-temp-file mo-path
+            (insert mo-string))
+          (push mo-path mo-files)))
+      (message "[Pipeline 1/4] Generated %d Modelica stubs" (length mo-files))
+
+      ;; Step 2: Compile to FMUs (async — chain the rest via sentinel)
+      (message "[Pipeline 2/4] Compiling FMUs via OpenModelica...")
+      (let* ((omc (sysml2--fmi-resolve-omc))
+             (mos-file (make-temp-file "sysml2-pipeline-" nil ".mos"))
+             (mos-lines nil)
+             (model-names nil))
+        (dolist (mo (nreverse mo-files))
+          (let ((name (file-name-sans-extension (file-name-nondirectory mo))))
+            (push name model-names)
+            (push (format "loadFile(\"%s\");" (expand-file-name mo)) mos-lines)
+            (push (format "buildModelFMU(%s, version=\"2.0\", fmuType=\"me_cs\");"
+                          name)
+                  mos-lines)))
+        (with-temp-file mos-file
+          (insert (mapconcat #'identity (nreverse mos-lines) "\n") "\n"))
+        (let* ((default-directory output-dir)
+               (proc-buf (generate-new-buffer " *sysml2-pipeline*"))
+               (proc (start-process "sysml2-pipeline-omc" proc-buf omc mos-file)))
+          (set-process-sentinel
+           proc
+           (let ((names (nreverse model-names))
+                 (pipe-buf buf)
+                 (pipe-dir output-dir)
+                 (pipe-ssp ssp-path)
+                 (pipe-mos mos-file))
+             (lambda (p _event)
+               (when (memq (process-status p) '(exit signal))
+                 (delete-file pipe-mos)
+                 (let ((compiled (cl-count-if
+                                  (lambda (n)
+                                    (file-exists-p
+                                     (expand-file-name (concat n ".fmu")
+                                                       pipe-dir)))
+                                  names)))
+                   (message "[Pipeline 2/4] FMU compilation: %d/%d succeeded"
+                            compiled (length names))
+
+                   ;; Step 3: Generate SSP with discovered FMUs
+                   (message "[Pipeline 3/4] Generating SSP package...")
+                   (let* ((fmu-paths (sysml2--cosim-discover-fmus
+                                      pipe-dir pipe-buf))
+                          (ssd-xml
+                           (let ((file (buffer-file-name pipe-buf)))
+                             (if (and file
+                                      (fboundp 'sysml2--cli-available-p)
+                                      (sysml2--cli-available-p))
+                                 (sysml2--cli-call-text "export" "ssp" file)
+                               (let ((structure
+                                      (with-current-buffer pipe-buf
+                                        (sysml2--cosim-extract-ssp-structure))))
+                                 (sysml2--cosim-generate-ssd-xml structure))))))
+                     (sysml2--cosim-package-ssp ssd-xml fmu-paths pipe-ssp)
+                     (message "[Pipeline 3/4] SSP written: %s" pipe-ssp)
+
+                     ;; Step 4: Run co-simulation
+                     (message "[Pipeline 4/4] Running co-simulation...")
+                     (sysml2-cosim-run pipe-ssp)))
+                 (kill-buffer (process-buffer p)))))))))))
 
 (provide 'sysml2-cosim)
 ;;; sysml2-cosim.el ends here

@@ -31,8 +31,14 @@
 ;;   `sysml2-fmi-inspect-fmu' -- Open FMU inspector buffer
 ;;   `sysml2-fmi-extract-interfaces' -- Extract FMI interface contracts
 ;;   `sysml2-fmi-generate-modelica' -- Generate Modelica stub
+;;   `sysml2-fmi-generate-all-modelica' -- Generate stubs for all parts
+;;   `sysml2-fmi-compile-fmu' -- Compile .mo to .fmu via OpenModelica
+;;   `sysml2-fmi-compile-all-fmus' -- Batch compile all .mo files
 ;;   `sysml2-fmi-validate-interfaces' -- Validate FMU against SysML
+;;   `sysml2-fmi-validate-all' -- Validate all FMUs against SysML
+;;   `sysml2-fmi-dashboard' -- Status overview of FMI export pipeline
 
+(require 'cl-lib)
 (require 'sysml2-vars)
 (require 'sysml2-lang)
 (require 'dom)
@@ -488,6 +494,330 @@ Interactive: prompts for part def name and output path."
           (message "Modelica stub written to %s" output-path)
           (find-file-other-window output-path))
       mo-string)))
+
+;; --- Batch Modelica Generation ---
+
+(defun sysml2--fmi-list-exportable-parts (&optional buffer)
+  "List exportable part defs in BUFFER.
+When sysml2-cli is available, uses tree-sitter AST.
+Otherwise extracts part defs via regex.
+Returns list of plists with `:name', `:ports', `:attributes', `:connections'."
+  (let ((file (buffer-file-name (or buffer (current-buffer)))))
+    (if (and file (sysml2--cli-available-p))
+        ;; Tree-sitter backend returns JSON list
+        (let ((result (sysml2--cli-call-json "export" "list" file)))
+          (if (and result (listp result))
+              (mapcar (lambda (item)
+                        (list :name (plist-get item :name)
+                              :ports (or (plist-get item :ports) 0)
+                              :attributes (or (plist-get item :attributes) 0)
+                              :connections (or (plist-get item :connections) 0)))
+                      result)
+            nil))
+      ;; Regex fallback — extract part defs that have ports
+      (with-current-buffer (or buffer (current-buffer))
+        (let ((part-defs (sysml2--model-extract-part-defs)))
+          (mapcar (lambda (pd)
+                    (list :name (plist-get pd :name)
+                          :ports 0 :attributes 0 :connections 0))
+                  part-defs))))))
+
+;;;###autoload
+(defun sysml2-fmi-generate-all-modelica (&optional buffer)
+  "Generate Modelica stubs for all exportable parts in BUFFER.
+Prompts for output directory, then generates a .mo file for each
+part definition that has ports or attributes."
+  (interactive)
+  (let* ((buf (or buffer (current-buffer)))
+         (parts (sysml2--fmi-list-exportable-parts buf)))
+    (unless parts
+      (user-error "No exportable part definitions found"))
+    (let* ((output-dir (read-directory-name
+                        "Output directory for .mo files: "
+                        sysml2-fmi-modelica-output-dir))
+           (file (buffer-file-name buf))
+           (generated nil))
+      (make-directory output-dir t)
+      (dolist (part parts)
+        (let* ((name (plist-get part :name))
+               (output-path (expand-file-name (concat name ".mo") output-dir))
+               (mo-string
+                (if (and file (sysml2--cli-available-p))
+                    (sysml2--cli-call-text "export" "modelica" file
+                                           "--part" name)
+                  (let* ((contract (sysml2--fmi-extract-part-interface name buf))
+                         (bounds (with-current-buffer buf
+                                   (sysml2--model-find-def-bounds "part def" name)))
+                         (attributes (when bounds
+                                       (with-current-buffer buf
+                                         (sysml2--fmi-extract-typed-attributes
+                                          (car bounds) (cdr bounds))))))
+                    (sysml2--fmi-generate-mo-string name contract attributes)))))
+          (with-temp-file output-path
+            (insert mo-string))
+          (push (list :name name :path output-path) generated)))
+      ;; Display summary
+      (let ((out-buf (get-buffer-create "*SysML2 Modelica Generation*")))
+        (with-current-buffer out-buf
+          (let ((inhibit-read-only t))
+            (erase-buffer)
+            (insert (propertize "Modelica Stub Generation\n" 'face 'bold))
+            (insert (make-string 50 ?-) "\n\n")
+            (insert (format "Generated %d Modelica stubs in %s\n\n"
+                            (length generated) output-dir))
+            (dolist (g (nreverse generated))
+              (insert (format "  %s  ->  %s\n"
+                              (plist-get g :name)
+                              (file-name-nondirectory (plist-get g :path))))))
+          (special-mode)
+          (goto-char (point-min)))
+        (pop-to-buffer out-buf))
+      (message "Generated %d Modelica stubs" (length generated)))))
+
+;; --- FMU Compilation via OpenModelica ---
+
+(defun sysml2--fmi-resolve-omc ()
+  "Resolve the OpenModelica compiler (omc) executable path.
+Checks `sysml2-fmi-openmodelica-path'/bin/omc, then exec-path."
+  (or (when sysml2-fmi-openmodelica-path
+        (let ((omc (expand-file-name "bin/omc" sysml2-fmi-openmodelica-path)))
+          (when (file-executable-p omc) omc)))
+      (executable-find "omc")
+      (user-error "OpenModelica (omc) not found.  Set `sysml2-fmi-openmodelica-path' or add omc to PATH")))
+
+(defun sysml2--fmi-generate-mos-script (mo-path &optional fmu-version fmu-type)
+  "Generate a .mos script to compile MO-PATH to an FMU.
+FMU-VERSION defaults to \"2.0\".  FMU-TYPE defaults to \"me_cs\"."
+  (let ((model-name (file-name-sans-extension (file-name-nondirectory mo-path)))
+        (version (or fmu-version "2.0"))
+        (ftype (or fmu-type "me_cs")))
+    (format "loadFile(\"%s\");\nbuildModelFMU(%s, version=\"%s\", fmuType=\"%s\");\n"
+            (expand-file-name mo-path) model-name version ftype)))
+
+;;;###autoload
+(defun sysml2-fmi-compile-fmu (mo-file)
+  "Compile Modelica file MO-FILE to an FMU using OpenModelica.
+Runs omc asynchronously.  The FMU is produced in the same directory."
+  (interactive "fModelica file (.mo): ")
+  (let* ((omc (sysml2--fmi-resolve-omc))
+         (mo-path (expand-file-name mo-file))
+         (mos-script (sysml2--fmi-generate-mos-script mo-path))
+         (mos-file (make-temp-file "sysml2-fmu-" nil ".mos"))
+         (default-directory (file-name-directory mo-path))
+         (proc-buf (generate-new-buffer " *sysml2-omc*")))
+    (with-temp-file mos-file
+      (insert mos-script))
+    (message "Compiling %s to FMU..." (file-name-nondirectory mo-path))
+    (let ((proc (start-process "sysml2-omc" proc-buf omc mos-file)))
+      (set-process-sentinel
+       proc
+       (let ((mo-name (file-name-sans-extension
+                       (file-name-nondirectory mo-path)))
+             (dir default-directory))
+         (lambda (p _event)
+           (when (memq (process-status p) '(exit signal))
+             (let ((fmu-path (expand-file-name (concat mo-name ".fmu") dir)))
+               (if (and (= (process-exit-status p) 0)
+                        (file-exists-p fmu-path))
+                   (message "FMU compiled: %s" fmu-path)
+                 (message "FMU compilation failed for %s (exit %d)"
+                          mo-name (process-exit-status p))))
+             (delete-file mos-file)
+             (kill-buffer (process-buffer p)))))))))
+
+;;;###autoload
+(defun sysml2-fmi-compile-all-fmus (directory)
+  "Compile all .mo files in DIRECTORY to FMUs using OpenModelica.
+Runs omc with a single .mos script that loads and builds all models."
+  (interactive "DDirectory with .mo files: ")
+  (let* ((omc (sysml2--fmi-resolve-omc))
+         (dir (expand-file-name directory))
+         (mo-files (directory-files dir t "\\.mo\\'" t)))
+    (unless mo-files
+      (user-error "No .mo files found in %s" dir))
+    ;; Generate combined .mos script
+    (let ((mos-file (make-temp-file "sysml2-fmu-all-" nil ".mos"))
+          (mos-lines nil)
+          (model-names nil))
+      (dolist (mo mo-files)
+        (let ((name (file-name-sans-extension (file-name-nondirectory mo))))
+          (push name model-names)
+          (push (format "loadFile(\"%s\");" (expand-file-name mo)) mos-lines)
+          (push (format "buildModelFMU(%s, version=\"2.0\", fmuType=\"me_cs\");"
+                        name)
+                mos-lines)))
+      (with-temp-file mos-file
+        (insert (mapconcat #'identity (nreverse mos-lines) "\n") "\n"))
+      (let ((default-directory dir)
+            (proc-buf (generate-new-buffer " *sysml2-omc*"))
+            (count (length mo-files)))
+        (message "Compiling %d Modelica models to FMUs..." count)
+        (let ((proc (start-process "sysml2-omc" proc-buf omc mos-file)))
+          (set-process-sentinel
+           proc
+           (let ((names (nreverse model-names))
+                 (output-dir dir))
+             (lambda (p _event)
+               (when (memq (process-status p) '(exit signal))
+                 (let ((compiled
+                        (cl-count-if
+                         (lambda (n)
+                           (file-exists-p
+                            (expand-file-name (concat n ".fmu") output-dir)))
+                         names)))
+                   (message "FMU compilation complete: %d/%d succeeded"
+                            compiled (length names)))
+                 (delete-file mos-file)
+                 (kill-buffer (process-buffer p)))))))))))
+
+;; --- Batch Validation ---
+
+;;;###autoload
+(defun sysml2-fmi-validate-all (fmu-directory &optional buffer)
+  "Validate all FMUs in FMU-DIRECTORY against part defs in BUFFER.
+Matches FMU filenames (case-insensitive) to part def names."
+  (interactive "DFMU directory: ")
+  (let* ((buf (or buffer (current-buffer)))
+         (dir (expand-file-name fmu-directory))
+         (fmu-files (directory-files dir t "\\.fmu\\'" t))
+         (parts (sysml2--fmi-list-exportable-parts buf))
+         (part-names (mapcar (lambda (p) (plist-get p :name)) parts))
+         (results nil))
+    (unless fmu-files
+      (user-error "No .fmu files found in %s" dir))
+    (dolist (fmu fmu-files)
+      (let* ((fmu-name (file-name-sans-extension (file-name-nondirectory fmu)))
+             (part-name (cl-find fmu-name part-names
+                                 :test #'string-equal-ignore-case)))
+        (if part-name
+            (let* ((extracted (sysml2--fmi-unzip-fmu fmu))
+                   (xml-path (cdr (assq 'model-description extracted)))
+                   (fmu-data (sysml2--fmi-parse-model-description xml-path))
+                   (fmu-vars (plist-get fmu-data :variables))
+                   (sysml-contract (sysml2--fmi-extract-part-interface
+                                    part-name buf))
+                   (comparison (sysml2--fmi-compare-interfaces
+                                fmu-vars sysml-contract)))
+              (push (list :fmu fmu-name
+                          :part part-name
+                          :matches (length (plist-get comparison :matches))
+                          :mismatches (length (plist-get comparison :type-mismatches))
+                          :sysml-only (length (plist-get comparison :sysml-only))
+                          :fmu-only (length (plist-get comparison :fmu-only))
+                          :status (if (and (= 0 (length (plist-get comparison :type-mismatches)))
+                                          (= 0 (length (plist-get comparison :sysml-only))))
+                                      'pass 'fail))
+                    results))
+          (push (list :fmu fmu-name :part nil :status 'unmatched) results))))
+    ;; Display
+    (let ((out-buf (get-buffer-create "*SysML2 FMI Validation*")))
+      (with-current-buffer out-buf
+        (let ((inhibit-read-only t))
+          (erase-buffer)
+          (insert (propertize "FMI Batch Validation\n" 'face 'bold))
+          (insert (make-string 60 ?-) "\n\n")
+          (insert (format "%-20s %-20s %-8s %-8s %-10s %s\n"
+                          "FMU" "Part Def" "Match" "Mismatch" "Missing" "Status"))
+          (insert (make-string 75 ?-) "\n")
+          (dolist (r (nreverse results))
+            (let* ((status (plist-get r :status))
+                   (face (pcase status
+                           ('pass '(:foreground "green"))
+                           ('fail '(:foreground "red"))
+                           ('unmatched '(:foreground "yellow")))))
+              (if (eq status 'unmatched)
+                  (insert (format "%-20s %-20s %-8s %-8s %-10s "
+                                  (plist-get r :fmu) "—" "—" "—" "—"))
+                (insert (format "%-20s %-20s %-8d %-8d %-10d "
+                                (plist-get r :fmu)
+                                (plist-get r :part)
+                                (plist-get r :matches)
+                                (plist-get r :mismatches)
+                                (plist-get r :sysml-only))))
+              (insert (propertize (upcase (symbol-name status)) 'face face))
+              (insert "\n"))))
+        (special-mode)
+        (goto-char (point-min)))
+      (pop-to-buffer out-buf))))
+
+;; --- FMI Dashboard ---
+
+;;;###autoload
+(defun sysml2-fmi-dashboard (&optional buffer)
+  "Show FMI export pipeline status for the current SysML file.
+Displays which parts have Modelica stubs, compiled FMUs, and
+validation results."
+  (interactive)
+  (let* ((buf (or buffer (current-buffer)))
+         (file (buffer-file-name buf))
+         (file-dir (when file (file-name-directory file)))
+         (mo-dir (or sysml2-fmi-modelica-output-dir file-dir))
+         (parts (sysml2--fmi-list-exportable-parts buf))
+         (rows nil))
+    (unless parts
+      (user-error "No exportable part definitions found"))
+    (dolist (part parts)
+      (let* ((name (plist-get part :name))
+             (mo-exists (and mo-dir
+                             (file-exists-p
+                              (expand-file-name (concat name ".mo") mo-dir))))
+             (fmu-exists (and mo-dir
+                              (file-exists-p
+                               (expand-file-name (concat name ".fmu") mo-dir)))))
+        (push (list :name name
+                    :ports (plist-get part :ports)
+                    :attributes (plist-get part :attributes)
+                    :mo mo-exists
+                    :fmu fmu-exists)
+              rows)))
+    ;; Display
+    (let ((out-buf (get-buffer-create "*SysML2 FMI Dashboard*")))
+      (with-current-buffer out-buf
+        (let ((inhibit-read-only t))
+          (erase-buffer)
+          (insert (propertize "FMI Export Dashboard\n" 'face 'bold))
+          (insert (make-string 60 ?-) "\n\n")
+          (when file
+            (insert (format "Source: %s\n" (file-name-nondirectory file))))
+          (insert (format "Output: %s\n\n" (or mo-dir "not configured")))
+          (insert (format "%-25s %-6s %-6s %-12s %-12s\n"
+                          "Part Definition" "Ports" "Attrs" "Modelica" "FMU"))
+          (insert (make-string 65 ?-) "\n")
+          (dolist (r (nreverse rows))
+            (insert (format "%-25s %-6d %-6d "
+                            (plist-get r :name)
+                            (plist-get r :ports)
+                            (plist-get r :attributes)))
+            (insert (propertize
+                     (format "%-12s"
+                             (if (plist-get r :mo) "generated" "missing"))
+                     'face (if (plist-get r :mo)
+                               '(:foreground "green")
+                             '(:foreground "yellow"))))
+            (insert (propertize
+                     (format "%-12s"
+                             (if (plist-get r :fmu) "compiled" "missing"))
+                     'face (if (plist-get r :fmu)
+                               '(:foreground "green")
+                             '(:foreground "yellow"))))
+            (insert "\n"))
+          (insert "\n")
+          ;; Summary counts
+          (let* ((all-rows rows)
+                 (total (length all-rows))
+                 (mo-count (cl-count-if (lambda (r) (plist-get r :mo)) all-rows))
+                 (fmu-count (cl-count-if (lambda (r) (plist-get r :fmu)) all-rows)))
+            (insert (format "Total: %d parts | %d Modelica stubs | %d FMUs\n"
+                            total mo-count fmu-count))
+            (insert "\n")
+            (insert "Commands:\n")
+            (insert "  C-c C-s M   Generate all Modelica stubs\n")
+            (insert "  C-c C-s B   Compile all FMUs (OpenModelica)\n")
+            (insert "  C-c C-s V   Validate all FMUs\n")
+            (insert "  C-c C-s P   Run full pipeline\n")))
+        (special-mode)
+        (goto-char (point-min)))
+      (pop-to-buffer out-buf))))
 
 ;; --- Interface Validation ---
 
