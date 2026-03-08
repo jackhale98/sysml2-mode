@@ -28,6 +28,7 @@ and the editor features that make working with it productive.
 - [Step 18: Views](#step-18-views)
 - [Step 19: Generate Diagrams](#step-19-generate-diagrams)
 - [Step 20: Navigation and Exploration](#step-20-navigation-and-exploration)
+- [Step 21: Simulate Your Model](#step-21-simulate-your-model)
 - [Complete File](#complete-file)
 - [SysML v2 Concept Summary](#sysml-v2-concept-summary)
 - [SysML v2 Syntax Quick Reference](#sysml-v2-syntax-quick-reference)
