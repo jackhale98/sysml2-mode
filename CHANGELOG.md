@@ -14,7 +14,13 @@
   signal completion
 - Per-parameter prompting for constraint/calculation evaluation
 - sysml2-cli executable resolution: checks `~/.cargo/bin/` and
-  `~/.local/bin/` as fallback paths for simulation commands
+  `~/.local/bin/` as fallback paths for simulation and FMI commands
+- FMI commands (`extract-interfaces`, `generate-modelica`,
+  `validate-interfaces`) now offer part def completion from exportable
+  parts instead of bare text input
+- `sysml2-fmi-batch-generate-modelica` (`C-c C-s F` / `SPC m s F`):
+  generate Modelica stubs for all exportable parts across multiple
+  SysML files in a directory
 
 ### Fixed
 - D2 executable resolution: now checks common installation paths

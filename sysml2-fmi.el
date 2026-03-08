@@ -31,7 +31,8 @@
 ;;   `sysml2-fmi-inspect-fmu' -- Open FMU inspector buffer
 ;;   `sysml2-fmi-extract-interfaces' -- Extract FMI interface contracts
 ;;   `sysml2-fmi-generate-modelica' -- Generate Modelica stub
-;;   `sysml2-fmi-generate-all-modelica' -- Generate stubs for all parts
+;;   `sysml2-fmi-generate-all-modelica' -- Generate stubs for all parts in buffer
+;;   `sysml2-fmi-batch-generate-modelica' -- Generate stubs across multiple files
 ;;   `sysml2-fmi-compile-fmu' -- Compile .mo to .fmu via OpenModelica
 ;;   `sysml2-fmi-compile-all-fmus' -- Batch compile all .mo files
 ;;   `sysml2-fmi-validate-interfaces' -- Validate FMU against SysML
@@ -48,13 +49,26 @@
 ;; --- sysml2-cli backend ---
 
 (defun sysml2--cli-available-p ()
-  "Return non-nil if sysml2-cli is available on exec-path."
-  (executable-find (or (bound-and-true-p sysml2-simulate-executable)
-                       "sysml2-cli")))
+  "Return non-nil if sysml2-cli is available on exec-path.
+Also checks common installation directories that GUI Emacs
+may not have in its PATH."
+  (let ((exe (or (bound-and-true-p sysml2-simulate-executable)
+                 "sysml2-cli")))
+    (or (executable-find exe)
+        (cl-find-if #'file-executable-p
+                    (list (expand-file-name (concat "~/.cargo/bin/" exe))
+                          (expand-file-name (concat "~/.local/bin/" exe)))))))
 
 (defun sysml2--cli-executable ()
-  "Return the sysml2-cli executable path."
-  (or (bound-and-true-p sysml2-simulate-executable) "sysml2-cli"))
+  "Return the resolved sysml2-cli executable path.
+Checks exec-path first, then common installation directories."
+  (let ((exe (or (bound-and-true-p sysml2-simulate-executable)
+                 "sysml2-cli")))
+    (or (executable-find exe)
+        (cl-find-if #'file-executable-p
+                    (list (expand-file-name (concat "~/.cargo/bin/" exe))
+                          (expand-file-name (concat "~/.local/bin/" exe))))
+        exe)))
 
 (defun sysml2--cli-call-json (&rest args)
   "Call sysml2-cli with ARGS and parse JSON output.
@@ -353,11 +367,16 @@ Returns list of plists with `:name', `:direction', `:sysml-type',
 ;;;###autoload
 (defun sysml2-fmi-extract-interfaces (&optional part-def-name buffer)
   "Extract FMI interface contracts for PART-DEF-NAME from BUFFER.
-Interactive: prompts for part def name.  Displays results in a buffer."
+Interactive: prompts for part def name with completion from
+exportable parts.  Displays results in a buffer."
   (interactive)
   (let* ((buf (or buffer (current-buffer)))
+         (parts (sysml2--fmi-list-exportable-parts buf))
+         (part-names (mapcar (lambda (p) (plist-get p :name)) parts))
          (name (or part-def-name
-                   (read-string "Part def name: ")))
+                   (if part-names
+                       (completing-read "Part def: " part-names nil t)
+                     (read-string "Part def name: "))))
          (contract (sysml2--fmi-extract-part-interface name buf))
          (out-buf (get-buffer-create "*SysML2 FMI Interfaces*")))
     (with-current-buffer out-buf
@@ -464,11 +483,15 @@ ATTRIBUTES is a list of typed attribute plists."
 (defun sysml2-fmi-generate-modelica (&optional part-def-name buffer)
   "Generate a Modelica stub for PART-DEF-NAME from BUFFER.
 When sysml2-cli is available, uses tree-sitter AST extraction.
-Interactive: prompts for part def name and output path."
+Interactive: prompts for part def name (with completion) and output path."
   (interactive)
   (let* ((buf (or buffer (current-buffer)))
+         (parts (sysml2--fmi-list-exportable-parts buf))
+         (part-names (mapcar (lambda (p) (plist-get p :name)) parts))
          (name (or part-def-name
-                   (read-string "Part def name: ")))
+                   (if part-names
+                       (completing-read "Part def: " part-names nil t)
+                     (read-string "Part def name: "))))
          (file (buffer-file-name buf))
          (mo-string
           (if (and file (sysml2--cli-available-p))
@@ -573,6 +596,80 @@ part definition that has ports or attributes."
           (goto-char (point-min)))
         (pop-to-buffer out-buf))
       (message "Generated %d Modelica stubs" (length generated)))))
+
+;; --- Multi-file Batch Modelica Generation ---
+
+;;;###autoload
+(defun sysml2-fmi-batch-generate-modelica (files output-dir)
+  "Generate Modelica stubs for all exportable parts across FILES.
+FILES is a list of SysML file paths.  All stubs are written to
+OUTPUT-DIR.  Interactive: prompts for directory of .sysml files
+and output directory."
+  (interactive
+   (let* ((src-dir (read-directory-name "SysML source directory: "
+                                        default-directory))
+          (sysml-files (directory-files (expand-file-name src-dir)
+                                       t "\\.sysml\\'" t))
+          (out-dir (read-directory-name "Output directory for .mo files: "
+                                        sysml2-fmi-modelica-output-dir)))
+     (unless sysml-files
+       (user-error "No .sysml files found in %s" src-dir))
+     (list sysml-files out-dir)))
+  (make-directory output-dir t)
+  (let ((generated nil)
+        (cli-p (sysml2--cli-available-p)))
+    (dolist (file files)
+      (let ((parts
+             (if cli-p
+                 (let ((result (sysml2--cli-call-json "export" "list" file)))
+                   (when (and result (listp result))
+                     (mapcar (lambda (item) (plist-get item :name)) result)))
+               ;; Regex fallback: open file temporarily
+               (with-temp-buffer
+                 (insert-file-contents file)
+                 (mapcar (lambda (pd) (plist-get pd :name))
+                         (sysml2--model-extract-part-defs))))))
+        (dolist (name parts)
+          (let* ((mo-path (expand-file-name (concat name ".mo") output-dir))
+                 (mo-string
+                  (if cli-p
+                      (sysml2--cli-call-text "export" "modelica" file
+                                             "--part" name)
+                    (with-temp-buffer
+                      (insert-file-contents file)
+                      (let* ((contract (sysml2--fmi-extract-part-interface--regex
+                                        name (current-buffer)))
+                             (bounds (sysml2--model-find-def-bounds "part def" name))
+                             (attributes (when bounds
+                                           (sysml2--fmi-extract-typed-attributes
+                                            (car bounds) (cdr bounds)))))
+                        (sysml2--fmi-generate-mo-string name contract attributes))))))
+            (with-temp-file mo-path
+              (insert mo-string))
+            (push (list :name name
+                        :source (file-name-nondirectory file)
+                        :path mo-path)
+                  generated)))))
+    ;; Display summary
+    (let ((out-buf (get-buffer-create "*SysML2 Modelica Generation*")))
+      (with-current-buffer out-buf
+        (let ((inhibit-read-only t))
+          (erase-buffer)
+          (insert (propertize "Batch Modelica Stub Generation\n" 'face 'bold))
+          (insert (make-string 50 ?-) "\n\n")
+          (insert (format "Processed %d SysML files\n" (length files)))
+          (insert (format "Generated %d Modelica stubs in %s\n\n"
+                          (length generated) output-dir))
+          (dolist (g (nreverse generated))
+            (insert (format "  %-20s  %-25s  ->  %s\n"
+                            (plist-get g :source)
+                            (plist-get g :name)
+                            (file-name-nondirectory (plist-get g :path))))))
+        (special-mode)
+        (goto-char (point-min)))
+      (pop-to-buffer out-buf))
+    (message "Generated %d Modelica stubs from %d files"
+             (length generated) (length files))))
 
 ;; --- FMU Compilation via OpenModelica ---
 
@@ -918,11 +1015,15 @@ FMU-PATH and PART-DEF-NAME are displayed in the header."
 ;;;###autoload
 (defun sysml2-fmi-validate-interfaces (fmu-path &optional part-def-name buffer)
   "Validate FMU at FMU-PATH against SysML PART-DEF-NAME in BUFFER.
-Interactive: prompts for FMU path and part def name."
+Interactive: prompts for FMU path and part def name (with completion)."
   (interactive "fFMU or modelDescription.xml: ")
   (let* ((buf (or buffer (current-buffer)))
+         (parts (sysml2--fmi-list-exportable-parts buf))
+         (part-names (mapcar (lambda (p) (plist-get p :name)) parts))
          (name (or part-def-name
-                   (read-string "Part def name: ")))
+                   (if part-names
+                       (completing-read "Part def: " part-names nil t)
+                     (read-string "Part def name: "))))
          (xml-path (if (string-suffix-p ".xml" fmu-path)
                        fmu-path
                      (let ((extracted (sysml2--fmi-unzip-fmu fmu-path)))

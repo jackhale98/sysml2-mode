@@ -230,6 +230,7 @@
     (define-key map (kbd "C-c C-s e") #'sysml2-fmi-extract-interfaces)
     (define-key map (kbd "C-c C-s m") #'sysml2-fmi-generate-modelica)
     (define-key map (kbd "C-c C-s M") #'sysml2-fmi-generate-all-modelica)
+    (define-key map (kbd "C-c C-s F") #'sysml2-fmi-batch-generate-modelica)
     (define-key map (kbd "C-c C-s v") #'sysml2-fmi-validate-interfaces)
     (define-key map (kbd "C-c C-s V") #'sysml2-fmi-validate-all)
     (define-key map (kbd "C-c C-s b") #'sysml2-fmi-compile-fmu)

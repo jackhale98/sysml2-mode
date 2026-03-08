@@ -116,7 +116,7 @@
       (with-temp-buffer
         (insert "part def X {}")
         (sysml2-mode)
-        (sysml2-diagram-export "/tmp/test-output.svg")))
+        (sysml2-diagram-export 'tree nil "/tmp/test-output.svg")))
     (should (equal captured-format "svg"))))
 
 ;; --- Type Selection Test ---
