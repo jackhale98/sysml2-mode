@@ -11,13 +11,16 @@ notation as supported by `sysml2-mode` for Emacs, targeting SysML v2.0 / KerML 1
 - [Definitions vs Usages](#definitions-vs-usages)
 - [Parts and Composition](#parts-and-composition)
 - [Attributes and Enumerations](#attributes-and-enumerations)
+- [Items](#items)
 - [Ports and Interfaces](#ports-and-interfaces)
 - [Connections and Flows](#connections-and-flows)
 - [Actions and Behavior](#actions-and-behavior)
 - [State Machines](#state-machines)
 - [Requirements](#requirements)
 - [Constraints and Calculations](#constraints-and-calculations)
-- [Use Cases and Analysis](#use-cases-and-analysis)
+- [Use Cases](#use-cases)
+- [Verification](#verification)
+- [Analysis](#analysis)
 - [Views and Viewpoints](#views-and-viewpoints)
 - [Comments and Documentation](#comments-and-documentation)
 - [Common Patterns](#common-patterns)
@@ -181,6 +184,54 @@ enum def DiameterChoices :> ISQ::LengthValue {
 
 **Best practice:** Use enums for fixed value sets. Enum defs can specialize
 quantity types to constrain valid numeric values.
+
+## Items
+
+Items represent things that flow between parts — commands, signals, data,
+physical substances. Unlike parts, items are not composed into a structural
+hierarchy; they model what is exchanged through ports, flows, and actions.
+
+```sysml
+item def Fuel {
+    attribute fuelMass :> ISQ::mass;
+}
+item def PwrCmd {
+    attribute throttleLevel : Real;
+}
+item def FuelCmd :> PwrCmd;          // specialization
+item def SensedSpeed {
+    attribute speed :> ISQ::speed;
+}
+```
+
+Items are used in port definitions to declare what flows in or out:
+
+```sysml
+port def FuelPort { out item fuel : Fuel; }
+port def ControlPort { in item fuelCmd : FuelCmd; }
+```
+
+Items also model signals and commands. Specialization (`:>`) creates signal
+hierarchies:
+
+```sysml
+item def Cmd;
+item def DriverCmd;
+item def IgnitionCmd :> DriverCmd {
+    attribute ignitionOnOff : IgnitionOnOff;
+}
+item def EngineStatus;
+```
+
+Use `ref item` for a reference to an item (not an owned copy):
+
+```sysml
+ref item fuel : Fuel { attribute fuelMass = 0 [kg]; }
+```
+
+**Best practice:** Define items in a dedicated `ItemDefinitions` or
+`SignalDefinitions` package. Use specialization to create command/signal
+hierarchies. Items are the "what" in flows — define them before port defs.
 
 ## Ports and Interfaces
 
@@ -452,28 +503,149 @@ Built-in operators: arithmetic (`+`, `-`, `*`, `/`, `%`, `**`), comparison
 **Best practice:** Extract repeated logic into named `constraint def` elements.
 Use `calc def` for computations with return values.
 
-## Use Cases and Analysis
+## Use Cases
+
+Use cases model interactions between a system (the subject) and external actors.
+They capture what the system does from the actors' perspective, with objectives,
+constraints, and included sub-use-cases.
 
 ```sysml
-use case def DriveVehicle {
+use case def TransportPassenger {
+    objective TransportObjective {
+        doc /* deliver passenger to destination safely and comfortably */
+        require transportRequirements;
+    }
     subject vehicle : Vehicle;
-    actor driver : String;
-    include use case startEngine : StartEngine;
+    actor environment;
+    actor road;
+    actor driver;
+    actor passenger [0..4];                              // multiplicity
+    include use case getInVehicle_a :> getInVehicle [1..5];
+    include use case getOutOfVehicle_a :> getOutOfVehicle [1..5];
 }
+```
 
+Use case definitions declare actors and constraints; use case usages add
+behavioral sequencing with `first`/`then`, `fork`/`join`, and `accept`:
+
+```sysml
+use case def GetInVehicle {
+    subject vehicle : Vehicle;
+    actor driver [0..1];
+    actor passenger [0..1];
+    assert constraint { driver != null xor passenger != null }
+}
+use case getInVehicle : GetInVehicle {
+    action unlockDoor_in [0..1];
+    then action openDoor_in;
+    then action enterVehicle;
+    then action closeDoor_in;
+}
+```
+
+Use case scenarios sequence sub-use-cases with concurrency:
+
+```sysml
+use case transportPassenger : TransportPassenger {
+    first start;
+    then action a {
+        action driverGetInVehicle subsets getInVehicle_a[1];
+        action passenger1GetInVehicle subsets getInVehicle_a[1];
+    }
+    then action trigger accept ignitionCmd : IgnitionCmd;
+    then action b {
+        action driveVehicleToDestination;
+        action providePower;
+    }
+    then action c {
+        action driverGetOutOfVehicle subsets getOutOfVehicle_a[1];
+        action passenger1GetOutOfVehicle subsets getOutOfVehicle_a[1];
+    }
+    then done;
+}
+```
+
+Bind parts to actors using assignment to connect the physical system to the
+use case context:
+
+```sysml
+part missionContext : MissionContext {
+    perform transportPassenger;
+    part driver : Driver = transportPassenger.driver {
+        perform transportPassenger.a.driverGetInVehicle.openDoor_in;
+        perform transportPassenger.b.driveVehicleToDestination;
+    }
+}
+```
+
+**Best practice:** Define use case defs with actors and constraints first, then
+create use case usages with action sequencing. Bind parts to actors in a mission
+context package to connect structure to behavior.
+
+## Verification
+
+Verification cases define how to test that requirements are met. Each
+verification has a subject (what is tested), an objective (which requirements
+to verify), a method annotation, and test actions:
+
+```sysml
+verification def MassTest;
+verification def AccelerationTest;
+
+verification massTests : MassTest {
+    subject vehicle_uut :> vehicle_b;
+    actor vehicleVerificationSubSystem_1 = verificationContext.massVerificationSystem;
+    objective {
+        verify vehicleSpecification.vehicleMassRequirement {
+            redefines massActual = weighVehicle.massMeasured;
+        }
+    }
+    @ VerificationMethod {
+        kind = (VerificationMethodKind::test, VerificationMethodKind::analyze);
+    }
+    action weighVehicle {
+        out massMeasured :> ISQ::mass;
+    }
+    then action evaluatePassFail {
+        in massMeasured :> ISQ::mass;
+        out verdict = PassIf(vehicleSpecification.vehicleMassRequirement(vehicle_uut));
+    }
+    flow from weighVehicle.massMeasured to evaluatePassFail.massMeasured;
+    return :>> verdict = evaluatePassFail.verdict;
+}
+```
+
+The verification context maps test equipment to verification actions using
+`perform`:
+
+```sysml
+part verificationContext {
+    perform massTests;
+    part vehicle_UnitUnderTest :> vehicle_b;
+    part massVerificationSystem {
+        part scale { perform massTests.weighVehicle; }
+        part operator { perform massTests.evaluatePassFail; }
+    }
+}
+```
+
+**Best practice:** Organize verifications in a `VehicleVerification` package.
+Define verification defs first, then create verification usages with subjects,
+objectives, method annotations, and test action sequences. Use `perform` to
+allocate test actions to verification equipment.
+
+## Analysis
+
+Analysis cases evaluate system properties. Each analysis has a subject, an
+objective, and returns a computed result:
+
+```sysml
 analysis def FuelEconomyAnalysis {
     subject vehicle : Vehicle;
     objective {
         doc /* Determine fuel economy under standard conditions. */
     }
     return fuelEconomy : Real;
-}
-
-verification def TestBatteryLife {
-    subject flashlight : Flashlight;
-    objective {
-        verify requirement BatteryLifeReq;
-    }
 }
 ```
 
