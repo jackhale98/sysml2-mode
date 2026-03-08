@@ -17,6 +17,8 @@
 
 ;;; Code:
 
+(require 'cl-lib)
+
 ;;; Public API:
 ;;
 ;; Variables:
@@ -430,6 +432,48 @@ When nil, searches `exec-path' for `pandoc'."
 
 (defvar sysml2--cosim-verification-buffer nil
   "Buffer used for requirement verification dashboard.")
+
+;; --- Cross-platform executable resolution ---
+
+(defun sysml2--platform-exe-name (name)
+  "Return NAME with platform-appropriate executable extension.
+On Windows, appends `.exe' if NAME lacks an extension."
+  (if (and (eq system-type 'windows-nt)
+           (not (string-match-p "\\.[^./\\\\]+\\'" name)))
+      (concat name ".exe")
+    name))
+
+(defun sysml2--platform-fallback-paths (exe)
+  "Return a list of platform-appropriate fallback paths for EXE.
+Checks common installation directories that GUI Emacs may not
+have in its PATH."
+  (let ((exe-name (sysml2--platform-exe-name exe)))
+    (cond
+     ((eq system-type 'windows-nt)
+      (let ((appdata (or (getenv "LOCALAPPDATA")
+                         (expand-file-name "~/AppData/Local"))))
+        (list (expand-file-name (concat "~/.cargo/bin/" exe-name))
+              (expand-file-name (concat appdata "/Programs/" exe-name))
+              (expand-file-name (concat appdata "/Microsoft/WinGet/Packages/" exe-name)))))
+     ((eq system-type 'darwin)
+      (list (expand-file-name (concat "~/.cargo/bin/" exe-name))
+            (expand-file-name (concat "~/.local/bin/" exe-name))
+            (concat "/opt/homebrew/bin/" exe-name)
+            (concat "/usr/local/bin/" exe-name)))
+     (t ; Linux and other Unix
+      (list (expand-file-name (concat "~/.cargo/bin/" exe-name))
+            (expand-file-name (concat "~/.local/bin/" exe-name))
+            (concat "/usr/local/bin/" exe-name))))))
+
+(defun sysml2--find-executable (exe &optional extra-paths)
+  "Find EXE using `executable-find' with platform-aware fallbacks.
+EXTRA-PATHS is an optional list of additional paths to check.
+Returns the resolved path or nil."
+  (or (executable-find exe)
+      (executable-find (sysml2--platform-exe-name exe))
+      (cl-find-if #'file-executable-p extra-paths)
+      (cl-find-if #'file-executable-p
+                  (sysml2--platform-fallback-paths exe))))
 
 (provide 'sysml2-vars)
 ;;; sysml2-vars.el ends here

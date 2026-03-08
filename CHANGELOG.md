@@ -23,9 +23,16 @@
   SysML files in a directory
 
 ### Fixed
-- D2 executable resolution: now checks common installation paths
-  (`~/.local/bin/d2`, `/usr/local/bin/d2`, `/opt/homebrew/bin/d2`) as
-  fallback when GUI Emacs does not inherit the shell PATH
+- Cross-platform compatibility: all external tool resolution now uses
+  `sysml2--find-executable` with platform-aware fallback paths for
+  Windows (`%LOCALAPPDATA%`), macOS (`/opt/homebrew/bin`), and Linux
+  (`~/.local/bin`, `~/.cargo/bin`)
+- Windows support: FMU extraction (`unzip`) and SSP packaging (`zip`)
+  now use PowerShell `Expand-Archive`/`Compress-Archive` on Windows
+- Windows support: OpenModelica resolution checks for `.exe` extension
+  and Windows-specific install paths
+- Windows support: HTML report `file://` URLs use three-slash format
+  (`file:///C:/...`) required by Windows browsers
 - D2 fallback messaging: displays a user-visible message when falling
   back to SVG rendering because D2 was not found
 

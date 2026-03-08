@@ -129,7 +129,9 @@ Connections are plists with `:name', `:source', `:target',
     (mapconcat #'identity (nreverse lines) "\n")))
 
 (defun sysml2--cosim-package-ssp (ssd-xml fmu-paths output-path)
-  "Package SSD-XML and FMU-PATHS into an SSP at OUTPUT-PATH."
+  "Package SSD-XML and FMU-PATHS into an SSP at OUTPUT-PATH.
+Uses platform-appropriate ZIP creation (zip on Unix,
+PowerShell on Windows)."
   (let ((tmp-dir (make-temp-file "sysml2-ssp-" t)))
     ;; Write SSD
     (let ((ssd-path (expand-file-name "SystemStructure.ssd" tmp-dir)))
@@ -143,10 +145,16 @@ Connections are plists with `:name', `:source', `:target',
           (copy-file fmu (expand-file-name
                           (file-name-nondirectory fmu) res-dir)
                      t))))
-    ;; Create ZIP
-    (let ((default-directory tmp-dir))
-      (call-process "zip" nil nil nil "-r"
-                    (expand-file-name output-path) "."))))
+    ;; Create ZIP (cross-platform)
+    (let ((abs-output (expand-file-name output-path)))
+      (if (eq system-type 'windows-nt)
+          (call-process "powershell" nil nil nil
+                        "-NoProfile" "-Command"
+                        (format "Compress-Archive -Force -Path '%s\\*' -DestinationPath '%s'"
+                                (replace-regexp-in-string "/" "\\\\" tmp-dir)
+                                (replace-regexp-in-string "/" "\\\\" abs-output)))
+        (let ((default-directory tmp-dir))
+          (call-process "zip" nil nil nil "-r" abs-output "."))))))
 
 ;;;###autoload
 (defun sysml2-cosim-generate-ssp (&optional buffer)
@@ -176,17 +184,18 @@ Interactive: prompts for output path."
 
 (defun sysml2--cosim-resolve-tool ()
   "Resolve the co-simulation tool executable.
-Returns (TOOL . PATH) where TOOL is `fmpy' or `omsimulator'."
+Returns (TOOL . PATH) where TOOL is `fmpy' or `omsimulator'.
+Uses platform-aware executable resolution."
   (pcase sysml2-cosim-tool
     ('fmpy
      (let ((path (or sysml2-fmi-fmpy-executable
-                     (executable-find "fmpy"))))
+                     (sysml2--find-executable "fmpy"))))
        (if path
            (cons 'fmpy path)
          (user-error "FMPy not found.  Set `sysml2-fmi-fmpy-executable'"))))
     ('omsimulator
      (let ((path (or sysml2-cosim-omsimulator-path
-                     (executable-find "OMSimulator"))))
+                     (sysml2--find-executable "OMSimulator"))))
        (if path
            (cons 'omsimulator path)
          (user-error "OMSimulator not found.  Set `sysml2-cosim-omsimulator-path'"))))))
@@ -338,7 +347,7 @@ CSV-PATH is shown in the header."
 (defun sysml2--cosim-plot-gnuplot (csv-path signals output-png)
   "Plot SIGNALS from CSV-PATH to OUTPUT-PNG using gnuplot."
   (let ((gnuplot (or sysml2-cosim-gnuplot-path
-                     (executable-find "gnuplot"))))
+                     (sysml2--find-executable "gnuplot"))))
     (unless gnuplot
       (user-error "Gnuplot not found.  Set `sysml2-cosim-gnuplot-path'"))
     (let* ((data (sysml2--cosim-parse-csv csv-path))

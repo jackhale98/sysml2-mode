@@ -66,24 +66,15 @@
 
 (defun sysml2-simulate--check-executable ()
   "Check that sysml2-cli is available.  Signal an error if not found."
-  (unless (or (executable-find sysml2-simulate-executable)
-              (cl-find-if #'file-executable-p
-                          (list (expand-file-name
-                                 (concat "~/.cargo/bin/" sysml2-simulate-executable))
-                                (expand-file-name
-                                 (concat "~/.local/bin/" sysml2-simulate-executable)))))
+  (unless (sysml2--find-executable sysml2-simulate-executable)
     (user-error "Cannot find `%s' on exec-path.  Install from https://github.com/jackhale98/sysml2-cli"
                 sysml2-simulate-executable)))
 
 (defun sysml2-simulate--resolve-executable ()
-  "Return the full path to sysml2-cli."
-  (or (executable-find sysml2-simulate-executable)
-      (cl-find-if #'file-executable-p
-                  (list (expand-file-name
-                         (concat "~/.cargo/bin/" sysml2-simulate-executable))
-                        (expand-file-name
-                         (concat "~/.local/bin/" sysml2-simulate-executable))))
-      sysml2-simulate-executable))
+  "Return the full path to sysml2-cli.
+Uses platform-aware executable resolution."
+  (or (sysml2--find-executable sysml2-simulate-executable)
+      (sysml2--platform-exe-name sysml2-simulate-executable)))
 
 (defun sysml2-simulate--ensure-file ()
   "Return the current buffer's file name.  Signal error if unsaved."

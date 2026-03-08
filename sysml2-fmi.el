@@ -49,26 +49,18 @@
 ;; --- sysml2-cli backend ---
 
 (defun sysml2--cli-available-p ()
-  "Return non-nil if sysml2-cli is available on exec-path.
-Also checks common installation directories that GUI Emacs
-may not have in its PATH."
-  (let ((exe (or (bound-and-true-p sysml2-simulate-executable)
-                 "sysml2-cli")))
-    (or (executable-find exe)
-        (cl-find-if #'file-executable-p
-                    (list (expand-file-name (concat "~/.cargo/bin/" exe))
-                          (expand-file-name (concat "~/.local/bin/" exe)))))))
+  "Return non-nil if sysml2-cli is available.
+Uses platform-aware executable resolution."
+  (sysml2--find-executable
+   (or (bound-and-true-p sysml2-simulate-executable) "sysml2-cli")))
 
 (defun sysml2--cli-executable ()
   "Return the resolved sysml2-cli executable path.
-Checks exec-path first, then common installation directories."
-  (let ((exe (or (bound-and-true-p sysml2-simulate-executable)
-                 "sysml2-cli")))
-    (or (executable-find exe)
-        (cl-find-if #'file-executable-p
-                    (list (expand-file-name (concat "~/.cargo/bin/" exe))
-                          (expand-file-name (concat "~/.local/bin/" exe))))
-        exe)))
+Uses platform-aware executable resolution."
+  (or (sysml2--find-executable
+       (or (bound-and-true-p sysml2-simulate-executable) "sysml2-cli"))
+      (sysml2--platform-exe-name
+       (or (bound-and-true-p sysml2-simulate-executable) "sysml2-cli"))))
 
 (defun sysml2--cli-call-json (&rest args)
   "Call sysml2-cli with ARGS and parse JSON output.
@@ -112,10 +104,21 @@ Prepends `-f json' to ARGS.  Returns parsed JSON as plists/lists."
 
 (defun sysml2--fmi-unzip-fmu (fmu-path)
   "Unzip FMU-PATH to a temporary directory.
+Uses platform-appropriate extraction (unzip on Unix,
+PowerShell on Windows).
 Returns alist with keys `dir', `model-description'."
-  (let ((tmp-dir (make-temp-file "sysml2-fmu-" t)))
-    (unless (= 0 (call-process "unzip" nil nil nil "-o" "-q"
-                                (expand-file-name fmu-path) "-d" tmp-dir))
+  (let* ((tmp-dir (make-temp-file "sysml2-fmu-" t))
+         (abs-fmu (expand-file-name fmu-path))
+         (exit-code
+          (if (eq system-type 'windows-nt)
+              (call-process "powershell" nil nil nil
+                            "-NoProfile" "-Command"
+                            (format "Expand-Archive -Force -Path '%s' -DestinationPath '%s'"
+                                    (replace-regexp-in-string "/" "\\\\" abs-fmu)
+                                    (replace-regexp-in-string "/" "\\\\" tmp-dir)))
+            (call-process "unzip" nil nil nil "-o" "-q"
+                          abs-fmu "-d" tmp-dir))))
+    (unless (= 0 exit-code)
       (user-error "Failed to unzip FMU: %s" fmu-path))
     (let ((xml-path (expand-file-name "modelDescription.xml" tmp-dir)))
       (unless (file-exists-p xml-path)
@@ -675,12 +678,22 @@ and output directory."
 
 (defun sysml2--fmi-resolve-omc ()
   "Resolve the OpenModelica compiler (omc) executable path.
-Checks `sysml2-fmi-openmodelica-path'/bin/omc, then exec-path."
-  (or (when sysml2-fmi-openmodelica-path
-        (let ((omc (expand-file-name "bin/omc" sysml2-fmi-openmodelica-path)))
-          (when (file-executable-p omc) omc)))
-      (executable-find "omc")
-      (user-error "OpenModelica (omc) not found.  Set `sysml2-fmi-openmodelica-path' or add omc to PATH")))
+Checks `sysml2-fmi-openmodelica-path', then uses platform-aware
+executable resolution."
+  (let ((omc-name (sysml2--platform-exe-name "omc")))
+    (or (when sysml2-fmi-openmodelica-path
+          (let ((candidates
+                 (list (expand-file-name (concat "bin/" omc-name)
+                                         sysml2-fmi-openmodelica-path)
+                       (expand-file-name omc-name
+                                         sysml2-fmi-openmodelica-path))))
+            (cl-find-if #'file-executable-p candidates)))
+        (sysml2--find-executable
+         "omc"
+         (when (eq system-type 'windows-nt)
+           (list "C:/OpenModelica/bin/omc.exe"
+                 (expand-file-name "~/OpenModelica/bin/omc.exe"))))
+        (user-error "OpenModelica (omc) not found.  Set `sysml2-fmi-openmodelica-path' or add omc to PATH"))))
 
 (defun sysml2--fmi-generate-mos-script (mo-path &optional fmu-version fmu-type)
   "Generate a .mos script to compile MO-PATH to an FMU.

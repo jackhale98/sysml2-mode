@@ -165,15 +165,10 @@ CALLBACK receives (SUCCESS DATA-OR-ERROR)."
 
 (defun sysml2--diagram-resolve-d2 ()
   "Return the D2 executable path, or nil if not found.
-Checks `sysml2-d2-executable-path', then `exec-path' via
-`executable-find', then common installation directories that
-GUI Emacs may not have in its PATH."
+Checks `sysml2-d2-executable-path', then uses platform-aware
+executable resolution."
   (or sysml2-d2-executable-path
-      (executable-find "d2")
-      (cl-find-if #'file-executable-p
-                  (list (expand-file-name "~/.local/bin/d2")
-                        "/usr/local/bin/d2"
-                        "/opt/homebrew/bin/d2"))))
+      (sysml2--find-executable "d2")))
 
 (defun sysml2--diagram-invoke-d2 (d2-string format callback)
   "Invoke D2 on D2-STRING for FORMAT, call CALLBACK with result.

@@ -1453,7 +1453,7 @@ it using Pandoc.  Requires Pandoc to be installed."
   (interactive
    (list (completing-read "Export format: " '("pdf" "html" "docx") nil t)))
   (let* ((pandoc (or sysml2-report-pandoc-executable
-                     (executable-find "pandoc")))
+                     (sysml2--find-executable "pandoc")))
          (base (file-name-sans-extension
                 (or (buffer-file-name) (buffer-name))))
          (output-file (concat base "-report." format))
@@ -1479,7 +1479,9 @@ it using Pandoc.  Requires Pandoc to be installed."
           (progn
             (message "Report exported to %s" output-file)
             (when (string= format "html")
-              (browse-url (concat "file://" (expand-file-name output-file)))))
+              (browse-url (concat "file://"
+                                  (if (eq system-type 'windows-nt) "/" "")
+                                  (expand-file-name output-file)))))
         (pop-to-buffer "*SysML2 Pandoc*")
         (user-error "Pandoc conversion failed (exit code %d)" exit-code)))))
 
