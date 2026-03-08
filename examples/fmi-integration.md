@@ -63,6 +63,7 @@ package ThermalSystem {
     part def HeatExchanger {
         port heatIn : ~HeatPort;        // Conjugated: receives heat
         port coolant : CoolantPort;
+        port tempOut : SensorPort;      // Measured outlet temperature
 
         attribute surfaceArea : Real;
         attribute heatTransferCoeff : Real;
@@ -84,12 +85,12 @@ package ThermalSystem {
         part exchanger : HeatExchanger;
         part controller : Controller;
 
-        // Connections define the SSP wiring
+        // Connections — port types must match (or conjugate)
         connection heaterToExchanger
             connect heater.heatOut to exchanger.heatIn;
 
         connection sensorFeedback
-            connect exchanger.coolant to controller.sensor;
+            connect exchanger.tempOut to controller.sensor;
 
         connection controlLoop
             connect controller.output to heater.control;
@@ -121,13 +122,7 @@ Open `thermal-system.sysml` in Emacs. With `sysml2-mode`, you get:
 
 ### List Exportable Parts
 
-Press `C-c C-x l` (or `SPC m x l`) to list simulatable constructs, then:
-
-```
-sysml2-cli export list thermal-system.sysml
-```
-
-Or from the command line:
+From the command line:
 ```sh
 sysml2-cli export list thermal-system.sysml
 ```
@@ -136,9 +131,9 @@ Output:
 ```
 Exportable Parts:
   Heater (2 ports, 2 attributes, 0 connections)
-  HeatExchanger (2 ports, 2 attributes, 0 connections)
+  HeatExchanger (3 ports, 2 attributes, 0 connections)
   Controller (2 ports, 2 attributes, 0 connections)
-  ThermalControlSystem (0 ports, 0 attributes, 2 connections)
+  ThermalControlSystem (0 ports, 0 attributes, 3 connections)
 ```
 
 ## Step 3: Extract FMI Interfaces
@@ -209,6 +204,15 @@ sysml2-cli export modelica thermal-system.sysml --part HeatExchanger -o HeatExch
 sysml2-cli export modelica thermal-system.sysml --part Controller -o Controller.mo
 ```
 
+> **Signal vs physical connectors:** The generated stubs use
+> `Modelica.Blocks.Interfaces.RealInput` / `RealOutput` — these are *signal-level*
+> connectors suitable for FMI co-simulation, where each variable maps 1:1 to an FMI
+> scalar variable.  If your Modelica model uses *physical domain* connectors (e.g.,
+> `Modelica.Thermal.HeatTransfer.Interfaces.HeatPort_a`), you'll need to adapt the
+> stub to bridge between the FMI signal interface and the physical connector.
+> The generated stub is a starting point; adjust connector types to match your
+> modeling style.
+
 ## Step 5: Implement Behavioral Equations
 
 Open each `.mo` file and fill in the physics. For example, `Heater.mo`:
@@ -230,22 +234,48 @@ equation
   heatFlow = maxPower * controlSignal * efficiency;
   der(internalTemp) = (heatFlow - 10*(internalTemp - 20)) / thermalMass;
   temperature = internalTemp;
-  setpoint = 0; // Driven externally in co-simulation
+  // setpoint is an output driven by the co-simulation master;
+  // in standalone testing you can assign a fixed value, but in FMI
+  // co-simulation this variable is set externally by the orchestrator.
 end Heater;
 ```
 
 ## Step 6: Compile to FMU
 
-Use OpenModelica to compile each Modelica model to an FMU:
+Use OpenModelica to compile each Modelica model to an FMU.  Create an `.mos`
+(Modelica script) file that loads and exports each model:
+
+```modelica
+// export_heater.mos
+loadFile("Heater.mo");
+buildModelFMU(Heater, version="2.0", fmuType="me_cs");
+```
+
+Then run it:
+```sh
+omc export_heater.mos
+```
+
+Repeat for each component, or combine them into a single script:
+```modelica
+// export_all.mos
+loadFile("Heater.mo");
+buildModelFMU(Heater, version="2.0", fmuType="me_cs");
+loadFile("HeatExchanger.mo");
+buildModelFMU(HeatExchanger, version="2.0", fmuType="me_cs");
+loadFile("Controller.mo");
+buildModelFMU(Controller, version="2.0", fmuType="me_cs");
+```
 
 ```sh
-# Using OpenModelica command-line
-omc --simCodeTarget=fmu Heater.mo
-omc --simCodeTarget=fmu HeatExchanger.mo
-omc --simCodeTarget=fmu Controller.mo
+omc export_all.mos
 ```
 
 This produces `Heater.fmu`, `HeatExchanger.fmu`, and `Controller.fmu`.
+
+> **Note:** The `fmuType="me_cs"` flag exports a combined Model Exchange + Co-Simulation
+> FMU.  Use `"cs"` for co-simulation only or `"me"` for model exchange only.  Dymola users
+> can use `translateModelFMU()` with similar options.
 
 ## Step 7: Validate FMU Interfaces
 
@@ -377,9 +407,8 @@ automatically checked. Complex constraints are flagged for manual review.
 
 Install sysml2-cli:
 ```sh
-git clone https://github.com/jackhale98/tree-sitter-sysml.git
-git clone https://github.com/jackhale98/sysml-lint.git
-cd sysml-lint
+git clone https://github.com/jackhale98/sysml2-cli.git
+cd sysml2-cli
 cargo install --path .
 ```
 
