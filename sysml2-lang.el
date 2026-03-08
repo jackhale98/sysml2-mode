@@ -288,6 +288,51 @@ Match BEFORE single-word keywords to prevent partial matches.")
     "Links" "Clocks" "Observation")
   "Known standard library package names for completion.")
 
+;; === Standard Library Types ===
+
+(defconst sysml2-scalar-value-types
+  '("Boolean" "String" "Integer" "Natural" "Real" "Complex"
+    "Rational" "Positive")
+  "Known ScalarValues types from the SysML standard library.")
+
+(defconst sysml2-isq-types
+  '("MassValue" "LengthValue" "TimeValue" "ElectricCurrentValue"
+    "TemperatureValue" "AmountOfSubstanceValue" "LuminousIntensityValue"
+    "ForceValue" "PressureValue" "EnergyValue" "PowerValue"
+    "VelocityValue" "AccelerationValue" "AngularVelocityValue"
+    "AngularAccelerationValue" "FrequencyValue" "AreaValue"
+    "VolumeValue" "DensityValue" "TorqueValue" "VoltageValue"
+    "CapacitanceValue" "ResistanceValue" "ConductanceValue"
+    "MagneticFluxValue" "MagneticFluxDensityValue" "InductanceValue"
+    "ElectricChargeValue" "SpeedValue" "DurationValue"
+    "DisplacementValue" "DistanceValue" "RadiusOfCurvatureValue"
+    "AngularMeasureValue" "DynamicViscosityValue"
+    "KinematicViscosityValue" "MomentOfInertiaValue"
+    "MassPerLengthValue" "MassFlowRateValue" "VolumeFlowRateValue")
+  "Known ISQ quantity value types from the SysML standard library.")
+
+(defconst sysml2-si-units
+  '("kg" "m" "s" "A" "K" "mol" "cd"
+    "N" "Pa" "J" "W" "Hz" "C" "V" "F"
+    "Ω" "S" "Wb" "T" "H"
+    "rad" "sr" "lx" "lm" "Bq" "Gy" "Sv" "kat"
+    "km" "cm" "mm" "μm" "nm"
+    "mg" "g"
+    "ms" "μs" "ns" "min" "h"
+    "kW" "MW" "GW"
+    "kJ" "MJ"
+    "kPa" "MPa" "GPa"
+    "mA" "kA"
+    "mV" "kV"
+    "kHz" "MHz" "GHz"
+    "L" "mL"
+    "°C")
+  "Known SI unit names from the SysML standard library.")
+
+(defconst sysml2-standard-library-types
+  (append sysml2-scalar-value-types sysml2-isq-types)
+  "All known standard library types for validation.")
+
 ;; === Definition Name Pattern ===
 
 (defconst sysml2--identifier-regexp

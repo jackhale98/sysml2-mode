@@ -247,6 +247,18 @@ Returns a completion table based on the context at point."
                    ((string-match-p "\\." cand) " <path>")
                    (t nil)))))))))
 
+;; --- Validation Helpers ---
+
+(defun sysml2--validate-nonempty (value label)
+  "Signal `user-error' if VALUE is empty.  LABEL names the field."
+  (when (string-empty-p (string-trim value))
+    (user-error "%s cannot be empty" label)))
+
+(defun sysml2--validate-distinct (source target)
+  "Signal `user-error' if SOURCE and TARGET are the same element."
+  (when (string= source target)
+    (user-error "Source and target cannot be the same: %s" source)))
+
 ;; --- Smart Connection Commands ---
 
 (defun sysml2--annotate-usage (name usages)
@@ -288,22 +300,27 @@ them for completion.  Generates valid SysML v2 connection syntax."
   (let* ((conn-name (read-string "Connection name: "))
          (conn-type (sysml2--read-definition-type "Connection type (RET for none): "))
          (source (sysml2--read-connectable "Connect (source): "))
-         (target (sysml2--read-connectable "To (target): "))
-         (indent (make-string (current-indentation) ?\s)))
+         (target (sysml2--read-connectable "To (target): ")))
+    (sysml2--validate-nonempty conn-name "Connection name")
+    (sysml2--validate-distinct source target)
     (end-of-line)
-    (insert "\n" indent "connection " conn-name)
-    (unless (string-empty-p conn-type)
-      (insert " : " conn-type))
-    (insert "\n" indent "  connect " source " to " target ";")))
+    (let ((start (point)))
+      (insert "\nconnection " conn-name)
+      (unless (string-empty-p conn-type)
+        (insert " : " conn-type))
+      (insert "\n    connect " source " to " target ";")
+      (sysml2--indent-inserted-region start (point)))))
 
 (defun sysml2-insert-binding ()
   "Insert a binding connector by selecting source and target interactively."
   (interactive)
   (let* ((source (sysml2--read-connectable "Bind (source): "))
-         (target (sysml2--read-connectable "To (target): "))
-         (indent (make-string (current-indentation) ?\s)))
+         (target (sysml2--read-connectable "To (target): ")))
+    (sysml2--validate-distinct source target)
     (end-of-line)
-    (insert "\n" indent "bind " source " = " target ";")))
+    (let ((start (point)))
+      (insert "\nbind " source " = " target ";")
+      (sysml2--indent-inserted-region start (point)))))
 
 (defun sysml2-insert-flow ()
   "Insert a flow connection by selecting source and target interactively."
@@ -311,13 +328,16 @@ them for completion.  Generates valid SysML v2 connection syntax."
   (let* ((flow-name (read-string "Flow name: "))
          (item-type (sysml2--read-definition-type "Item type flowing (RET for none): "))
          (source (sysml2--read-connectable "From (source): "))
-         (target (sysml2--read-connectable "To (target): "))
-         (indent (make-string (current-indentation) ?\s)))
+         (target (sysml2--read-connectable "To (target): ")))
+    (sysml2--validate-nonempty flow-name "Flow name")
+    (sysml2--validate-distinct source target)
     (end-of-line)
-    (insert "\n" indent "flow " flow-name)
-    (unless (string-empty-p item-type)
-      (insert " of " item-type))
-    (insert " from " source " to " target ";")))
+    (let ((start (point)))
+      (insert "\nflow " flow-name)
+      (unless (string-empty-p item-type)
+        (insert " of " item-type))
+      (insert "\n    from " source " to " target ";")
+      (sysml2--indent-inserted-region start (point)))))
 
 (defun sysml2-insert-interface ()
   "Insert an interface usage by selecting endpoints interactively."
@@ -325,13 +345,16 @@ them for completion.  Generates valid SysML v2 connection syntax."
   (let* ((iface-name (read-string "Interface name: "))
          (iface-type (sysml2--read-definition-type "Interface type (RET for none): "))
          (source (sysml2--read-connectable "Connect (source): "))
-         (target (sysml2--read-connectable "To (target): "))
-         (indent (make-string (current-indentation) ?\s)))
+         (target (sysml2--read-connectable "To (target): ")))
+    (sysml2--validate-nonempty iface-name "Interface name")
+    (sysml2--validate-distinct source target)
     (end-of-line)
-    (insert "\n" indent "interface " iface-name)
-    (unless (string-empty-p iface-type)
-      (insert " : " iface-type))
-    (insert "\n" indent "  connect " source " to " target ";")))
+    (let ((start (point)))
+      (insert "\ninterface " iface-name)
+      (unless (string-empty-p iface-type)
+        (insert " : " iface-type))
+      (insert "\n    connect " source " to " target ";")
+      (sysml2--indent-inserted-region start (point)))))
 
 (defun sysml2-insert-allocation ()
   "Insert an allocation usage by selecting source and target interactively."
@@ -341,31 +364,30 @@ them for completion.  Generates valid SysML v2 connection syntax."
          (all (delete-dups (append (mapcar (lambda (u) (plist-get u :name)) usages) defs)))
          (alloc-name (read-string "Allocation name: "))
          (source (completing-read "Allocate (source): " all nil t))
-         (target (completing-read "To (target): " all nil t))
-         (indent (make-string (current-indentation) ?\s)))
+         (target (completing-read "To (target): " all nil t)))
+    (sysml2--validate-nonempty alloc-name "Allocation name")
+    (sysml2--validate-distinct source target)
     (end-of-line)
-    (insert "\n" indent "allocation " alloc-name
-            "\n" indent "  allocate " source " to " target ";")))
+    (let ((start (point)))
+      (insert "\nallocation " alloc-name
+              "\n    allocate " source " to " target ";")
+      (sysml2--indent-inserted-region start (point)))))
 
 (defun sysml2-insert-satisfy ()
   "Insert a satisfy requirement statement interactively."
   (interactive)
-  (let* ((usages (sysml2--buffer-usage-names))
+  (let* ((req-defs (sysml2--buffer-requirement-names))
          (defs (sysml2--buffer-definition-names))
-         (all (delete-dups (append (mapcar (lambda (u) (plist-get u :name)) usages) defs)))
-         ;; Filter to requirement-like names for the requirement prompt
-         (req-usages (seq-filter (lambda (u)
-                                   (member (plist-get u :kind)
-                                           '("requirement" "constraint")))
-                                 usages))
-         (req-names (if req-usages
-                        (mapcar (lambda (u) (plist-get u :name)) req-usages)
-                      all))
-         (req (completing-read "Satisfy requirement: " req-names nil t))
-         (by (completing-read "By (satisfying element): " all nil t))
-         (indent (make-string (current-indentation) ?\s)))
+         (all (delete-dups (append (mapcar (lambda (u) (plist-get u :name))
+                                           (sysml2--buffer-usage-names))
+                                   defs)))
+         (req-candidates (or req-defs all))
+         (req (completing-read "Satisfy requirement: " req-candidates nil t))
+         (by (completing-read "By (satisfying element): " all nil t)))
     (end-of-line)
-    (insert "\n" indent "satisfy " req " by " by ";")))
+    (let ((start (point)))
+      (insert "\nsatisfy requirement " req " by " by ";")
+      (sysml2--indent-inserted-region start (point)))))
 
 (defun sysml2--buffer-requirement-names ()
   "Extract all requirement definition names from the current buffer.
@@ -392,19 +414,19 @@ and subject type, then generates a verification def block."
                       nil nil (concat req "Verification")))
          (subj-name (read-string "Subject name (default testSubject): "
                                  nil nil "testSubject"))
-         (subj-type (sysml2--read-definition-type "Subject type: "))
-         (indent (make-string (current-indentation) ?\s))
-         (inner (concat indent "    ")))
+         (subj-type (sysml2--read-definition-type "Subject type: ")))
     (end-of-line)
-    (insert "\n" indent "verification def " verif-name " {")
-    (insert "\n" inner "subject " subj-name)
-    (unless (string-empty-p subj-type)
-      (insert " : " subj-type))
-    (insert ";")
-    (insert "\n" inner "objective {")
-    (insert "\n" inner "    verify requirement " req ";")
-    (insert "\n" inner "}")
-    (insert "\n" indent "}")))
+    (let ((start (point)))
+      (insert "\nverification def " verif-name " {")
+      (insert "\nsubject " subj-name)
+      (unless (string-empty-p subj-type)
+        (insert " : " subj-type))
+      (insert ";")
+      (insert "\nobjective {")
+      (insert "\nverify requirement " req ";")
+      (insert "\n}")
+      (insert "\n}")
+      (sysml2--indent-inserted-region start (point)))))
 
 (defun sysml2-insert-subject ()
   "Insert a subject declaration interactively.
@@ -606,16 +628,48 @@ Prompts for subject name and type, then inserts at current indentation."
       (insert "\n" indent "}")
       (goto-char pos))))
 
+(defun sysml2-scaffold-calc-def ()
+  "Scaffold a new calc definition with in parameters and return value."
+  (interactive)
+  (let* ((name (read-string "Calc def name: "))
+         (params-str (read-string "Input params (name:Type, ...): "))
+         (ret-name (read-string "Return name (default result): " nil nil "result"))
+         (ret-type (sysml2--read-definition-type "Return type (RET for Real): "))
+         (indent (make-string (current-indentation) ?\s))
+         (inner (concat indent "    ")))
+    (end-of-line)
+    (let ((start (point)))
+      (insert "\n" indent "calc def " name " {")
+      ;; Input parameters
+      (unless (string-empty-p params-str)
+        (dolist (spec (split-string params-str "," t " "))
+          (let* ((parts (split-string spec ":" t " "))
+                 (pname (car parts))
+                 (ptype (cadr parts)))
+            (insert "\n" inner "in " pname)
+            (when ptype
+              (insert " : " ptype))
+            (insert ";"))))
+      ;; Return value
+      (insert "\n" inner "return " ret-name)
+      (unless (string-empty-p ret-type)
+        (insert " : " ret-type))
+      (insert ";")
+      (insert "\n" indent "}")
+      (sysml2--indent-inserted-region start (point)))))
+
 (defun sysml2-scaffold ()
   "Scaffold a new SysML v2 model element.
 Presents a menu of available scaffolding commands."
   (interactive)
   (let ((type (completing-read "Scaffold: "
-                               '("package" "part def" "port def"
+                               '("full model" "package" "part def" "port def"
                                  "requirement def" "state def"
-                                 "action def" "enum def" "use case def")
+                                 "action def" "enum def" "use case def"
+                                 "calc def")
                                nil t)))
     (pcase type
+      ("full model"      (sysml2-scaffold-model))
       ("package"         (sysml2-scaffold-package))
       ("part def"        (sysml2-scaffold-part-def))
       ("port def"        (sysml2-scaffold-port-def))
@@ -623,7 +677,68 @@ Presents a menu of available scaffolding commands."
       ("state def"       (sysml2-scaffold-state-def))
       ("action def"      (sysml2-scaffold-action-def))
       ("enum def"        (sysml2-scaffold-enum-def))
-      ("use case def"    (sysml2-scaffold-use-case-def)))))
+      ("use case def"    (sysml2-scaffold-use-case-def))
+      ("calc def"        (sysml2-scaffold-calc-def)))))
+
+;; --- Full Model Scaffold ---
+
+(defun sysml2--indent-inserted-region (start end)
+  "Re-indent the region from START to END using the buffer's indent function."
+  (when (and start end (> end start))
+    (indent-region start end)))
+
+(defun sysml2-scaffold-model ()
+  "Scaffold a complete SysML v2 model package interactively.
+Prompts for package name, parts, ports, connections, requirements,
+and generates a full model skeleton with proper indentation."
+  (interactive)
+  (let* ((pkg-name (read-string "Package name: "))
+         (imports-str (read-string "Imports (comma-sep, RET for ISQ/SI/ScalarValues): "
+                                   nil nil "ISQ::*, SI::*, ScalarValues::*"))
+         (parts-str (read-string "Part defs (name:Super, ...): "))
+         (ports-str (read-string "Port defs (name, ...): "))
+         (conns-str (read-string "Connections (source->target, ...): "))
+         (reqs-str (read-string "Requirements (name, ...): "))
+         (start (point)))
+    (insert "\npackage " pkg-name " {\n")
+    ;; Imports
+    (unless (string-empty-p imports-str)
+      (dolist (imp (split-string imports-str "," t " "))
+        (insert "    import " imp ";\n"))
+      (insert "\n"))
+    ;; Port definitions
+    (unless (string-empty-p ports-str)
+      (dolist (port-name (split-string ports-str "," t " "))
+        (insert "    port def " port-name " {\n")
+        (insert "    }\n\n")))
+    ;; Part definitions
+    (unless (string-empty-p parts-str)
+      (dolist (spec (split-string parts-str "," t " "))
+        (let* ((parts (split-string spec ":" t " "))
+               (name (car parts))
+               (super (cadr parts)))
+          (insert "    part def " name)
+          (when super
+            (insert " :> " super))
+          (insert " {\n")
+          (insert "    }\n\n"))))
+    ;; Connections
+    (unless (string-empty-p conns-str)
+      (dolist (conn-spec (split-string conns-str "," t " "))
+        (let* ((endpoints (split-string conn-spec "->" t " ")))
+          (when (= (length endpoints) 2)
+            (insert "    connect " (car endpoints)
+                    " to " (cadr endpoints) ";\n")))
+        (insert "\n")))
+    ;; Requirements
+    (unless (string-empty-p reqs-str)
+      (dolist (req-name (split-string reqs-str "," t " "))
+        (insert "    requirement def " req-name " {\n")
+        (insert "        doc /* TODO: describe requirement */\n")
+        (insert "    }\n\n")))
+    (insert "}\n")
+    ;; Re-indent the whole generated block
+    (sysml2--indent-inserted-region start (point))))
 
 (provide 'sysml2-completion)
 ;;; sysml2-completion.el ends here

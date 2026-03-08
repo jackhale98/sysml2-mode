@@ -43,6 +43,7 @@
 ;;   `sysml2-diagram-view' -- Generate diagram from a view def's filter
 
 (require 'sysml2-vars)
+(require 'sysml2-lang)
 (require 'sysml2-model)
 (require 'sysml2-svg)
 (require 'sysml2-d2)
@@ -338,12 +339,69 @@ Bound to `C-c C-d b'."
 
 (declare-function sysml2-which-function "sysml2-navigation")
 
-(defun sysml2--diagram-read-scope (type)
-  "Return a scope name for diagram TYPE.
+(defun sysml2--diagram-scan-defs (def-keyword &optional require-body)
+  "Return a list of definition names matching DEF-KEYWORD in the buffer.
+DEF-KEYWORD is e.g. \"part def\", \"state def\".
+When REQUIRE-BODY is non-nil, skip forward declarations (semicolons
+without a `{' body)."
+  (let ((names nil)
+        (re (concat "\\b" (regexp-quote def-keyword)
+                    "[ \t]+\\(" sysml2--identifier-regexp "\\)")))
+    (save-excursion
+      (goto-char (point-min))
+      (while (re-search-forward re nil t)
+        (unless (let ((ppss (syntax-ppss)))
+                  (or (nth 3 ppss) (nth 4 ppss)))
+          (let ((name (match-string-no-properties 1)))
+            (if require-body
+                ;; Check that this def has a body (not just semicolon)
+                (save-excursion
+                  (when (re-search-forward "[{;]" (line-end-position 3) t)
+                    (when (eq (char-before) ?\{)
+                      (push name names))))
+              (push name names))))))
+    (nreverse names)))
+
+(defun sysml2--diagram-scan-exhibit-states ()
+  "Return a list of exhibit state names in the buffer."
+  (let ((names nil)
+        (re (concat "\\bexhibit[ \t]+state[ \t]+"
+                    "\\(" sysml2--identifier-regexp "\\)")))
+    (save-excursion
+      (goto-char (point-min))
+      (while (re-search-forward re nil t)
+        (unless (let ((ppss (syntax-ppss)))
+                  (or (nth 3 ppss) (nth 4 ppss)))
+          (push (match-string-no-properties 1) names))))
+    (nreverse names)))
+
+(defun sysml2--diagram-read-scope (diagram-type)
+  "Return a scope name for DIAGRAM-TYPE.
 Uses `sysml2-which-function' to auto-detect the enclosing definition,
-falling back to `read-string' if no enclosing definition is found."
+falling back to `completing-read' with candidates filtered by the
+applicable definition keyword for DIAGRAM-TYPE."
   (or (sysml2-which-function)
-      (let ((name (read-string (format "%s — scope (definition name): " type))))
+      (let* ((def-kw (pcase diagram-type
+                       ("IBD" "part def")
+                       ("State machine" "state def")
+                       ("Action flow" "action def")
+                       (_ nil)))
+             ;; For state machines, require body (skip forward declarations)
+             (require-body (string= diagram-type "State machine"))
+             (candidates (when def-kw
+                           (sysml2--diagram-scan-defs def-kw require-body)))
+             ;; For state machines, also include exhibit state names
+             (candidates (if (string= diagram-type "State machine")
+                             (delete-dups (append candidates
+                                                  (sysml2--diagram-scan-exhibit-states)))
+                           candidates))
+             (name (if candidates
+                       (completing-read
+                        (format "%s — select %s: " diagram-type
+                                (or def-kw "definition"))
+                        candidates nil t)
+                     (read-string
+                      (format "%s — scope (definition name): " diagram-type)))))
         (if (string-empty-p name) nil name))))
 
 (defun sysml2--diagram-generate-and-show (type scope)

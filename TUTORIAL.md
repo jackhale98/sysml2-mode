@@ -30,6 +30,7 @@ and the editor features that make working with it productive.
 - [Step 20: Navigation and Exploration](#step-20-navigation-and-exploration)
 - [Complete File](#complete-file)
 - [SysML v2 Concept Summary](#sysml-v2-concept-summary)
+- [SysML v2 Syntax Quick Reference](#sysml-v2-syntax-quick-reference)
 - [Further Reading](#further-reading)
 
 ## Prerequisites
@@ -1235,6 +1236,190 @@ package DroneSystem {
 | Visibility      | `public`/`private` | Access control                  |
 | Doc comment          | `doc /* ... */`     | Structured documentation             |
 | Metadata             | `#AnnotationName`  | Model annotations                    |
+
+---
+
+## SysML v2 Syntax Quick Reference
+
+This section covers SysML v2 textual notation syntax that goes beyond the
+concept definitions above. Use this as a reference while writing models.
+
+### Operators and Symbols
+
+| Symbol | Meaning | Example |
+|--------|---------|---------|
+| `:>` | Specialization ("is a kind of") | `part def Car :> Vehicle` |
+| `:>>` | Redefinition (override inherited) | `attribute :>> mass = 1500 [kg]` |
+| `::` | Namespace separator | `ISQ::MassValue` |
+| `::*` | Wildcard import | `import ISQ::*` |
+| `::>` | Binding connector (equality) | Rarely used; prefer `bind x = y;` |
+| `:` | Typing (is of type) | `part engine : Engine` |
+| `~` | Port conjugation (flip in/out) | `port clutchPort : ~DrivePwrPort` |
+| `#` | Metadata annotation | `part bumper { @Safety }` |
+| `=` | Default value / assignment | `attribute mass = 1500 [kg]` |
+
+### Multiplicity
+
+Multiplicity constrains how many instances of a usage exist:
+
+```sysml
+part motor : Motor[4];          // exactly 4
+part sensor : Sensor[1..3];     // 1 to 3
+part log : LogEntry[0..*];      // zero or more (unbounded)
+part wheel : Wheel[*];          // same as [0..*]
+part pilot : Pilot[1];          // exactly 1 (explicit)
+```
+
+Optional suffixes: `ordered` (preserves order), `nonunique` (allows duplicates).
+
+### Units and Quantities
+
+SysML v2 uses the International System of Quantities (ISQ) and SI units
+from the standard library:
+
+```sysml
+import ISQ::*;       // Mass, Length, Speed, Force, etc.
+import SI::*;        // kg, m, s, N, Pa, etc.
+import ScalarValues::*;  // Real, Integer, Boolean, String, etc.
+
+// Attribute with ISQ type
+attribute mass : ISQ::MassValue;
+
+// Value with unit annotation
+attribute redefines mass = 1500 [SI::kg];
+
+// Shorthand (with ISQ/SI imported)
+attribute speed : SpeedValue = 60 [km/h];
+```
+
+Common ISQ types: `MassValue`, `LengthValue`, `SpeedValue`, `ForceValue`,
+`PowerValue`, `EnergyValue`, `TimeValue`, `TemperatureValue`,
+`ElectricCurrentValue`, `ElectricPotentialValue`, `AngularVelocityValue`.
+
+Common SI units: `kg`, `m`, `s`, `N`, `Pa`, `W`, `J`, `K`, `A`, `V`,
+`Hz`, `rad`, `mm`, `km`, `h`.
+
+### Expressions and Constraints
+
+Constraints use Boolean expressions inside `require constraint` blocks:
+
+```sysml
+require constraint {
+    drone.totalMass <= 2.5 [kg]
+}
+
+// Named constraints
+constraint def SpeedLimit {
+    attribute maxSpeed : SpeedValue;
+    attribute currentSpeed : SpeedValue;
+    require constraint { currentSpeed <= maxSpeed }
+}
+
+// Assert (must hold at all times)
+assert constraint fuelConstraint { fuel.fuelMass <= fuelMassMax }
+```
+
+Available operators: `+`, `-`, `*`, `/`, `**` (power), `==`, `!=`,
+`<`, `>`, `<=`, `>=`, `and`, `or`, `not`, `xor`, `implies`.
+
+### Calculations (calc def)
+
+Calculations define mathematical functions with typed inputs and returns:
+
+```sysml
+calc def FuelConsumption {
+    in bestFuelConsumption : Real;
+    in idlingFuelConsumption : Real;
+    in tpd_avg :> timePerDistance;
+    return dpv :> distancePerVolume = 1/f;
+}
+
+// Usage with arguments
+calc :> evaluationFunction {
+    in part vehicle :> myVehicle;
+    return attribute eval : Real = EvalFn(vehicle.mass, vehicle.power);
+}
+```
+
+Use `C-c m c` / `SPC m m c` to scaffold a calc def interactively.
+
+### Comments and Documentation
+
+```sysml
+// Single line comment
+
+/* Block comment
+   can span multiple lines */
+
+// Documentation comment (structured — appears in reports)
+requirement def MaxWeight {
+    doc /* The total mass shall not exceed 2.5 kg
+           to comply with regulations. */
+}
+```
+
+### Visibility
+
+```sysml
+package MyPackage {
+    public part def PublicPart;      // visible outside package
+    private part def InternalPart;   // hidden from outside
+    protected part def BasePart;     // visible to specializations
+    // default visibility is public
+}
+```
+
+### Short Names
+
+Short names provide a compact identifier alongside the full name,
+useful for requirement IDs:
+
+```sysml
+requirement <'R1'> vehicleMassReq : MassRequirement {
+    doc /* Vehicle mass shall not exceed 2000 kg */
+}
+
+requirement <'2_1'> cityFuelEconomy : FuelEconomyRequirement;
+```
+
+### Metadata Annotations
+
+Metadata attaches structured data to model elements:
+
+```sysml
+metadata def Safety {
+    attribute isMandatory : Boolean;
+}
+
+part bumper { @Safety { isMandatory = true; } }
+part keylessEntry { @Security; }
+```
+
+### Individual Instances
+
+```sysml
+individual part def MyCarUnit1 :> SurveyDrone {
+    attribute redefines serialNumber = "VIN-001";
+}
+```
+
+### Trade Studies (Analysis)
+
+Trade studies compare alternatives using evaluation functions:
+
+```sysml
+analysis def EngineTradeStudy {
+    subject vehicle_b : Vehicle_b;
+    objective : MaximizeObjective;
+
+    calc :> evaluationFunction {
+        in part vehicle :> vehicle_4cyl;
+        return attribute eval : Real = Eval4Cyl(
+            vehicle.engine.mass,
+            vehicle.engine.peakHorsePower);
+    }
+}
+```
 
 ---
 

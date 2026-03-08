@@ -78,6 +78,7 @@
 (declare-function sysml2-scaffold-action-def "sysml2-completion")
 (declare-function sysml2-scaffold-enum-def "sysml2-completion")
 (declare-function sysml2-scaffold-use-case-def "sysml2-completion")
+(declare-function sysml2-scaffold-calc-def "sysml2-completion")
 (declare-function sysml2-report-summary "sysml2-report")
 (declare-function sysml2-report-traceability "sysml2-report")
 (declare-function sysml2-report-export-markdown "sysml2-report")
@@ -176,6 +177,7 @@
      "m a" '(sysml2-scaffold-action-def :which-key "action def")
      "m e" '(sysml2-scaffold-enum-def :which-key "enum def")
      "m u" '(sysml2-scaffold-use-case-def :which-key "use case def")
+     "m c" '(sysml2-scaffold-calc-def :which-key "calc def")
      ;; Code folding
      "f"   '(:ignore t :which-key "fold")
      "f t" '(hs-toggle-hiding :which-key "toggle")

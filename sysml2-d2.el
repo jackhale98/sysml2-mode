@@ -116,8 +116,10 @@
     (when bounds
       (let ((parts (sysml2--model-extract-part-usages (car bounds) (cdr bounds)))
             (ports (sysml2--model-extract-port-usages (car bounds) (cdr bounds)))
-            (conns (sysml2--model-extract-connections (car bounds) (cdr bounds))))
-        ;; Parts as containers
+            (conns (sysml2--model-extract-connections (car bounds) (cdr bounds)))
+            (flows (sysml2--model-extract-flows (car bounds) (cdr bounds)))
+            (binds (sysml2--model-extract-bindings (car bounds) (cdr bounds))))
+        ;; Parts as containers with proper sizing
         (dolist (p parts)
           (let ((pname (plist-get p :name))
                 (ptype (plist-get p :type))
@@ -129,41 +131,78 @@
             (push "  style.fill: \"#E8F4FD\"" lines)
             (push "  style.stroke: \"#2196F3\"" lines)
             ;; Find ports belonging to this part's type
-            (let ((type-bounds (sysml2--model-find-def-bounds "part def" ptype)))
+            (let ((type-bounds (sysml2--model-find-def-bounds "part def" ptype))
+                  (has-ports nil))
               (when type-bounds
                 (let ((inner-ports (sysml2--model-extract-port-usages
                                     (car type-bounds) (cdr type-bounds))))
+                  (when inner-ports (setq has-ports t))
                   (dolist (ip inner-ports)
                     (let ((ipname (plist-get ip :name))
                           (iptype (plist-get ip :type)))
-                      (push (format "  %s: \"%s : %s\" {" ipname ipname iptype) lines)
+                      (push (format "  %s: \"%s\\n: %s\" {" ipname ipname
+                                    (or iptype "")) lines)
                       (push "    style.fill: \"#FFF3E0\"" lines)
                       (push "    style.stroke: \"#FF9800\"" lines)
-                      (push "    width: 24" lines)
-                      (push "    height: 24" lines)
-                      (push "  }" lines))))))
+                      (push "    style.border-radius: 0" lines)
+                      (push "    width: 50" lines)
+                      (push "    height: 40" lines)
+                      (push "  }" lines)))))
+              ;; Set minimum container size based on content
+              (unless has-ports
+                (push "  width: 160" lines)
+                (push "  height: 80" lines)))
             (push "}" lines)
             (push "" lines)))
-        ;; Boundary ports
+        ;; Boundary ports (on the scope boundary)
         (dolist (p ports)
           (let ((pname (plist-get p :name))
                 (ptype (plist-get p :type))
                 (conj (plist-get p :conjugated)))
-            (push (format "%s: \"%s%s : %s\" {"
-                          pname (if conj "~" "") pname ptype) lines)
+            (push (format "%s: \"%s%s\\n: %s\" {"
+                          pname (if conj "~" "") pname (or ptype "")) lines)
             (push "  style.fill: \"#FFF3E0\"" lines)
             (push "  style.stroke: \"#FF9800\"" lines)
+            (push "  style.border-radius: 0" lines)
+            (push "  width: 50" lines)
+            (push "  height: 40" lines)
             (push "}" lines)
             (push "" lines)))
-        ;; Connections
+        ;; Connection edges
         (dolist (c conns)
           (let ((src (plist-get c :source))
                 (tgt (plist-get c :target))
                 (cname (plist-get c :name)))
-            ;; Convert dot-path to D2 nesting
-            (let ((d2-src (replace-regexp-in-string "\\." "." src))
-                  (d2-tgt (replace-regexp-in-string "\\." "." tgt)))
-              (push (format "%s -> %s: %s" d2-src d2-tgt cname) lines))))))
+            (push (format "%s -> %s: \"%s\" {" src tgt cname) lines)
+            (push "  style.stroke: \"#2196F3\"" lines)
+            (push "}" lines)))
+        (when conns (push "" lines))
+        ;; Flow edges
+        (dolist (f flows)
+          (let ((src (plist-get f :source))
+                (tgt (plist-get f :target))
+                (fname (plist-get f :name))
+                (ftype (plist-get f :type)))
+            (push (format "%s -> %s: \"%s\" {" src tgt
+                          (if ftype
+                              (format "%s\\n[%s]"
+                                      (if (string-empty-p fname) "flow" fname)
+                                      ftype)
+                            (if (string-empty-p fname) "flow" fname)))
+                  lines)
+            (push "  style.stroke: \"#9C27B0\"" lines)
+            (push "  style.stroke-dash: 5" lines)
+            (push "}" lines)))
+        (when flows (push "" lines))
+        ;; Bind edges
+        (dolist (b binds)
+          (let ((src (plist-get b :source))
+                (tgt (plist-get b :target)))
+            (push (format "%s -> %s: \"=\" {" src tgt) lines)
+            (push "  style.stroke: \"#FF9800\"" lines)
+            (push "  style.stroke-dash: 3" lines)
+            (push "}" lines)))
+        (when binds (push "" lines))))
     (string-join (nreverse lines) "\n")))
 
 ;; ---------------------------------------------------------------------------
@@ -171,8 +210,11 @@
 ;; ---------------------------------------------------------------------------
 
 (defun sysml2-d2-state-machine (scope-name)
-  "Generate D2 source for a state machine diagram of SCOPE-NAME."
-  (let ((bounds (sysml2--model-find-def-bounds "state def" scope-name))
+  "Generate D2 source for a state machine diagram of SCOPE-NAME.
+Looks for `state def SCOPE-NAME { ... }' first, then falls back to
+`exhibit state SCOPE-NAME { ... }' inside part definitions."
+  (let ((bounds (or (sysml2--model-find-def-bounds "state def" scope-name)
+                    (sysml2--model-find-exhibit-state-bounds scope-name)))
         (lines nil))
     (push (format "title: \"%s — State Machine\" {" scope-name) lines)
     (push "  near: top-center" lines)
@@ -183,10 +225,12 @@
     (push "direction: right" lines)
     (push "" lines)
     (when bounds
-      (let ((states (sysml2--model-extract-states (car bounds) (cdr bounds)))
-            (transitions (sysml2--model-extract-transitions
-                          (car bounds) (cdr bounds)))
-            (state-names nil))
+      (let* ((states (sysml2--model-extract-states (car bounds) (cdr bounds)))
+             (transitions (sysml2--model-extract-transitions
+                           (car bounds) (cdr bounds)))
+             (initial-state (sysml2--model-extract-initial-state
+                             (car bounds) (cdr bounds)))
+             (state-names nil))
         ;; Collect state names
         (dolist (s states)
           (push (plist-get s :name) state-names))
@@ -207,10 +251,12 @@
             (push "  style.stroke: \"#4CAF50\"" lines)
             (push "}" lines)
             (push "" lines)))
-        ;; Initial transition to first state
-        (when state-names
-          (push (format "__start__ -> %s" (car (last state-names))) lines)
-          (push "" lines))
+        ;; Initial transition — use parsed entry state or fall back to first state
+        (let ((init-target (or initial-state
+                               (car (last state-names)))))
+          (when init-target
+            (push (format "__start__ -> %s" init-target) lines)
+            (push "" lines)))
         ;; Transitions
         (dolist (tr transitions)
           (let ((from (plist-get tr :from))

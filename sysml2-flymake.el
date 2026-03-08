@@ -150,6 +150,41 @@ Returns a list of Flymake diagnostics."
                       diagnostics)))))))
     diagnostics))
 
+;; --- Standard library reference validation ---
+
+(defun sysml2--check-library-references ()
+  "Check that qualified references to ISQ, SI, and ScalarValues are valid.
+Returns a list of Flymake diagnostics for unknown library members."
+  (let ((diagnostics nil)
+        ;; Match ISQ::Name, SI::Name, ScalarValues::Name
+        (lib-ref-re (concat "\\b\\(ISQ\\|SI\\|ScalarValues\\)"
+                            "::\\([A-Za-z_][A-Za-z0-9_°μ]*\\)")))
+    (save-excursion
+      (goto-char (point-min))
+      (while (re-search-forward lib-ref-re nil t)
+        (let ((beg (match-beginning 0))
+              (end (match-end 0))
+              (lib (match-string-no-properties 1))
+              (member-name (match-string-no-properties 2)))
+          (save-excursion
+            (let ((ppss (syntax-ppss beg)))
+              (unless (or (nth 3 ppss) (nth 4 ppss))
+                ;; Skip wildcard imports like ISQ::*
+                (unless (string= member-name "*")
+                  (let ((valid-members
+                         (cond
+                          ((string= lib "ISQ") sysml2-isq-types)
+                          ((string= lib "SI") sysml2-si-units)
+                          ((string= lib "ScalarValues") sysml2-scalar-value-types))))
+                    (when (and valid-members
+                               (not (member member-name valid-members)))
+                      (push (flymake-make-diagnostic
+                             (current-buffer) beg end
+                             :warning
+                             (format "Unknown %s member `%s'" lib member-name))
+                            diagnostics))))))))))
+    diagnostics))
+
 ;; --- Tree-sitter Flymake backend ---
 
 (defun sysml2-ts--error-message-for-parent (parent-node)
@@ -236,18 +271,22 @@ Returns a list of Flymake diagnostics at :note level."
     (save-excursion
       (goto-char (point-min))
       (while (re-search-forward req-def-re nil t)
-        (let ((ppss (syntax-ppss (match-beginning 0))))
-          (unless (or (nth 3 ppss) (nth 4 ppss))
-            (push (cons (match-string-no-properties 1)
-                        (match-beginning 0))
-                  req-defs)))))
+        (let ((beg (match-beginning 0))
+              (name (match-string-no-properties 1)))
+          (save-excursion
+            (let ((ppss (syntax-ppss beg)))
+              (unless (or (nth 3 ppss) (nth 4 ppss))
+                (push (cons name beg) req-defs)))))))
     ;; Collect satisfied requirement names
     (save-excursion
       (goto-char (point-min))
       (while (re-search-forward satisfy-re nil t)
-        (let ((ppss (syntax-ppss (match-beginning 0))))
-          (unless (or (nth 3 ppss) (nth 4 ppss))
-            (push (match-string-no-properties 1) satisfied)))))
+        (let ((beg (match-beginning 0))
+              (name (match-string-no-properties 1)))
+          (save-excursion
+            (let ((ppss (syntax-ppss beg)))
+              (unless (or (nth 3 ppss) (nth 4 ppss))
+                (push name satisfied)))))))
     ;; Report unsatisfied
     (dolist (rd req-defs)
       (unless (member (car rd) satisfied)
@@ -274,18 +313,22 @@ Returns a list of Flymake diagnostics at :note level."
     (save-excursion
       (goto-char (point-min))
       (while (re-search-forward req-def-re nil t)
-        (let ((ppss (syntax-ppss (match-beginning 0))))
-          (unless (or (nth 3 ppss) (nth 4 ppss))
-            (push (cons (match-string-no-properties 1)
-                        (match-beginning 0))
-                  req-defs)))))
+        (let ((beg (match-beginning 0))
+              (name (match-string-no-properties 1)))
+          (save-excursion
+            (let ((ppss (syntax-ppss beg)))
+              (unless (or (nth 3 ppss) (nth 4 ppss))
+                (push (cons name beg) req-defs)))))))
     ;; Collect verified requirement names
     (save-excursion
       (goto-char (point-min))
       (while (re-search-forward verify-re nil t)
-        (let ((ppss (syntax-ppss (match-beginning 0))))
-          (unless (or (nth 3 ppss) (nth 4 ppss))
-            (push (match-string-no-properties 1) verified)))))
+        (let ((beg (match-beginning 0))
+              (name (match-string-no-properties 1)))
+          (save-excursion
+            (let ((ppss (syntax-ppss beg)))
+              (unless (or (nth 3 ppss) (nth 4 ppss))
+                (push name verified)))))))
     ;; Report unverified
     (dolist (rd req-defs)
       (unless (member (car rd) verified)
@@ -321,11 +364,12 @@ Skips package declarations."
     (save-excursion
       (goto-char (point-min))
       (while (re-search-forward def-re nil t)
-        (let ((ppss (syntax-ppss (match-beginning 0))))
-          (unless (or (nth 3 ppss) (nth 4 ppss))
-            (push (cons (match-string-no-properties 1)
-                        (match-beginning 0))
-                  defs)))))
+        (let ((beg (match-beginning 0))
+              (name (match-string-no-properties 1)))
+          (save-excursion
+            (let ((ppss (syntax-ppss beg)))
+              (unless (or (nth 3 ppss) (nth 4 ppss))
+                (push (cons name beg) defs)))))))
     ;; Check each definition for references
     (dolist (def defs)
       (let* ((name (car def))
@@ -334,9 +378,10 @@ Skips package declarations."
         (save-excursion
           (goto-char (point-min))
           (while (re-search-forward name-re nil t)
-            (let ((ppss (syntax-ppss (match-beginning 0))))
-              (unless (or (nth 3 ppss) (nth 4 ppss))
-                (setq count (1+ count))))))
+            (save-excursion
+              (let ((ppss (syntax-ppss (match-beginning 0))))
+                (unless (or (nth 3 ppss) (nth 4 ppss))
+                  (setq count (1+ count)))))))
         ;; If only appears once (its own declaration), it's unused
         (when (<= count 1)
           (push (flymake-make-diagnostic
@@ -357,7 +402,8 @@ Calls REPORT-FN with collected diagnostics from all checks."
                              (sysml2--check-missing-semicolons)
                              (sysml2--check-unsatisfied-requirements)
                              (sysml2--check-unverified-requirements)
-                             (sysml2--check-unused-definitions))))
+                             (sysml2--check-unused-definitions)
+                             (sysml2--check-library-references))))
     (funcall report-fn diagnostics)))
 
 ;; --- Setup ---

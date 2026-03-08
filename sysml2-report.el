@@ -108,15 +108,40 @@ in `part def') are excluded."
     (sort result (lambda (a b) (string< (car a) (car b))))))
 
 ;; ---------------------------------------------------------------------------
+;; Collect requirement usages (not defs)
+;; ---------------------------------------------------------------------------
+
+(defun sysml2--report-collect-requirement-usages ()
+  "Collect requirement usage names from the current buffer.
+Returns a list of simple names for `requirement NAME' usages
+\(excluding `requirement def' definitions)."
+  (let ((result nil)
+        (re (concat "\\brequirement\\s-+"
+                     "\\(?:<'[^']*'>\\s-+\\)?"
+                     "\\(" sysml2--identifier-regexp "\\)")))
+    (save-excursion
+      (goto-char (point-min))
+      (while (re-search-forward re nil t)
+        (let ((name (match-string-no-properties 1)))
+          (save-excursion
+            (let ((ppss (syntax-ppss (match-beginning 0))))
+              (unless (or (nth 3 ppss) (nth 4 ppss)
+                          ;; Skip `requirement def'
+                          (string= name "def"))
+                (push name result)))))))
+    (delete-dups (nreverse result))))
+
+;; ---------------------------------------------------------------------------
 ;; Collect satisfy statements
 ;; ---------------------------------------------------------------------------
 
 (defun sysml2--report-collect-satisfy ()
   "Collect satisfy statements from the current buffer.
 Returns a list of (REQUIREMENT-NAME . TARGET-NAME) pairs from
-statements like `satisfy requirement ReqName by TargetName'."
+statements like `satisfy [requirement] ReqName by TargetName'."
   (let ((result nil)
-        (satisfy-re (concat "\\bsatisfy\\s-+requirement\\s-+"
+        (satisfy-re (concat "\\bsatisfy\\s-+"
+                            "\\(?:requirement\\s-+\\)?"
                             "\\(" sysml2--qualified-name-regexp "\\)"
                             "\\s-+by\\s-+"
                             "\\(" sysml2--qualified-name-regexp "\\)")))
@@ -136,45 +161,44 @@ statements like `satisfy requirement ReqName by TargetName'."
 (defun sysml2--report-collect-verify ()
   "Collect verify statements from the current buffer.
 Returns a list of (REQUIREMENT-NAME . VERIFICATION-DEF-NAME) pairs.
-Looks for `verify requirement ReqName' inside `verification def VerifName'
-blocks, as well as standalone `verify requirement ReqName' statements."
+Looks for `verify [requirement] ReqName' inside verification blocks
+and standalone verify statements."
   (let ((result nil)
-        (verif-def-re (concat "\\bverification\\s-+def\\s-+"
-                              "\\(" sysml2--identifier-regexp "\\)"))
-        (verify-re (concat "\\bverify\\s-+requirement\\s-+"
+        ;; Match `verification NAME : Type {' (usage with body, not forward decls)
+        (verif-usage-re (concat "\\bverification\\s-+"
+                                "\\(" sysml2--identifier-regexp "\\)"
+                                "[^;]*{"))
+        ;; Match `verify [requirement] <qualified-name>'
+        (verify-re (concat "\\bverify\\s-+\\(?:requirement\\s-+\\)?"
                            "\\(" sysml2--qualified-name-regexp "\\)")))
     (save-excursion
       (goto-char (point-min))
-      ;; Strategy: find each verification def, then look for verify statements
-      ;; inside its body.
-      (while (re-search-forward verif-def-re nil t)
+      ;; Strategy: find verification usages (not defs), look for verify inside
+      (while (re-search-forward verif-usage-re nil t)
         (unless (sysml2--report-in-comment-or-string-p)
           (let ((verif-name (match-string-no-properties 1))
-                (block-start nil)
                 (block-end nil))
-            ;; Find the opening brace
-            (when (re-search-forward "{" nil t)
-              (setq block-start (point))
-              (backward-char 1)
-              (condition-case nil
-                  (progn
-                    (forward-sexp 1)
-                    (setq block-end (point)))
-                (scan-error
-                 (setq block-end (point-max)))))
-            (when (and block-start block-end)
-              (save-excursion
-                (goto-char block-start)
-                (while (re-search-forward verify-re block-end t)
-                  (unless (sysml2--report-in-comment-or-string-p)
-                    (let ((req-name (match-string-no-properties 1)))
-                      (push (cons req-name verif-name) result)))))))))
-      ;; Also find standalone verify statements (outside verification defs)
+            ;; Go to the `{' and find the matching `}'
+            (goto-char (1- (match-end 0)))
+            (condition-case nil
+                (progn
+                  (forward-sexp 1)
+                  (setq block-end (point)))
+              (scan-error
+               (setq block-end (point-max))))
+            (let ((block-start (match-end 0)))
+              (when block-end
+                (save-excursion
+                  (goto-char block-start)
+                  (while (re-search-forward verify-re block-end t)
+                    (unless (sysml2--report-in-comment-or-string-p)
+                      (let ((req-name (match-string-no-properties 1)))
+                        (push (cons req-name verif-name) result))))))))))
+      ;; Also find standalone verify statements
       (goto-char (point-min))
       (while (re-search-forward verify-re nil t)
         (unless (sysml2--report-in-comment-or-string-p)
           (let ((req-name (match-string-no-properties 1)))
-            ;; Only add if not already captured from a verification def block
             (unless (assoc req-name result)
               (push (cons req-name nil) result))))))
     (nreverse result)))
@@ -390,22 +414,31 @@ satisfy and verify relationships, and coverage status.  The buffer uses
                           (sysml2--report-collect-satisfy)))
          (verify-pairs (with-current-buffer source-buf
                          (sysml2--report-collect-verify)))
-         (req-names (or (cdr (assoc "requirement def" definitions)) '()))
+         (req-def-names (or (cdr (assoc "requirement def" definitions)) '()))
+         (req-usage-names (with-current-buffer source-buf
+                            (sysml2--report-collect-requirement-usages)))
+         (req-names (delete-dups (append req-def-names req-usage-names)))
          ;; Build lookup tables: req-name -> list of targets / verifiers
          (satisfy-map (make-hash-table :test 'equal))
          (verify-map (make-hash-table :test 'equal))
          (entries nil)
          (buf (get-buffer-create "*SysML2 Traceability*")))
-    ;; Populate satisfy map
+    ;; Populate satisfy map (normalize qualified names to simple names)
     (dolist (pair satisfy-pairs)
-      (let ((req (car pair))
-            (target (cdr pair)))
-        (puthash req (cons target (gethash req satisfy-map)) satisfy-map)))
-    ;; Populate verify map
+      (let* ((req-full (car pair))
+             (target (cdr pair))
+             ;; Strip package prefixes: Requirements::foo -> foo, a.b -> b
+             (req (replace-regexp-in-string "\\`.*[:.]" "" req-full)))
+        (puthash req (cons target (gethash req satisfy-map)) satisfy-map)
+        ;; Also store under full name for qualified lookups
+        (puthash req-full (cons target (gethash req-full satisfy-map)) satisfy-map)))
+    ;; Populate verify map (normalize qualified names)
     (dolist (pair verify-pairs)
-      (let ((req (car pair))
-            (verifier (cdr pair)))
-        (puthash req (cons verifier (gethash req verify-map)) verify-map)))
+      (let* ((req-full (car pair))
+             (verifier (cdr pair))
+             (req (replace-regexp-in-string "\\`.*[:.]" "" req-full)))
+        (puthash req (cons verifier (gethash req verify-map)) verify-map)
+        (puthash req-full (cons verifier (gethash req-full verify-map)) verify-map)))
     ;; Build table entries
     (dolist (req-name req-names)
       (let* ((satisfied-by (gethash req-name satisfy-map))
@@ -420,6 +453,7 @@ satisfy and verify relationships, and coverage status.  The buffer uses
              (status (cond
                       ((and satisfied-by verified-by) "\u2713 Full")
                       (satisfied-by                   "\u25B3 No test")
+                      (verified-by                    "\u25B3 No satisfy")
                       (t                              "\u2717 Gap"))))
         (push (list req-name (vector req-name sat-str ver-str status))
               entries)))
@@ -448,6 +482,7 @@ satisfy and verify relationships, and coverage status.  The buffer uses
     ("traceability"   . "Traceability Matrix")
     ("states"         . "State Machines")
     ("actions"        . "Action Flows")
+    ("calculations"   . "Calculations")
     ("enumerations"   . "Enumerations"))
   "Available Markdown report sections as (ID . TITLE) pairs.")
 
@@ -589,18 +624,47 @@ satisfy and verify relationships, and coverage status.  The buffer uses
   "Render the Connection Matrix section from SOURCE-BUF."
   (with-current-buffer source-buf
     (let ((connections (sysml2--model-extract-connections))
+          (flows (sysml2--model-extract-flows))
+          (bindings (sysml2--model-extract-bindings))
           (lines nil))
       (push (sysml2--report-md-heading 2 "Connection Matrix") lines)
-      (if (null connections)
+      (if (and (null connections) (null flows) (null bindings))
           (push "*No connections found.*\n\n" lines)
-        (push "| Connection | Source | Target |\n" lines)
-        (push "|------------|--------|--------|\n" lines)
-        (dolist (c connections)
-          (push (format "| %s | %s | %s |\n"
-                        (plist-get c :name)
-                        (plist-get c :source)
-                        (plist-get c :target)) lines))
-        (push "\n" lines))
+        ;; Connections
+        (when connections
+          (push "### Connections\n\n" lines)
+          (push "| Name | Source | Target |\n" lines)
+          (push "|------|--------|--------|\n" lines)
+          (dolist (c connections)
+            (let ((name (plist-get c :name)))
+              (push (format "| %s | %s | %s |\n"
+                            (if (string-empty-p name) "—" name)
+                            (plist-get c :source)
+                            (plist-get c :target)) lines)))
+          (push "\n" lines))
+        ;; Flows
+        (when flows
+          (push "### Flows\n\n" lines)
+          (push "| Name | Type | Source | Target |\n" lines)
+          (push "|------|------|--------|--------|\n" lines)
+          (dolist (f flows)
+            (push (format "| %s | %s | %s | %s |\n"
+                          (let ((n (plist-get f :name)))
+                            (if (string-empty-p n) "—" n))
+                          (or (plist-get f :type) "—")
+                          (plist-get f :source)
+                          (plist-get f :target)) lines))
+          (push "\n" lines))
+        ;; Bindings
+        (when bindings
+          (push "### Bindings\n\n" lines)
+          (push "| Source | Target |\n" lines)
+          (push "|--------|--------|\n" lines)
+          (dolist (b bindings)
+            (push (format "| %s | %s |\n"
+                          (plist-get b :source)
+                          (plist-get b :target)) lines))
+          (push "\n" lines)))
       (apply #'concat (nreverse lines)))))
 
 (defun sysml2--report-md-requirements (source-buf)
@@ -653,17 +717,25 @@ satisfy and verify relationships, and coverage status.  The buffer uses
     (let* ((definitions (sysml2--report-collect-definitions))
            (satisfy-pairs (sysml2--report-collect-satisfy))
            (verify-pairs (sysml2--report-collect-verify))
-           (req-names (or (cdr (assoc "requirement def" definitions)) '()))
+           (req-def-names (or (cdr (assoc "requirement def" definitions)) '()))
+           (req-usage-names (sysml2--report-collect-requirement-usages))
+           (req-names (delete-dups (append req-def-names req-usage-names)))
            (satisfy-map (make-hash-table :test 'equal))
            (verify-map (make-hash-table :test 'equal))
            (lines nil))
-      ;; Build lookup tables
+      ;; Build lookup tables (normalize qualified names)
       (dolist (pair satisfy-pairs)
-        (puthash (car pair) (cons (cdr pair) (gethash (car pair) satisfy-map))
-                 satisfy-map))
+        (let* ((req-full (car pair))
+               (target (cdr pair))
+               (req (replace-regexp-in-string "\\`.*[:.]" "" req-full)))
+          (puthash req (cons target (gethash req satisfy-map)) satisfy-map)
+          (puthash req-full (cons target (gethash req-full satisfy-map)) satisfy-map)))
       (dolist (pair verify-pairs)
-        (puthash (car pair) (cons (cdr pair) (gethash (car pair) verify-map))
-                 verify-map))
+        (let* ((req-full (car pair))
+               (verifier (cdr pair))
+               (req (replace-regexp-in-string "\\`.*[:.]" "" req-full)))
+          (puthash req (cons verifier (gethash req verify-map)) verify-map)
+          (puthash req-full (cons verifier (gethash req-full verify-map)) verify-map)))
       (push (sysml2--report-md-heading 2 "Traceability Matrix") lines)
       (if (null req-names)
           (push "*No requirement definitions found.*\n\n" lines)
@@ -682,6 +754,7 @@ satisfy and verify relationships, and coverage status.  The buffer uses
                  (status (cond
                           ((and satisfied-by verified-by) "✓ Full")
                           (satisfied-by                   "△ No test")
+                          (verified-by                    "△ No satisfy")
                           (t                              "✗ Gap"))))
             (push (format "| %s | %s | %s | %s |\n"
                           req-name sat-str ver-str status) lines)))
@@ -698,7 +771,8 @@ satisfy and verify relationships, and coverage status.  The buffer uses
       ;; Find state defs and extract their states/transitions
       (let ((state-def-names (cdr (assoc "state def" definitions))))
         (dolist (sname state-def-names)
-          (let ((bounds (sysml2--model-find-def-bounds "state def" sname)))
+          (let ((bounds (or (sysml2--model-find-def-bounds "state def" sname)
+                            (sysml2--model-find-exhibit-state-bounds sname))))
             (when bounds
               (setq found t)
               (let ((states (sysml2--model-extract-states (car bounds) (cdr bounds)))
@@ -801,6 +875,35 @@ making it suitable for successions nested inside action def bodies."
             (push "\n" lines))))
       (apply #'concat (nreverse lines)))))
 
+(defun sysml2--report-md-calculations (source-buf)
+  "Render the Calculations section from SOURCE-BUF."
+  (with-current-buffer source-buf
+    (let ((calcs (sysml2--model-extract-calcs))
+          (lines nil))
+      (push (sysml2--report-md-heading 2 "Calculations") lines)
+      (if (null calcs)
+          (push "*No calculations found.*\n\n" lines)
+        (dolist (c calcs)
+          (let ((name (plist-get c :name))
+                (params (plist-get c :params))
+                (ret-name (plist-get c :return-name))
+                (ret-type (plist-get c :return-type)))
+            (push (format "### %s\n\n" name) lines)
+            (when params
+              (push "**Inputs:**\n\n" lines)
+              (dolist (p params)
+                (let ((pname (plist-get p :name))
+                      (ptype (plist-get p :type)))
+                  (push (format "- `%s`%s\n" pname
+                                (if ptype (format " : %s" ptype) ""))
+                        lines)))
+              (push "\n" lines))
+            (when ret-name
+              (push (format "**Returns:** `%s`%s\n\n" ret-name
+                            (if ret-type (format " : %s" ret-type) ""))
+                    lines)))))
+      (apply #'concat (nreverse lines)))))
+
 ;; ---------------------------------------------------------------------------
 ;; Section dispatcher
 ;; ---------------------------------------------------------------------------
@@ -816,6 +919,7 @@ making it suitable for successions nested inside action def bodies."
     ("traceability" (sysml2--report-md-traceability source-buf))
     ("states"       (sysml2--report-md-states source-buf))
     ("actions"      (sysml2--report-md-actions source-buf))
+    ("calculations" (sysml2--report-md-calculations source-buf))
     ("enumerations" (sysml2--report-md-enumerations source-buf))
     (_ (format "<!-- Unknown section: %s -->\n\n" section-id))))
 

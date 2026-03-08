@@ -89,6 +89,7 @@
 (require 'sysml2-evil)
 (require 'sysml2-outline)
 (require 'sysml2-report)
+(require 'sysml2-eldoc)
 
 ;; --- Version ---
 
@@ -154,6 +155,7 @@
 (declare-function sysml2-insert-subject "sysml2-completion")
 (declare-function sysml2-diagram-open-in-playground "sysml2-diagram")
 (declare-function sysml2-scaffold "sysml2-completion")
+(declare-function sysml2-scaffold-model "sysml2-completion")
 (declare-function sysml2-scaffold-package "sysml2-completion")
 (declare-function sysml2-scaffold-part-def "sysml2-completion")
 (declare-function sysml2-scaffold-port-def "sysml2-completion")
@@ -162,6 +164,7 @@
 (declare-function sysml2-scaffold-action-def "sysml2-completion")
 (declare-function sysml2-scaffold-enum-def "sysml2-completion")
 (declare-function sysml2-scaffold-use-case-def "sysml2-completion")
+(declare-function sysml2-scaffold-calc-def "sysml2-completion")
 (defvar hs-special-modes-alist)
 
 ;; --- Keymap ---
@@ -203,6 +206,7 @@
     (define-key map (kbd "C-c C-c u") #'sysml2-insert-subject)
     ;; Model Scaffolding (C-c m prefix — lowercase m)
     (define-key map (kbd "C-c m m") #'sysml2-scaffold)
+    (define-key map (kbd "C-c m M") #'sysml2-scaffold-model)
     (define-key map (kbd "C-c m p") #'sysml2-scaffold-package)
     (define-key map (kbd "C-c m d") #'sysml2-scaffold-part-def)
     (define-key map (kbd "C-c m o") #'sysml2-scaffold-port-def)
@@ -211,6 +215,7 @@
     (define-key map (kbd "C-c m a") #'sysml2-scaffold-action-def)
     (define-key map (kbd "C-c m e") #'sysml2-scaffold-enum-def)
     (define-key map (kbd "C-c m u") #'sysml2-scaffold-use-case-def)
+    (define-key map (kbd "C-c m c") #'sysml2-scaffold-calc-def)
     ;; API
     (define-key map (kbd "C-c C-a l") #'sysml2-api-list-projects)
     (define-key map (kbd "C-c C-a q") #'sysml2-api-query)
@@ -311,11 +316,16 @@
                '(sysml2-mode "{" "}" "/[*/]" nil nil))
   (hs-minor-mode 1)
 
-  ;; Flymake
-  (sysml2-flymake-setup)
+  ;; ElDoc
+  (sysml2-eldoc-setup)
+
+  ;; Flymake (skip in batch/noninteractive to avoid timer hangs)
+  (unless noninteractive
+    (sysml2-flymake-setup))
 
   ;; LSP (may start server if available)
-  (sysml2-lsp-setup))
+  (unless noninteractive
+    (sysml2-lsp-setup)))
 
 ;; --- KerML Mode ---
 

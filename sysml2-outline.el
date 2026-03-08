@@ -78,6 +78,15 @@ Returns a list of plists (:name :type :level :pos :line)."
 
 ;; --- Rendering ---
 
+(defun sysml2--outline-has-children-p (entry entries)
+  "Return non-nil if ENTRY has children in ENTRIES.
+A child is the next entry with a higher level."
+  (let ((idx (cl-position entry entries :test #'eq))
+        (level (plist-get entry :level)))
+    (when idx
+      (let ((next (nth (1+ idx) entries)))
+        (and next (> (plist-get next :level) level))))))
+
 (defun sysml2--outline-render (entries source-buffer)
   "Render ENTRIES into the outline buffer for SOURCE-BUFFER."
   (let ((buf (get-buffer-create sysml2--outline-buffer-name))
@@ -86,6 +95,7 @@ Returns a list of plists (:name :type :level :pos :line)."
       (erase-buffer)
       (sysml2-outline-mode)
       (setq-local sysml2--outline-source-buffer source-buffer)
+      (setq-local sysml2--outline-entries entries)
       (dolist (entry entries)
         (let* ((level (plist-get entry :level))
                (indent-str (make-string (* level 2) ?\s))
@@ -93,8 +103,14 @@ Returns a list of plists (:name :type :level :pos :line)."
                (name (plist-get entry :name))
                (pos (plist-get entry :pos))
                (line (plist-get entry :line))
+               (has-children (sysml2--outline-has-children-p entry entries))
                (start (point)))
+          ;; Collapse indicator
           (insert indent-str)
+          (if has-children
+              (insert (propertize "▶ " 'face 'shadow
+                                  'sysml2-outline-toggle t))
+            (insert "  "))
           (let ((kw-start (point)))
             (insert kw)
             (put-text-property kw-start (point) 'face 'sysml2-keyword-face))
@@ -103,11 +119,101 @@ Returns a list of plists (:name :type :level :pos :line)."
             (insert name)
             (put-text-property name-start (point) 'face 'sysml2-definition-name-face))
           (insert "\n")
-          ;; Store marker for navigation
+          ;; Store properties for navigation and collapsing
           (put-text-property start (point) 'sysml2-outline-marker pos)
-          (put-text-property start (point) 'sysml2-outline-line line)))
+          (put-text-property start (point) 'sysml2-outline-line line)
+          (put-text-property start (point) 'sysml2-outline-level level)))
       (goto-char (point-min)))
     buf))
+
+;; --- Collapsing ---
+
+(defvar-local sysml2--outline-entries nil
+  "The outline entries for the current outline buffer.")
+
+(defvar-local sysml2--outline-collapsed (make-hash-table :test 'equal)
+  "Hash of collapsed line numbers in the outline.")
+
+(defun sysml2--outline-toggle-fold ()
+  "Toggle folding of the outline entry at point."
+  (interactive)
+  (let ((level (get-text-property (line-beginning-position) 'sysml2-outline-level))
+        (inhibit-read-only t))
+    (when level
+      (let* ((line-num (line-number-at-pos))
+             (collapsed (gethash line-num sysml2--outline-collapsed)))
+        (save-excursion
+          (forward-line 1)
+          (let ((start (point)))
+            ;; Find extent of children (all following lines with level > this one)
+            (while (and (not (eobp))
+                        (let ((child-level (get-text-property
+                                            (line-beginning-position)
+                                            'sysml2-outline-level)))
+                          (and child-level (> child-level level))))
+              (forward-line 1))
+            (when (> (point) start)
+              (if collapsed
+                  ;; Expand
+                  (progn
+                    (remove-text-properties start (point) '(invisible nil))
+                    (remhash line-num sysml2--outline-collapsed)
+                    ;; Update indicator
+                    (save-excursion
+                      (goto-char (line-beginning-position (- 1 (- (line-number-at-pos) line-num))))
+                      (when (search-forward "▼" (line-end-position) t)
+                        (replace-match "▶"))))
+                ;; Collapse
+                (put-text-property start (point) 'invisible 'sysml2-outline)
+                (puthash line-num t sysml2--outline-collapsed)
+                ;; Update indicator
+                (save-excursion
+                  (goto-char (line-beginning-position 0))
+                  (goto-char (line-beginning-position))
+                  (when (search-forward "▶" (line-end-position) t)
+                    (replace-match "▼")))))))))))
+
+(defun sysml2--outline-collapse-all ()
+  "Collapse all entries that have children in the outline.
+Collapses every level, not just top-level."
+  (interactive)
+  (let ((inhibit-read-only t))
+    ;; Work bottom-up so inner nodes collapse before outer ones
+    (save-excursion
+      (goto-char (point-max))
+      (forward-line -1)
+      (while (>= (point) (point-min))
+        (let ((level (get-text-property (line-beginning-position)
+                                        'sysml2-outline-level)))
+          (when (and level
+                     (sysml2--outline-line-has-children-p)
+                     (not (gethash (line-number-at-pos)
+                                   sysml2--outline-collapsed)))
+            (sysml2--outline-toggle-fold)))
+        (forward-line -1)))))
+
+(defun sysml2--outline-line-has-children-p ()
+  "Return non-nil if the current outline line has children."
+  (let ((level (get-text-property (line-beginning-position)
+                                   'sysml2-outline-level)))
+    (when level
+      (save-excursion
+        (forward-line 1)
+        (and (not (eobp))
+             (let ((next-level (get-text-property (line-beginning-position)
+                                                   'sysml2-outline-level)))
+               (and next-level (> next-level level))))))))
+
+(defun sysml2--outline-expand-all ()
+  "Expand all collapsed entries in the outline."
+  (interactive)
+  (let ((inhibit-read-only t))
+    (remove-text-properties (point-min) (point-max) '(invisible nil))
+    (clrhash sysml2--outline-collapsed)
+    (save-excursion
+      (goto-char (point-min))
+      (while (search-forward "▼" nil t)
+        (replace-match "▶")))))
 
 ;; --- Navigation ---
 
@@ -143,6 +249,9 @@ Returns a list of plists (:name :type :level :pos :line)."
     (define-key map (kbd "q") #'sysml2-outline-toggle)
     (define-key map (kbd "n") #'next-line)
     (define-key map (kbd "p") #'previous-line)
+    (define-key map (kbd "TAB") #'sysml2--outline-toggle-fold)
+    (define-key map (kbd "S") #'sysml2--outline-collapse-all)
+    (define-key map (kbd "E") #'sysml2--outline-expand-all)
     (define-key map [mouse-1] #'sysml2--outline-click)
     map)
   "Keymap for `sysml2-outline-mode'.")
@@ -158,7 +267,9 @@ Returns a list of plists (:name :type :level :pos :line)."
 \\{sysml2-outline-mode-map}"
   :group 'sysml2
   (setq truncate-lines t)
-  (setq cursor-type 'bar))
+  (setq cursor-type 'bar)
+  (setq-local sysml2--outline-collapsed (make-hash-table :test 'equal))
+  (add-to-invisibility-spec '(sysml2-outline . t)))
 
 ;; --- Auto-refresh ---
 

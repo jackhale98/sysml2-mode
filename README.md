@@ -148,7 +148,7 @@ Context-aware `completion-at-point` with annotation hints:
 
 ### Flymake Diagnostics
 
-Six in-buffer checks with no external tools required:
+Seven in-buffer checks with no external tools required:
 
 **Syntax checks:**
 
@@ -161,6 +161,7 @@ Six in-buffer checks with no external tools required:
 4. **Unsatisfied requirements** -- requirement defs with no `satisfy` statement
 5. **Unverified requirements** -- requirement defs with no `verify` statement
 6. **Unused definitions** -- definitions never referenced elsewhere in the buffer
+7. **Invalid library references** -- validates ISQ, SI, and ScalarValues qualified names
 
 ### Project Detection
 
@@ -282,6 +283,7 @@ Interactive commands to bootstrap common SysML v2 model structures. Each command
 | `C-c m a` | `sysml2-scaffold-action-def` | Action def with sub-actions and successions |
 | `C-c m e` | `sysml2-scaffold-enum-def` | Enum def with literals |
 | `C-c m u` | `sysml2-scaffold-use-case-def` | Use case def with subject, actors, includes |
+| `C-c m c` | `sysml2-scaffold-calc-def` | Calc def with in params and return value |
 
 ## FMI/FMU Integration
 
@@ -490,6 +492,7 @@ Plus `gd` for goto-definition in normal state. Neither evil nor general.el is a 
 | `C-c m a` | `sysml2-scaffold-action-def` |
 | `C-c m e` | `sysml2-scaffold-enum-def` |
 | `C-c m u` | `sysml2-scaffold-use-case-def` |
+| `C-c m c` | `sysml2-scaffold-calc-def` |
 | **LSP** | |
 | `C-c C-l s` | `sysml2-lsp-ensure` |
 | `C-c C-l r` | `sysml2-lsp-restart` |
@@ -561,6 +564,7 @@ sysml2-api.el           Systems Modeling API REST client
 sysml2-fmi.el           FMU inspector, interface extraction, Modelica gen
 sysml2-cosim.el         SSP generation, simulation, results, verification
 sysml2-outline.el       Outline side panel
+sysml2-eldoc.el         Definition/documentation at point (ElDoc)
 sysml2-evil.el          Optional evil-mode keybindings
 sysml2-ts.el            Tree-sitter grammar integration
 sysml2-mode.el          Entry point, syntax table, keymap, mode definition
@@ -568,7 +572,7 @@ sysml2-mode.el          Entry point, syntax table, keymap, mode definition
 
 ## Testing
 
-202 ERT tests across 16 test files:
+210 ERT tests across 16 test files:
 
 ```bash
 make test
