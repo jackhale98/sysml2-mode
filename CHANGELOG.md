@@ -7,6 +7,14 @@
   (`C-c C-d e`) instead of relying on auto-detection at point
 - Diagram preview scales to fit the preview window using `:max-width`
   and `:max-height` image properties
+- Simulation commands now offer completion candidates extracted from
+  the model: trigger signals for state machines, parameter names for
+  constraints and calculations, construct names for all types
+- Multi-select event picker for state machine simulation with trigger
+  signal completion
+- Per-parameter prompting for constraint/calculation evaluation
+- sysml2-cli executable resolution: checks `~/.cargo/bin/` and
+  `~/.local/bin/` as fallback paths for simulation commands
 
 ### Fixed
 - D2 executable resolution: now checks common installation paths

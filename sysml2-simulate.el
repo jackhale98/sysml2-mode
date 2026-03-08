@@ -20,6 +20,10 @@
 ;;   - Simulating state machines with event injection
 ;;   - Executing action flows
 ;;
+;; All prompts offer completion candidates extracted from the model:
+;; trigger signals for state machines, parameter names for constraints
+;; and calculations, etc.
+;;
 ;; All commands work on the current buffer's file and display results
 ;; in a dedicated *SysML Simulation* buffer.
 ;;
@@ -27,6 +31,7 @@
 
 ;;; Code:
 
+(require 'cl-lib)
 (require 'sysml2-vars)
 
 ;;; Public API:
@@ -61,9 +66,24 @@
 
 (defun sysml2-simulate--check-executable ()
   "Check that sysml2-cli is available.  Signal an error if not found."
-  (unless (executable-find sysml2-simulate-executable)
+  (unless (or (executable-find sysml2-simulate-executable)
+              (cl-find-if #'file-executable-p
+                          (list (expand-file-name
+                                 (concat "~/.cargo/bin/" sysml2-simulate-executable))
+                                (expand-file-name
+                                 (concat "~/.local/bin/" sysml2-simulate-executable)))))
     (user-error "Cannot find `%s' on exec-path.  Install from https://github.com/jackhale98/sysml2-cli"
                 sysml2-simulate-executable)))
+
+(defun sysml2-simulate--resolve-executable ()
+  "Return the full path to sysml2-cli."
+  (or (executable-find sysml2-simulate-executable)
+      (cl-find-if #'file-executable-p
+                  (list (expand-file-name
+                         (concat "~/.cargo/bin/" sysml2-simulate-executable))
+                        (expand-file-name
+                         (concat "~/.local/bin/" sysml2-simulate-executable))))
+      sysml2-simulate-executable))
 
 (defun sysml2-simulate--ensure-file ()
   "Return the current buffer's file name.  Signal error if unsaved."
@@ -72,16 +92,16 @@
 
 (defun sysml2-simulate--run (args &optional json-p)
   "Run sysml2-cli simulate with ARGS and return combined output.
-When JSON-P is non-nil, pass -f json and parse the output.
+When JSON-P is non-nil, pass -f json.
 Captures both stdout and stderr for complete diagnostics."
   (sysml2-simulate--check-executable)
-  (let* ((full-args (append (when json-p '("-f" "json"))
+  (let* ((exe (sysml2-simulate--resolve-executable))
+         (full-args (append (when json-p '("-f" "json"))
                             '("simulate") args))
          (stderr-file (make-temp-file "sysml2-sim-stderr"))
          (stdout (with-output-to-string
                    (with-current-buffer standard-output
-                     (apply #'call-process
-                            sysml2-simulate-executable nil
+                     (apply #'call-process exe nil
                             (list t stderr-file) nil
                             full-args))))
          (stderr (with-temp-buffer
@@ -124,9 +144,8 @@ Captures both stdout and stderr for complete diagnostics."
                       "declaration (semicolon-only, no body with states)."))
              (t
               (insert "0 steps with a valid initial state usually means no "
-                      "events were provided. State machines need trigger events "
-                      "to advance. Re-run with events matching your transition "
-                      "triggers (e.g., startCmd,stopCmd)."))))
+                      "events were provided or guard conditions blocked all "
+                      "transitions."))))
            ;; Action flow: 0 steps
            ((and (string-match-p "0 steps" output)
                  (string-match-p "Action Flow" title))
@@ -142,35 +161,95 @@ Captures both stdout and stderr for complete diagnostics."
                            display-buffer-below-selected)
                           (window-height . 0.4)))))
 
-(defun sysml2-simulate--get-constructs (file)
-  "Get simulatable constructs from FILE as parsed JSON."
-  (let* ((output (sysml2-simulate--run
-                  (list "list" file)))
-         (lines (split-string output "\n" t)))
-    ;; Parse the text output into sections
-    (let ((constraints nil)
-          (calcs nil)
-          (machines nil)
-          (actions nil)
-          (section nil))
-      (dolist (line lines)
-        (cond
-         ((string-match "^Constraints:" line) (setq section 'constraints))
-         ((string-match "^Calculations:" line) (setq section 'calcs))
-         ((string-match "^State Machines:" line) (setq section 'machines))
-         ((string-match "^Actions:" line) (setq section 'actions))
-         ((string-match "^$" line) nil)
-         ((string-match "^  \\([A-Za-z_][A-Za-z0-9_]*\\)" line)
-          (let ((name (match-string 1 line)))
-            (pcase section
-              ('constraints (push name constraints))
-              ('calcs (push name calcs))
-              ('machines (push name machines))
-              ('actions (push name actions)))))))
-      (list :constraints (nreverse constraints)
-            :calcs (nreverse calcs)
-            :machines (nreverse machines)
-            :actions (nreverse actions)))))
+;; --- Structured data extraction ---
+
+(defun sysml2-simulate--get-constructs-json (file)
+  "Get simulatable constructs from FILE as parsed JSON.
+Returns the parsed JSON alist with full details (triggers, params, etc.)."
+  (let ((output (sysml2-simulate--run (list "list" file) t)))
+    (condition-case nil
+        (json-parse-string output :object-type 'alist :array-type 'list)
+      (error nil))))
+
+(defun sysml2-simulate--machine-names (data)
+  "Extract state machine names from parsed JSON DATA."
+  (mapcar (lambda (m) (alist-get 'name m))
+          (alist-get 'state_machines data)))
+
+(defun sysml2-simulate--machine-triggers (data machine-name)
+  "Extract trigger signal names for MACHINE-NAME from DATA."
+  (let ((machine (cl-find-if (lambda (m) (equal (alist-get 'name m) machine-name))
+                             (alist-get 'state_machines data))))
+    (when machine
+      (alist-get 'triggers machine))))
+
+(defun sysml2-simulate--machine-states (data machine-name)
+  "Extract state names for MACHINE-NAME from DATA."
+  (let ((machine (cl-find-if (lambda (m) (equal (alist-get 'name m) machine-name))
+                             (alist-get 'state_machines data))))
+    (when machine
+      (alist-get 'states machine))))
+
+(defun sysml2-simulate--constraint-names (data)
+  "Extract constraint names from parsed JSON DATA."
+  (mapcar (lambda (c) (alist-get 'name c))
+          (alist-get 'constraints data)))
+
+(defun sysml2-simulate--calc-names (data)
+  "Extract calculation names from parsed JSON DATA."
+  (mapcar (lambda (c) (alist-get 'name c))
+          (alist-get 'calculations data)))
+
+(defun sysml2-simulate--construct-params (data kind name)
+  "Extract parameter names for construct NAME of KIND from DATA.
+KIND is `constraints' or `calculations'."
+  (let ((construct (cl-find-if (lambda (c) (equal (alist-get 'name c) name))
+                               (alist-get kind data))))
+    (when construct
+      (mapcar (lambda (p) (alist-get 'name p))
+              (alist-get 'params construct)))))
+
+(defun sysml2-simulate--action-names (data)
+  "Extract action names from parsed JSON DATA."
+  (mapcar (lambda (a) (alist-get 'name a))
+          (alist-get 'actions data)))
+
+;; --- Completing-read helpers ---
+
+(defun sysml2-simulate--read-events (triggers)
+  "Prompt for events with TRIGGERS as completion candidates.
+Returns a comma-separated string of selected events."
+  (if (null triggers)
+      (read-string "Events (comma-separated, empty for none): "
+                   nil 'sysml2-simulate-event-history)
+    (let ((selected nil)
+          (available (copy-sequence triggers))
+          (done nil))
+      (while (not done)
+        (let* ((prompt (if selected
+                           (format "Events so far: [%s]. Add event (empty to finish): "
+                                   (string-join (reverse selected) ","))
+                         "Select event (empty to finish): "))
+               (choice (completing-read prompt available nil nil nil
+                                        'sysml2-simulate-event-history)))
+          (if (string-empty-p choice)
+              (setq done t)
+            (push choice selected))))
+      (string-join (nreverse selected) ","))))
+
+(defun sysml2-simulate--read-bindings (params)
+  "Prompt for variable bindings with PARAMS as guidance.
+Shows each parameter name and prompts for a value.
+Returns a comma-separated string of name=value pairs."
+  (if (null params)
+      (read-string "Variable bindings (name=val,..., empty for none): "
+                   nil 'sysml2-simulate-history)
+    (let ((bindings nil))
+      (dolist (param params)
+        (let ((val (read-string (format "  %s = " param) nil 'sysml2-simulate-history)))
+          (unless (string-empty-p val)
+            (push (format "%s=%s" param val) bindings))))
+      (string-join (nreverse bindings) ","))))
 
 ;; --- Interactive commands ---
 
@@ -187,17 +266,22 @@ Captures both stdout and stderr for complete diagnostics."
 ;;;###autoload
 (defun sysml2-simulate-eval ()
   "Evaluate a constraint or calculation from the current file.
-Prompts for the construct name and variable bindings."
+Prompts for the construct name (with completion) and variable
+bindings (with parameter name suggestions)."
   (interactive)
   (let* ((file (sysml2-simulate--ensure-file))
-         (constructs (sysml2-simulate--get-constructs file))
-         (all-names (append (plist-get constructs :constraints)
-                            (plist-get constructs :calcs)))
+         (data (sysml2-simulate--get-constructs-json file))
+         (all-names (append (sysml2-simulate--constraint-names data)
+                            (sysml2-simulate--calc-names data)))
          (name (if all-names
                    (completing-read "Constraint/Calc: " all-names nil t)
                  (read-string "Constraint/Calc name: ")))
-         (bindings (read-string "Variable bindings (name=val,...): "
-                                nil 'sysml2-simulate-history))
+         ;; Look up parameters for this construct
+         (params (or (sysml2-simulate--construct-params data 'constraints name)
+                     (sysml2-simulate--construct-params data 'calculations name)))
+         (_ (when params
+              (message "Parameters: %s" (string-join params ", "))))
+         (bindings (sysml2-simulate--read-bindings params))
          (args (list "eval" file "-n" name)))
     (when (and bindings (not (string-empty-p bindings)))
       (setq args (append args (list "-b" bindings))))
@@ -208,16 +292,23 @@ Prompts for the construct name and variable bindings."
 ;;;###autoload
 (defun sysml2-simulate-state-machine ()
   "Simulate a state machine from the current file.
-Prompts for the machine name, events, and variable bindings."
+Prompts for the machine name (with completion), events (with
+trigger signal completion), and variable bindings."
   (interactive)
   (let* ((file (sysml2-simulate--ensure-file))
-         (constructs (sysml2-simulate--get-constructs file))
-         (machines (plist-get constructs :machines))
+         (data (sysml2-simulate--get-constructs-json file))
+         (machines (sysml2-simulate--machine-names data))
          (name (if machines
                    (completing-read "State machine: " machines nil t)
                  (read-string "State machine name: ")))
-         (events (read-string "Events (comma-separated, empty for none): "
-                              nil 'sysml2-simulate-event-history))
+         ;; Show available triggers for this machine
+         (triggers (sysml2-simulate--machine-triggers data name))
+         (states (sysml2-simulate--machine-states data name))
+         (_ (when states
+              (message "States: %s | Triggers: %s"
+                       (string-join states ", ")
+                       (if triggers (string-join triggers ", ") "(none)"))))
+         (events (sysml2-simulate--read-events triggers))
          (bindings (read-string "Variable bindings (name=val,..., empty for none): "
                                 nil 'sysml2-simulate-history))
          (max-steps (read-number "Max steps: " sysml2-simulate-max-steps))
@@ -234,11 +325,11 @@ Prompts for the machine name, events, and variable bindings."
 ;;;###autoload
 (defun sysml2-simulate-action-flow ()
   "Execute an action flow from the current file.
-Prompts for the action name and variable bindings."
+Prompts for the action name (with completion) and variable bindings."
   (interactive)
   (let* ((file (sysml2-simulate--ensure-file))
-         (constructs (sysml2-simulate--get-constructs file))
-         (actions (plist-get constructs :actions))
+         (data (sysml2-simulate--get-constructs-json file))
+         (actions (sysml2-simulate--action-names data))
          (name (if actions
                    (completing-read "Action: " actions nil t)
                  (read-string "Action name: ")))
