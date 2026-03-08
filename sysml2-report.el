@@ -394,6 +394,7 @@ Provides a sortable table of requirements with their satisfy and verify
 relationships."
   (setq tabulated-list-format
         [("Requirement" 20 t)
+         ("ID" 10 t)
          ("Satisfied By" 20 t)
          ("Verified By" 20 t)
          ("Status" 12 t)])
@@ -417,12 +418,24 @@ satisfy and verify relationships, and coverage status.  The buffer uses
          (req-def-names (or (cdr (assoc "requirement def" definitions)) '()))
          (req-usage-names (with-current-buffer source-buf
                             (sysml2--report-collect-requirement-usages)))
-         (req-names (delete-dups (append req-def-names req-usage-names)))
+         (req-names (sort (delete-dups (append req-def-names req-usage-names))
+                         #'string<))
+         ;; Build ID lookup: req-name -> short-name ID
+         (req-usages-data (with-current-buffer source-buf
+                            (sysml2--model-extract-requirement-usages)))
+         (id-map (make-hash-table :test 'equal))
          ;; Build lookup tables: req-name -> list of targets / verifiers
          (satisfy-map (make-hash-table :test 'equal))
          (verify-map (make-hash-table :test 'equal))
          (entries nil)
          (buf (get-buffer-create "*SysML2 Traceability*")))
+    ;; Populate ID map from requirement usages
+    (dolist (r req-usages-data)
+      (when (plist-get r :id)
+        (puthash (plist-get r :name) (plist-get r :id) id-map))
+      (dolist (child (plist-get r :children))
+        (when (plist-get child :id)
+          (puthash (plist-get child :name) (plist-get child :id) id-map))))
     ;; Populate satisfy map (normalize qualified names to simple names)
     (dolist (pair satisfy-pairs)
       (let* ((req-full (car pair))
@@ -441,7 +454,8 @@ satisfy and verify relationships, and coverage status.  The buffer uses
         (puthash req-full (cons verifier (gethash req-full verify-map)) verify-map)))
     ;; Build table entries
     (dolist (req-name req-names)
-      (let* ((satisfied-by (gethash req-name satisfy-map))
+      (let* ((req-id (or (gethash req-name id-map) "—"))
+             (satisfied-by (gethash req-name satisfy-map))
              (verified-by (gethash req-name verify-map))
              (sat-str (if satisfied-by
                          (mapconcat #'identity (nreverse satisfied-by) ", ")
@@ -455,7 +469,7 @@ satisfy and verify relationships, and coverage status.  The buffer uses
                       (satisfied-by                   "\u25B3 No test")
                       (verified-by                    "\u25B3 No satisfy")
                       (t                              "\u2717 Gap"))))
-        (push (list req-name (vector req-name sat-str ver-str status))
+        (push (list req-name (vector req-name req-id sat-str ver-str status))
               entries)))
     (setq entries (nreverse entries))
     (with-current-buffer buf
@@ -480,6 +494,7 @@ satisfy and verify relationships, and coverage status.  The buffer uses
     ("connections"    . "Connection Matrix")
     ("requirements"   . "Requirements Specification")
     ("traceability"   . "Traceability Matrix")
+    ("allocations"    . "Allocation Matrix")
     ("states"         . "State Machines")
     ("actions"        . "Action Flows")
     ("calculations"   . "Calculations")
@@ -545,7 +560,9 @@ satisfy and verify relationships, and coverage status.  The buffer uses
 (defun sysml2--report-md-part-decomp (source-buf)
   "Render the Part Decomposition / BOM section from SOURCE-BUF."
   (with-current-buffer source-buf
-    (let ((part-defs (sysml2--model-extract-part-defs))
+    (let ((part-defs (sort (copy-sequence (sysml2--model-extract-part-defs))
+                           (lambda (a b) (string< (plist-get a :name)
+                                                  (plist-get b :name)))))
           (lines nil))
       (push (sysml2--report-md-heading 2 "Part Decomposition (BOM)") lines)
       (if (null part-defs)
@@ -581,7 +598,9 @@ satisfy and verify relationships, and coverage status.  The buffer uses
 (defun sysml2--report-md-interfaces (source-buf)
   "Render the Interface Table section from SOURCE-BUF."
   (with-current-buffer source-buf
-    (let ((part-defs (sysml2--model-extract-part-defs))
+    (let ((part-defs (sort (copy-sequence (sysml2--model-extract-part-defs))
+                           (lambda (a b) (string< (plist-get a :name)
+                                                  (plist-get b :name)))))
           (lines nil)
           (found nil))
       (push (sysml2--report-md-heading 2 "Interface Table") lines)
@@ -590,7 +609,11 @@ satisfy and verify relationships, and coverage status.  The buffer uses
         (let* ((name (plist-get def :name))
                (bounds (sysml2--model-find-def-bounds "part def" name))
                (ports (when bounds
-                        (sysml2--model-extract-port-usages (car bounds) (cdr bounds)))))
+                        (sort (copy-sequence
+                               (sysml2--model-extract-port-usages
+                                (car bounds) (cdr bounds)))
+                              (lambda (a b) (string< (plist-get a :name)
+                                                     (plist-get b :name)))))))
           (when ports
             (setq found t)
             (push (format "### %s\n\n" name) lines)
@@ -604,7 +627,10 @@ satisfy and verify relationships, and coverage status.  The buffer uses
                             (or (plist-get p :direction) "—")) lines))
             (push "\n" lines))))
       ;; Also check port defs at top level
-      (let ((port-defs (sysml2--model-extract-typed-defs "port def" "port")))
+      (let ((port-defs (sort (copy-sequence
+                              (sysml2--model-extract-typed-defs "port def" "port"))
+                             (lambda (a b) (string< (plist-get a :name)
+                                                    (plist-get b :name))))))
         (when port-defs
           (setq found t)
           (push "### Port Definitions\n\n" lines)
@@ -623,9 +649,15 @@ satisfy and verify relationships, and coverage status.  The buffer uses
 (defun sysml2--report-md-connections (source-buf)
   "Render the Connection Matrix section from SOURCE-BUF."
   (with-current-buffer source-buf
-    (let ((connections (sysml2--model-extract-connections))
-          (flows (sysml2--model-extract-flows))
-          (bindings (sysml2--model-extract-bindings))
+    (let ((connections (sort (copy-sequence (sysml2--model-extract-connections))
+                            (lambda (a b) (string< (plist-get a :source)
+                                                   (plist-get b :source)))))
+          (flows (sort (copy-sequence (sysml2--model-extract-flows))
+                       (lambda (a b) (string< (plist-get a :source)
+                                              (plist-get b :source)))))
+          (bindings (sort (copy-sequence (sysml2--model-extract-bindings))
+                          (lambda (a b) (string< (plist-get a :source)
+                                                 (plist-get b :source)))))
           (lines nil))
       (push (sysml2--report-md-heading 2 "Connection Matrix") lines)
       (if (and (null connections) (null flows) (null bindings))
@@ -670,8 +702,12 @@ satisfy and verify relationships, and coverage status.  The buffer uses
 (defun sysml2--report-md-requirements (source-buf)
   "Render the Requirements Specification section from SOURCE-BUF."
   (with-current-buffer source-buf
-    (let ((req-defs (sysml2--model-extract-requirements))
-          (req-usages (sysml2--model-extract-requirement-usages))
+    (let ((req-defs (sort (copy-sequence (sysml2--model-extract-requirements))
+                         (lambda (a b) (string< (plist-get a :name)
+                                                (plist-get b :name)))))
+          (req-usages (sort (copy-sequence (sysml2--model-extract-requirement-usages))
+                            (lambda (a b) (string< (plist-get a :name)
+                                                   (plist-get b :name)))))
           (lines nil))
       (push (sysml2--report-md-heading 2 "Requirements Specification") lines)
       (if (and (null req-defs) (null req-usages))
@@ -719,10 +755,21 @@ satisfy and verify relationships, and coverage status.  The buffer uses
            (verify-pairs (sysml2--report-collect-verify))
            (req-def-names (or (cdr (assoc "requirement def" definitions)) '()))
            (req-usage-names (sysml2--report-collect-requirement-usages))
-           (req-names (delete-dups (append req-def-names req-usage-names)))
+           (req-names (sort (delete-dups (append req-def-names req-usage-names))
+                          #'string<))
+           ;; Build ID lookup from model extractor
+           (req-usages-data (sysml2--model-extract-requirement-usages))
+           (id-map (make-hash-table :test 'equal))
            (satisfy-map (make-hash-table :test 'equal))
            (verify-map (make-hash-table :test 'equal))
            (lines nil))
+      ;; Populate ID map
+      (dolist (r req-usages-data)
+        (when (plist-get r :id)
+          (puthash (plist-get r :name) (plist-get r :id) id-map))
+        (dolist (child (plist-get r :children))
+          (when (plist-get child :id)
+            (puthash (plist-get child :name) (plist-get child :id) id-map))))
       ;; Build lookup tables (normalize qualified names)
       (dolist (pair satisfy-pairs)
         (let* ((req-full (car pair))
@@ -739,10 +786,11 @@ satisfy and verify relationships, and coverage status.  The buffer uses
       (push (sysml2--report-md-heading 2 "Traceability Matrix") lines)
       (if (null req-names)
           (push "*No requirement definitions found.*\n\n" lines)
-        (push "| Requirement | Satisfied By | Verified By | Status |\n" lines)
-        (push "|-------------|-------------|-------------|--------|\n" lines)
+        (push "| Requirement | ID | Satisfied By | Verified By | Status |\n" lines)
+        (push "|-------------|-----|-------------|-------------|--------|\n" lines)
         (dolist (req-name req-names)
-          (let* ((satisfied-by (gethash req-name satisfy-map))
+          (let* ((req-id (or (gethash req-name id-map) "—"))
+                 (satisfied-by (gethash req-name satisfy-map))
                  (verified-by (gethash req-name verify-map))
                  (sat-str (if satisfied-by
                               (mapconcat #'identity (nreverse satisfied-by) ", ")
@@ -756,8 +804,27 @@ satisfy and verify relationships, and coverage status.  The buffer uses
                           (satisfied-by                   "△ No test")
                           (verified-by                    "△ No satisfy")
                           (t                              "✗ Gap"))))
-            (push (format "| %s | %s | %s | %s |\n"
-                          req-name sat-str ver-str status) lines)))
+            (push (format "| %s | %s | %s | %s | %s |\n"
+                          req-name req-id sat-str ver-str status) lines)))
+        (push "\n" lines))
+      (apply #'concat (nreverse lines)))))
+
+(defun sysml2--report-md-allocations (source-buf)
+  "Render the Allocation Matrix section from SOURCE-BUF."
+  (with-current-buffer source-buf
+    (let ((allocations (sort (copy-sequence (sysml2--model-extract-allocations))
+                             (lambda (a b) (string< (plist-get a :source)
+                                                    (plist-get b :source)))))
+          (lines nil))
+      (push (sysml2--report-md-heading 2 "Allocation Matrix") lines)
+      (if (null allocations)
+          (push "*No allocations found.*\n\n" lines)
+        (push "| Source | Target |\n" lines)
+        (push "|--------|--------|\n" lines)
+        (dolist (a allocations)
+          (push (format "| %s | %s |\n"
+                        (plist-get a :source)
+                        (plist-get a :target)) lines))
         (push "\n" lines))
       (apply #'concat (nreverse lines)))))
 
@@ -854,7 +921,9 @@ making it suitable for successions nested inside action def bodies."
 (defun sysml2--report-md-enumerations (source-buf)
   "Render the Enumerations section from SOURCE-BUF."
   (with-current-buffer source-buf
-    (let ((enum-defs (sysml2--model-extract-enum-defs))
+    (let ((enum-defs (sort (copy-sequence (sysml2--model-extract-enum-defs))
+                          (lambda (a b) (string< (plist-get a :name)
+                                                 (plist-get b :name)))))
           (lines nil))
       (push (sysml2--report-md-heading 2 "Enumerations") lines)
       (if (null enum-defs)
@@ -878,7 +947,9 @@ making it suitable for successions nested inside action def bodies."
 (defun sysml2--report-md-calculations (source-buf)
   "Render the Calculations section from SOURCE-BUF."
   (with-current-buffer source-buf
-    (let ((calcs (sysml2--model-extract-calcs))
+    (let ((calcs (sort (copy-sequence (sysml2--model-extract-calcs))
+                       (lambda (a b) (string< (plist-get a :name)
+                                              (plist-get b :name)))))
           (lines nil))
       (push (sysml2--report-md-heading 2 "Calculations") lines)
       (if (null calcs)
@@ -917,6 +988,7 @@ making it suitable for successions nested inside action def bodies."
     ("connections"   (sysml2--report-md-connections source-buf))
     ("requirements" (sysml2--report-md-requirements source-buf))
     ("traceability" (sysml2--report-md-traceability source-buf))
+    ("allocations"  (sysml2--report-md-allocations source-buf))
     ("states"       (sysml2--report-md-states source-buf))
     ("actions"      (sysml2--report-md-actions source-buf))
     ("calculations" (sysml2--report-md-calculations source-buf))

@@ -738,48 +738,143 @@ the result to examples/plantuml/.  Works interactively and in batch:
 
 (defconst sysml2--diagram-view-filter-type-alist
   '(("PartUsage" . tree)
+    ("PartDefinition" . tree)
     ("RequirementUsage" . requirement-tree)
+    ("RequirementDefinition" . requirement-tree)
     ("ConnectionUsage" . interconnection)
+    ("InterfaceUsage" . interconnection)
     ("StateUsage" . state-machine)
+    ("StateDefinition" . state-machine)
     ("ActionUsage" . action-flow)
-    ("UseCaseUsage" . use-case))
+    ("ActionDefinition" . action-flow)
+    ("UseCaseUsage" . use-case)
+    ("UseCaseDefinition" . use-case)
+    ("Package" . package)
+    ("AllocationUsage" . tree)
+    ("FlowConnectionUsage" . interconnection))
   "Map SysML v2 view filter metatype names to diagram type symbols.")
 
+(defconst sysml2--diagram-render-method-alist
+  '(("asTreeDiagram" . tree)
+    ("asInterconnectionDiagram" . interconnection)
+    ("asStateMachineDiagram" . state-machine)
+    ("asActionFlowDiagram" . action-flow)
+    ("asRequirementDiagram" . requirement-tree)
+    ("asUseCaseDiagram" . use-case)
+    ("asPackageDiagram" . package)
+    ("asTableDiagram" . tree))
+  "Map SysML v2 render method names to diagram type symbols.")
+
 (defun sysml2--diagram-parse-views ()
-  "Parse the current buffer for `view def' declarations with filter clauses.
-Return a list of (NAME . DIAGRAM-TYPE) where DIAGRAM-TYPE is a symbol
-derived from the `filter @SysML::XXX' clause inside each view def."
+  "Parse the current buffer for view definitions and usages.
+Return a list of (NAME . DIAGRAM-TYPE) where DIAGRAM-TYPE is resolved
+from `render' clauses, `filter @SysML::XXX' clauses, and view
+inheritance via `:>' or `:' specialization."
   (save-excursion
     (goto-char (point-min))
-    (let ((views nil)
-          (view-re (concat "\\bview[ \t]+def[ \t]+"
-                           "\\([A-Za-z_][A-Za-z0-9_]*\\)")))
-      (while (re-search-forward view-re nil t)
-        (let ((name (match-string-no-properties 1))
-              (view-start (match-end 0)))
-          (save-excursion
-            (goto-char view-start)
-            (when (re-search-forward "{" nil t)
-              (let ((brace-start (1- (point)))
-                    (brace-end nil))
-                (goto-char brace-start)
-                (condition-case nil
-                    (progn
-                      (forward-sexp 1)
-                      (setq brace-end (point)))
-                  (scan-error nil))
-                (when brace-end
-                  (let ((body (buffer-substring-no-properties
-                               brace-start brace-end)))
-                    (when (string-match
-                           "filter[ \t]+@SysML::\\([A-Za-z_][A-Za-z0-9_]*\\)"
-                           body)
-                      (let* ((metatype (match-string 1 body))
-                             (dtype (cdr (assoc metatype
-                                                sysml2--diagram-view-filter-type-alist))))
-                        (when dtype
-                          (push (cons name dtype) views)))))))))))
-      (nreverse views))))
+    (let ((view-defs (make-hash-table :test 'equal))
+          (results nil)
+          ;; Match view def with optional inheritance
+          (def-re (concat "\\bview[ \t]+def[ \t]+"
+                          "\\([A-Za-z_][A-Za-z0-9_]*\\)"
+                          "\\(?:[ \t]*:>?[ \t]*\\([A-Za-z_][A-Za-z0-9_]*\\)\\)?"))
+          ;; Match view usage with optional type
+          (usage-re (concat "\\bview[ \t]+"
+                            "\\([A-Za-z_][A-Za-z0-9_]*\\)"
+                            "\\(?:[ \t]*:>?[ \t]*\\([A-Za-z_][A-Za-z0-9_]*\\)\\)?")))
+      ;; Pass 1: collect all view defs
+      (while (re-search-forward def-re nil t)
+        (unless (let ((ppss (syntax-ppss))) (or (nth 3 ppss) (nth 4 ppss)))
+          (let ((name (match-string-no-properties 1))
+                (parent (match-string-no-properties 2))
+                (view-start (match-end 0))
+                (render-dtype nil)
+                (filter-dtype nil))
+            ;; Parse body for render and filter clauses
+            (save-excursion
+              (goto-char view-start)
+              (when (re-search-forward "{" (line-end-position 3) t)
+                (let ((brace-start (1- (point))) brace-end)
+                  (goto-char brace-start)
+                  (condition-case nil
+                      (progn (forward-sexp 1) (setq brace-end (point)))
+                    (scan-error nil))
+                  (when brace-end
+                    (let ((body (buffer-substring-no-properties
+                                 brace-start brace-end)))
+                      ;; Check for render clause
+                      (when (string-match
+                             "\\brender[ \t]+\\([A-Za-z_][A-Za-z0-9_]*\\)"
+                             body)
+                        (setq render-dtype
+                              (cdr (assoc (match-string 1 body)
+                                          sysml2--diagram-render-method-alist))))
+                      ;; Check for filter clause
+                      (when (string-match
+                             "filter[ \t]+@SysML::\\([A-Za-z_][A-Za-z0-9_]*\\)"
+                             body)
+                        (setq filter-dtype
+                              (cdr (assoc (match-string 1 body)
+                                          sysml2--diagram-view-filter-type-alist)))))))))
+            (puthash name (list :parent parent
+                                :dtype (or render-dtype filter-dtype))
+                     view-defs))))
+      ;; Pass 2: resolve inheritance for view defs (max 10 iterations)
+      (let ((changed t) (guard 0))
+        (while (and changed (< guard 10))
+          (setq changed nil guard (1+ guard))
+          (maphash
+           (lambda (_name props)
+             (when (and (not (plist-get props :dtype))
+                        (plist-get props :parent))
+               (let* ((parent-name (plist-get props :parent))
+                      (parent-props (gethash parent-name view-defs)))
+                 (when (and parent-props (plist-get parent-props :dtype))
+                   (plist-put props :dtype (plist-get parent-props :dtype))
+                   (setq changed t)))))
+           view-defs)))
+      ;; Collect resolved view defs
+      (maphash (lambda (name props)
+                 (when (plist-get props :dtype)
+                   (push (cons name (plist-get props :dtype)) results)))
+               view-defs)
+      ;; Pass 3: collect view usages (not defs)
+      (goto-char (point-min))
+      (while (re-search-forward usage-re nil t)
+        (unless (let ((ppss (syntax-ppss))) (or (nth 3 ppss) (nth 4 ppss)))
+          (let ((name (match-string-no-properties 1))
+                (type-name (match-string-no-properties 2)))
+            ;; Skip if this is actually a `view def'
+            (unless (string= name "def")
+              ;; Check body for filter clause
+              (let ((usage-dtype nil)
+                    (usage-start (match-end 0)))
+                (save-excursion
+                  (goto-char usage-start)
+                  (when (re-search-forward "{" (line-end-position 3) t)
+                    (let ((brace-start (1- (point))) brace-end)
+                      (goto-char brace-start)
+                      (condition-case nil
+                          (progn (forward-sexp 1) (setq brace-end (point)))
+                        (scan-error nil))
+                      (when brace-end
+                        (let ((body (buffer-substring-no-properties
+                                     brace-start brace-end)))
+                          (when (string-match
+                                 "filter[ \t]+@SysML::\\([A-Za-z_][A-Za-z0-9_]*\\)"
+                                 body)
+                            (setq usage-dtype
+                                  (cdr (assoc (match-string 1 body)
+                                              sysml2--diagram-view-filter-type-alist)))))))))
+                ;; Resolve from type or parent view def
+                (unless usage-dtype
+                  (when type-name
+                    (let ((parent-props (gethash type-name view-defs)))
+                      (when parent-props
+                        (setq usage-dtype (plist-get parent-props :dtype))))))
+                (when usage-dtype
+                  (push (cons name usage-dtype) results)))))))
+      (nreverse results))))
 
 (defun sysml2-diagram-view ()
   "Generate a diagram based on a `view def' in the current buffer.

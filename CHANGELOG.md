@@ -1,5 +1,40 @@
 # Changelog
 
+## 0.2.0 — 2026-03-07
+
+### Added
+- Hierarchical tree diagrams: depth-based layout with L-shaped connectors
+  replacing flat column alignment; children indented right of parents
+- Requirements diagrams: verify/satisfy annotations, requirement ID display
+  (`<'ID'>` syntax), color-coded status fills (green=full, yellow=partial,
+  red=gap, blue=no-satisfy), and a legend
+- Model extraction: verify relationships (`sysml2--model-extract-verifications`),
+  allocate relationships (`sysml2--model-extract-allocations`), requirement
+  short-name IDs (`:id` field), composition extraction from `part def` bodies
+- ISO 13485 traceability: requirement ID column in traceability matrix (both
+  interactive and Markdown export), new Allocation Matrix report section
+- View filter improvements: `render` clause parsing (e.g. `render asTreeDiagram`),
+  view inheritance via `:>` specialization, view usage parsing (not just defs),
+  extended metatype mappings (15 metatypes + 8 render methods)
+- Deterministic report output: all report tables sorted alphabetically for
+  stable git diffs
+- `sysml2-diagram-view` command (`C-c C-d v`): generate diagrams from `view def`
+  filter and render clauses
+- 15 new tests: verification/allocation extraction, requirement IDs,
+  hierarchical tree layout, view filter parsing, report enhancements
+
+### Fixed
+- Byte-compilation: added missing `(require 'cl-lib)` in 5 modules
+  (sysml2-outline, sysml2-diagram, sysml2-model, sysml2-cosim, sysml2-plantuml)
+- Verification extraction regex: correctly matches outer `verification` block
+  brace instead of inner `verify` statement brace
+- Composition extraction: Pass 2 scans `part def` bodies for child parts
+  (previously only extracted from part usage bodies)
+- SVG byte-compilation: renamed `left-margin` to avoid shadowing Emacs dynamic
+  variable
+- Scope selection: `completing-read` always shows all candidates with at-point
+  default, instead of auto-selecting
+
 ## 0.1.0 — 2026-03-07
 
 ### Added
@@ -38,7 +73,7 @@
 - 4 new snippets: `fl` (flow), `ifc` (interface), `alloc` (allocation),
   `bind` (binding)
 - Evil mode / Doom Emacs support (`SPC m` prefix via general.el)
-- Test infrastructure: 202 ERT tests
+- Test infrastructure: 210 ERT tests
 - CI with GitHub Actions (Emacs 29.4 + 30.1)
 - Eclipse SysON and Pilot LSP server support
 - Makefile with test, compile, clean, lint targets

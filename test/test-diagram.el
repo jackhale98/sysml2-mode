@@ -280,5 +280,238 @@
       (should (= (length with-body) 1))
       (should (equal (car with-body) "EngineStates")))))
 
+;; --- Verification Extraction Tests ---
+
+(ert-deftest sysml2-test-extract-verifications-basic ()
+  "Test extraction of verify relationships."
+  (with-temp-buffer
+    (insert "verification massTests : MassTest {\n"
+            "    verify vehicleMassRequirement {\n"
+            "        redefines massActual = weighVehicle.massMeasured;\n"
+            "    }\n"
+            "}\n")
+    (sysml2-mode)
+    (let ((vrs (sysml2--model-extract-verifications)))
+      (should (= (length vrs) 1))
+      (should (equal (plist-get (car vrs) :requirement) "vehicleMassRequirement"))
+      (should (equal (plist-get (car vrs) :by) "massTests")))))
+
+(ert-deftest sysml2-test-extract-verifications-annex-a ()
+  "Test verification extraction against annex-a fixture."
+  (with-temp-buffer
+    (insert-file-contents
+     (expand-file-name "test/fixtures/annex-a-simple-vehicle-model.sysml"
+                       (or (locate-dominating-file default-directory "test")
+                           default-directory)))
+    (sysml2-mode)
+    (let ((vrs (sysml2--model-extract-verifications)))
+      (should (>= (length vrs) 1))
+      (should (seq-find (lambda (v)
+                          (string-match-p "vehicleMassRequirement"
+                                          (plist-get v :requirement)))
+                        vrs)))))
+
+(ert-deftest sysml2-test-extract-verifications-flashlight ()
+  "Test verification extraction against flashlight fixture."
+  (with-temp-buffer
+    (insert-file-contents
+     (expand-file-name "test/fixtures/flashlight.sysml"
+                       (or (locate-dominating-file default-directory "test")
+                           default-directory)))
+    (sysml2-mode)
+    (let ((vrs (sysml2--model-extract-verifications)))
+      (should (>= (length vrs) 1))
+      (should (seq-find (lambda (v)
+                          (equal (plist-get v :requirement) "BatteryLifeReq"))
+                        vrs)))))
+
+;; --- Allocation Extraction Tests ---
+
+(ert-deftest sysml2-test-extract-allocations-basic ()
+  "Test extraction of allocate relationships."
+  (with-temp-buffer
+    (insert "allocate vehicleLogical to vehicle_b;\n"
+            "allocate engineLogical to vehicle_b.engine;\n")
+    (sysml2-mode)
+    (let ((als (sysml2--model-extract-allocations)))
+      (should (= (length als) 2))
+      (should (equal (plist-get (car als) :source) "vehicleLogical"))
+      (should (equal (plist-get (car als) :target) "vehicle_b")))))
+
+(ert-deftest sysml2-test-extract-allocations-annex-a ()
+  "Test allocation extraction against annex-a fixture."
+  (with-temp-buffer
+    (insert-file-contents
+     (expand-file-name "test/fixtures/annex-a-simple-vehicle-model.sysml"
+                       (or (locate-dominating-file default-directory "test")
+                           default-directory)))
+    (sysml2-mode)
+    (let ((als (sysml2--model-extract-allocations)))
+      (should (>= (length als) 3)))))
+
+;; --- Requirement ID Extraction ---
+
+(ert-deftest sysml2-test-requirement-id-extraction ()
+  "Test that requirement IDs are extracted from short name syntax."
+  (with-temp-buffer
+    (insert "requirement <'1'> vehicleMassReq : MassRequirement {\n"
+            "    doc /* The mass shall be under 2000 kg */\n"
+            "    requirement <'1.1'> engineMassReq : MassRequirement;\n"
+            "}\n")
+    (sysml2-mode)
+    (let ((reqs (sysml2--model-extract-requirement-usages)))
+      (should (>= (length reqs) 1))
+      (let ((r (car reqs)))
+        (should (equal (plist-get r :name) "vehicleMassReq"))
+        (should (equal (plist-get r :id) "1"))
+        (let ((child (car (plist-get r :children))))
+          (should child)
+          (should (equal (plist-get child :id) "1.1")))))))
+
+;; --- Tree Diagram Hierarchical Layout ---
+
+(ert-deftest sysml2-test-svg-tree-hierarchical ()
+  "Test that tree SVG uses hierarchical layout with distinct X positions."
+  (with-temp-buffer
+    (insert "part def Vehicle {\n"
+            "    part engine : Engine;\n"
+            "    part trans : Transmission;\n"
+            "}\n"
+            "part def Engine;\n"
+            "part def Transmission;\n")
+    (sysml2-mode)
+    (let ((svg (sysml2-svg-generate 'tree nil)))
+      ;; Vehicle and Engine should be at different X positions
+      ;; Engine is a child so should be indented right
+      (should (string-match-p "Parts Tree" svg))
+      ;; Should contain polygon (composition diamond)
+      (should (string-match-p "<polygon" svg))
+      ;; SVG should contain all three part names
+      (should (string-match-p "Vehicle" svg))
+      (should (string-match-p "Engine" svg))
+      (should (string-match-p "Transmission" svg)))))
+
+;; --- Requirements Diagram with Relationships ---
+
+(ert-deftest sysml2-test-svg-requirement-tree-with-verify ()
+  "Test that requirements SVG includes verify annotations."
+  (with-temp-buffer
+    (insert "requirement def MassReq {\n"
+            "    doc /* mass shall be under 2000 kg */\n"
+            "}\n"
+            "requirement vehicleMassReq : MassReq;\n"
+            "verification massTest : MassTest {\n"
+            "    verify vehicleMassReq;\n"
+            "}\n")
+    (sysml2-mode)
+    (let ((svg (sysml2-svg-generate 'requirement-tree nil)))
+      (should (string-match-p "Requirements Diagram" svg))
+      (should (string-match-p "MassReq" svg))
+      (should (string-match-p "vehicleMassReq" svg))
+      (should (string-match-p "verify" svg))
+      (should (string-match-p "massTest" svg)))))
+
+;; --- View Filter Parsing ---
+
+(ert-deftest sysml2-test-view-parse-render-clause ()
+  "Test that views with render clauses are detected."
+  (with-temp-buffer
+    (insert "view def TreeView {\n"
+            "    render asTreeDiagram;\n"
+            "}\n")
+    (sysml2-mode)
+    (let ((views (sysml2--diagram-parse-views)))
+      (should (= 1 (length views)))
+      (should (string= "TreeView" (caar views)))
+      (should (eq 'tree (cdar views))))))
+
+(ert-deftest sysml2-test-view-parse-inheritance ()
+  "Test that view defs inherit diagram type from parent."
+  (with-temp-buffer
+    (insert "view def TreeView {\n"
+            "    render asTreeDiagram;\n"
+            "}\n"
+            "view def PartsTreeView :> TreeView {\n"
+            "    filter @SysML::PartUsage;\n"
+            "}\n")
+    (sysml2-mode)
+    (let ((views (sysml2--diagram-parse-views)))
+      (should (>= (length views) 2))
+      (let ((parts-view (assoc "PartsTreeView" views)))
+        (should parts-view)
+        (should (eq 'tree (cdr parts-view)))))))
+
+(ert-deftest sysml2-test-view-parse-usage ()
+  "Test that view usages inherit diagram type from their def."
+  (with-temp-buffer
+    (insert "view def TreeView {\n"
+            "    render asTreeDiagram;\n"
+            "}\n"
+            "view def PartsTreeView :> TreeView {\n"
+            "    filter @SysML::PartUsage;\n"
+            "}\n"
+            "view myPartsView : PartsTreeView {\n"
+            "    expose foo::**;\n"
+            "}\n")
+    (sysml2-mode)
+    (let ((views (sysml2--diagram-parse-views)))
+      (let ((usage (assoc "myPartsView" views)))
+        (should usage)
+        (should (eq 'tree (cdr usage)))))))
+
+(ert-deftest sysml2-test-view-parse-annex-a ()
+  "Test view parsing on the annex-a fixture."
+  (let ((fixture (expand-file-name "test/fixtures/annex-a-simple-vehicle-model.sysml"
+                                   (or (locate-dominating-file default-directory "test")
+                                       default-directory))))
+    (with-temp-buffer
+      (insert-file-contents fixture)
+      (sysml2-mode)
+      (let ((views (sysml2--diagram-parse-views)))
+        ;; TreeView has render asTreeDiagram -> tree
+        (should (assoc "TreeView" views))
+        (should (eq 'tree (cdr (assoc "TreeView" views))))
+        ;; PartsTreeView inherits from TreeView -> tree
+        (should (assoc "PartsTreeView" views))
+        (should (eq 'tree (cdr (assoc "PartsTreeView" views))))
+        ;; vehiclePartsTree_Safety usage inherits from PartsTreeView
+        (should (assoc "vehiclePartsTree_Safety" views))))))
+
+;; --- Report Enhancements ---
+
+(ert-deftest sysml2-test-md-traceability-has-id-column ()
+  "Test that markdown traceability includes requirement IDs."
+  (with-temp-buffer
+    (insert "requirement def MassReq {\n"
+            "    doc /* mass ok */\n"
+            "}\n"
+            "requirement <'REQ-001'> vehicleMass : MassReq {\n"
+            "    doc /* mass under 2000 */\n"
+            "}\n")
+    (sysml2-mode)
+    (let ((md (sysml2--report-md-traceability (current-buffer))))
+      ;; Header should include ID column
+      (should (string-match-p "| Requirement | ID |" md))
+      ;; Row should include the ID value
+      (should (string-match-p "REQ-001" md)))))
+
+(ert-deftest sysml2-test-md-allocations-section ()
+  "Test allocation matrix markdown rendering."
+  (with-temp-buffer
+    (insert "allocation def FunctionAllocation;\n"
+            "allocate providePower to engine;\n"
+            "allocate controlBraking to brakingSubsystem;\n")
+    (sysml2-mode)
+    (let ((md (sysml2--report-md-allocations (current-buffer))))
+      (should (string-match-p "Allocation Matrix" md))
+      (should (string-match-p "providePower" md))
+      (should (string-match-p "engine" md))
+      (should (string-match-p "controlBraking" md))
+      (should (string-match-p "brakingSubsystem" md)))))
+
+(ert-deftest sysml2-test-allocations-section-registered ()
+  "Test that the allocations section is registered."
+  (should (assoc "allocations" sysml2--report-md-sections)))
+
 (provide 'test-diagram)
 ;;; test-diagram.el ends here

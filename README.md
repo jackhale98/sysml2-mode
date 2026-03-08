@@ -208,6 +208,7 @@ Generate diagrams from SysML v2 models with a dual-backend architecture. Seven d
 | `C-c C-d u` | `sysml2-diagram-use-case` | Use Case |
 | `C-c C-d k` | `sysml2-diagram-package` | Package |
 | `C-c C-d p` | `sysml2-diagram-preview` | Auto-detect at point |
+| `C-c C-d v` | `sysml2-diagram-view` | Generate from view def filter |
 | `C-c C-d e` | `sysml2-diagram-export` | Export to file |
 | `C-c C-d o` | `sysml2-diagram-open-plantuml` | View diagram source |
 | `C-c C-d w` | `sysml2-diagram-open-in-playground` | Open in D2 web playground |
@@ -215,11 +216,15 @@ Generate diagrams from SysML v2 models with a dual-backend architecture. Seven d
 Scoped diagrams (IBD, state machine, action flow) auto-detect the
 enclosing definition or prompt for a scope name.
 
+View-filtered diagrams (`C-c C-d v`) parse `view def` declarations with
+`render` clauses, `filter @SysML::...` metatype filters, and `:>`
+inheritance to determine the diagram type automatically.
+
 ### Native Backend (default)
 
 The native backend (`sysml2-diagram-backend` = `native`) uses two rendering engines:
 
-- **Direct SVG** (zero dependencies) for deterministic layouts: tree/BDD diagrams and requirement trees
+- **Direct SVG** (zero dependencies) for deterministic layouts: tree/BDD diagrams (hierarchical depth-based layout with L-shaped connectors) and requirement trees (with verify/satisfy annotations, requirement IDs, and color-coded coverage status)
 - **[D2](https://d2lang.com)** for graph layouts: IBD, state machine, action flow, use case, and package diagrams
 
 When D2 is not installed locally, graph diagrams automatically fall back to opening in the [D2 Playground](https://play.d2lang.com) in your browser — no local installation required. Changes in the playground do NOT update the SysML model; this is a one-way, read-only visualization.
@@ -479,6 +484,7 @@ Plus `gd` for goto-definition in normal state. Neither evil nor general.el is a 
 | `C-c C-d u` | `sysml2-diagram-use-case` |
 | `C-c C-d k` | `sysml2-diagram-package` |
 | `C-c C-d p` | `sysml2-diagram-preview` |
+| `C-c C-d v` | `sysml2-diagram-view` |
 | `C-c C-d e` | `sysml2-diagram-export` |
 | `C-c C-d o` | `sysml2-diagram-open-plantuml` |
 | `C-c C-d w` | `sysml2-diagram-open-in-playground` |
@@ -559,7 +565,7 @@ sysml2-svg.el           Direct SVG generation (tree, requirement diagrams)
 sysml2-d2.el            D2 language generation (IBD, state, action, etc.)
 sysml2-plantuml.el      SysML-to-PlantUML transformation (legacy backend)
 sysml2-diagram.el       Diagram dispatch, preview, export, org-babel
-sysml2-report.el        Model summary, traceability, Markdown/Pandoc export
+sysml2-report.el        Model summary, traceability (with IDs), allocations, Markdown/Pandoc export
 sysml2-api.el           Systems Modeling API REST client
 sysml2-fmi.el           FMU inspector, interface extraction, Modelica gen
 sysml2-cosim.el         SSP generation, simulation, results, verification
@@ -572,7 +578,7 @@ sysml2-mode.el          Entry point, syntax table, keymap, mode definition
 
 ## Testing
 
-210 ERT tests across 16 test files:
+225 ERT tests across 16 test files:
 
 ```bash
 make test

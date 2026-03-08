@@ -596,11 +596,12 @@ Returns list of plists (:name :type :doc :children)."
       (let ((results nil)
             (seen (make-hash-table :test 'equal))
             (re (concat "\\brequirement[ \t]+"
-                        "\\(?:<[^>]+>[ \t]+\\)?"
+                        "\\(?:<'\\([^']+\\)'>[ \t]+\\)?"
                         "\\(" sysml2--identifier-regexp "\\)")))
         (while (re-search-forward re nil t)
           (let ((match-start (match-beginning 0))
-                (name (match-string-no-properties 1))
+                (req-id (match-string-no-properties 1))
+                (name (match-string-no-properties 2))
                 (match-end (match-end 0)))
             (save-excursion
               (goto-char match-start)
@@ -649,10 +650,11 @@ Returns list of plists (:name :type :doc :children)."
                           (goto-char (1+ brace-start))
                           (let ((child-re
                                  (concat "\\brequirement[ \t]+"
-                                         "\\(?:<[^>]+>[ \t]+\\)?"
+                                         "\\(?:<'\\([^']+\\)'>[ \t]+\\)?"
                                          "\\(" sysml2--identifier-regexp "\\)")))
                             (while (re-search-forward child-re body-end t)
-                              (let ((cname (match-string-no-properties 1))
+                              (let ((cid (match-string-no-properties 1))
+                                    (cname (match-string-no-properties 2))
                                     (cend (match-end 0))
                                     (ctype nil) (cdoc nil))
                                 (unless (or (save-excursion
@@ -692,9 +694,10 @@ Returns list of plists (:name :type :doc :children)."
                                                   1)))))))
                                   (puthash cname t seen)
                                   (push (list :name cname :type ctype
-                                              :doc cdoc)
+                                              :doc cdoc :id cid)
                                         children))))))))
                     (push (list :name name :type type :doc doc
+                                :id req-id
                                 :children (nreverse children))
                           results)))))))
         (nreverse results)))))
@@ -705,16 +708,24 @@ Returns list of plists (:name :type :doc :children)."
 
 (defun sysml2--model-extract-usage-compositions (&optional buffer)
   "Extract composition relationships from typed part usages in BUFFER.
+Also extracts compositions from part def bodies (part NAME : TYPE
+inside a part def block).
 Returns list of (:parent-type :child-type :multiplicity)."
   (with-current-buffer (or buffer (current-buffer))
     (save-excursion
       (goto-char (point-min))
       (let ((results nil)
             (seen (make-hash-table :test 'equal))
+            (child-re (concat "\\bpart[ \t]+"
+                              "\\(" sysml2--identifier-regexp "\\)"
+                              "[ \t]*:[ \t>]*"
+                              "\\(" sysml2--qualified-name-regexp "\\)"
+                              "\\(?:[ \t]*\\[\\([^]]+\\)\\]\\)?"))
             (re (concat "\\bpart[ \t]+"
                         "\\(" sysml2--identifier-regexp "\\)"
                         "[ \t]*:[ \t>]*"
                         "\\(" sysml2--qualified-name-regexp "\\)")))
+        ;; Pass 1: compositions inside part usages (e.g. part v : Vehicle { part e : Engine; })
         (while (re-search-forward re nil t)
           (let ((parent-type (match-string-no-properties 2))
                 (match-end-pos (match-end 0)))
@@ -731,13 +742,7 @@ Returns list of (:parent-type :child-type :multiplicity)."
                           (progn (forward-sexp 1) (setq body-end (point)))
                         (scan-error (setq body-end (point-max))))
                       (goto-char (1+ brace-start))
-                      (while (re-search-forward
-                              (concat "\\bpart[ \t]+"
-                                      "\\(" sysml2--identifier-regexp "\\)"
-                                      "[ \t]*:[ \t>]*"
-                                      "\\(" sysml2--qualified-name-regexp "\\)"
-                                      "\\(?:[ \t]*\\[\\([^]]+\\)\\]\\)?")
-                              body-end t)
+                      (while (re-search-forward child-re body-end t)
                         (save-excursion
                           (goto-char (match-beginning 0))
                           (unless (looking-at "\\bpart[ \t]+def\\b")
@@ -765,6 +770,36 @@ Returns list of (:parent-type :child-type :multiplicity)."
                                                 :child-type child-type
                                                 :multiplicity mult)
                                           results)))))))))))))))
+        ;; Pass 2: compositions inside part def bodies
+        (goto-char (point-min))
+        (let ((def-re (concat "\\bpart[ \t]+def[ \t]+"
+                              "\\(" sysml2--identifier-regexp "\\)")))
+          (while (re-search-forward def-re nil t)
+            (let ((def-name (match-string-no-properties 1))
+                  (def-end (match-end 0)))
+              (save-excursion
+                (goto-char def-end)
+                (when (re-search-forward "{" (line-end-position 3) t)
+                  (let ((brace-start (1- (point)))
+                        (body-end nil))
+                    (goto-char brace-start)
+                    (condition-case nil
+                        (progn (forward-sexp 1) (setq body-end (point)))
+                      (scan-error (setq body-end (point-max))))
+                    (goto-char (1+ brace-start))
+                    (while (re-search-forward child-re body-end t)
+                      (save-excursion
+                        (goto-char (match-beginning 0))
+                        (unless (looking-at "\\bpart[ \t]+def\\b")
+                          (let* ((child-type (match-string-no-properties 2))
+                                 (mult (match-string-no-properties 3))
+                                 (key (concat def-name "|" child-type)))
+                            (unless (gethash key seen)
+                              (puthash key t seen)
+                              (push (list :parent-type def-name
+                                          :child-type child-type
+                                          :multiplicity mult)
+                                    results))))))))))))
         (nreverse results)))))
 
 (defun sysml2--model-extract-satisfactions (&optional buffer)
@@ -784,6 +819,58 @@ Returns list of (:requirement :by)."
           (push (list :requirement (match-string-no-properties 1)
                       :by (match-string-no-properties 2))
                 results))
+        (nreverse results)))))
+
+(defun sysml2--model-extract-verifications (&optional buffer)
+  "Extract verify relationships from BUFFER.
+Returns list of (:requirement :by).  Searches inside `verification'
+blocks for `verify [requirement] NAME' statements."
+  (with-current-buffer (or buffer (current-buffer))
+    (save-excursion
+      (goto-char (point-min))
+      (let ((results nil)
+            (verif-re (concat "\\bverification[ \t]+"
+                              "\\(" sysml2--identifier-regexp "\\)"))
+            (verify-re (concat "\\bverify[ \t]+\\(?:requirement[ \t]+\\)?"
+                               "\\(" sysml2--qualified-name-regexp "\\)")))
+        ;; Find verification usages with bodies
+        (while (re-search-forward verif-re nil t)
+          (unless (let ((ppss (syntax-ppss)))
+                    (or (nth 3 ppss) (nth 4 ppss)))
+            (let ((verif-name (match-string-no-properties 1))
+                  (block-end nil)
+                  (search-start (match-end 0)))
+              ;; Find the opening brace for this verification block
+              (when (re-search-forward "{" (line-end-position 3) t)
+                (goto-char (1- (point)))
+                (condition-case nil
+                    (progn (forward-sexp 1) (setq block-end (point)))
+                  (scan-error (setq block-end (point-max))))
+                (save-excursion
+                  (goto-char search-start)
+                  (while (re-search-forward verify-re block-end t)
+                    (push (list :requirement (match-string-no-properties 1)
+                                :by verif-name)
+                          results)))))))
+        (nreverse results)))))
+
+(defun sysml2--model-extract-allocations (&optional buffer)
+  "Extract allocate relationships from BUFFER.
+Returns list of (:source :target)."
+  (with-current-buffer (or buffer (current-buffer))
+    (save-excursion
+      (goto-char (point-min))
+      (let ((results nil)
+            (re (concat "\\ballocate[ \t]+"
+                        "\\(" sysml2--qualified-name-regexp "\\)"
+                        "[ \t]+to[ \t]+"
+                        "\\(" sysml2--qualified-name-regexp "\\)")))
+        (while (re-search-forward re nil t)
+          (unless (let ((ppss (syntax-ppss)))
+                    (or (nth 3 ppss) (nth 4 ppss)))
+            (push (list :source (match-string-no-properties 1)
+                        :target (match-string-no-properties 2))
+                  results)))
         (nreverse results)))))
 
 ;; ---------------------------------------------------------------------------
