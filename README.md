@@ -2,7 +2,7 @@
 
 An Emacs major mode for editing [SysML v2](https://www.omgsysml.org/SysML-2.htm) and [KerML](https://www.omg.org/spec/KerML/) textual notation files.
 
-Provides syntax highlighting, indentation, completion, navigation, diagram generation, FMI/FMU integration, co-simulation orchestration, and LSP support.
+Provides syntax highlighting, indentation, completion, navigation, diagram generation, native simulation, FMI/FMU integration, co-simulation orchestration, and LSP support.
 
 **Requires:** Emacs 29.1+
 
@@ -17,6 +17,7 @@ Provides syntax highlighting, indentation, completion, navigation, diagram gener
 - [Model Inspection](#model-inspection)
 - [FMI/FMU Integration](#fmifmu-integration)
 - [Co-Simulation](#co-simulation)
+- [Native Simulation](#native-simulation)
 - [Systems Modeling API](#systems-modeling-api)
 - [LSP Support](#lsp-support)
 - [Evil-Mode Integration](#evil-mode-integration)
@@ -397,6 +398,113 @@ Optional gnuplot integration for time-series plots.
 
 Parses simple constraints from requirement `doc` comments (`signal <= bound`) and checks simulation data. Complex constraints are flagged as `MANUAL`.
 
+## Native Simulation
+
+Built-in SysML v2 behavioral simulation powered by [sysml-lint](https://github.com/jackhale98/sysml-lint). Evaluate constraints, run calculations, simulate state machines, and execute action flows directly from Emacs.
+
+**Requires:** `sysml-lint` on `exec-path` (install from [sysml-lint releases](https://github.com/jackhale98/sysml-lint/releases))
+
+### Simulation Commands
+
+| Binding | Command | Description |
+|---------|---------|-------------|
+| `C-c C-x s` | `sysml2-simulate` | Open simulation dispatch menu |
+| `C-c C-x l` | `sysml2-simulate-list` | List all simulatable constructs in the current file |
+| `C-c C-x e` | `sysml2-simulate-eval` | Evaluate a constraint or calculation with variable bindings |
+| `C-c C-x m` | `sysml2-simulate-state-machine` | Simulate a state machine with event injection |
+| `C-c C-x a` | `sysml2-simulate-action-flow` | Execute an action flow |
+
+### Listing Constructs
+
+`C-c C-x l` scans the current file and lists all simulatable constructs with their parameters:
+
+```
+=== Simulatable Constructs: model.sysml ===
+
+Constraints:
+  SpeedLimit (speed: Real)
+
+Calculations:
+  KineticEnergy (mass: Real, velocity: Real) -> Real
+
+State Machines:
+  TrafficLight [entry: red, states: red, yellow, green, transitions: 3]
+
+Actions:
+  ProcessOrder (7 steps)
+```
+
+### Evaluating Constraints and Calculations
+
+`C-c C-x e` prompts for a constraint/calculation name (with completion) and variable bindings, then displays the result:
+
+```
+=== Eval: SpeedLimit ===
+
+constraint SpeedLimit: satisfied
+```
+
+Variable bindings use `name=value` format, comma-separated (e.g., `speed=100,mass=1500`).
+
+### State Machine Simulation
+
+`C-c C-x m` prompts for the state machine name, events to inject, variable bindings for guards, and maximum steps. The simulation trace shows each state transition:
+
+```
+=== State Machine: TrafficLight ===
+
+State Machine: TrafficLight
+Initial state: red
+
+  Step 0: red -- [next]--> green
+  Step 1: green -- [next]--> yellow
+  Step 2: yellow -- [next]--> red
+
+Status: deadlocked (3 steps, current: red)
+```
+
+### Action Flow Execution
+
+`C-c C-x a` executes an action flow and traces each step, including fork/join parallelism, conditionals, assignments, and loops:
+
+```
+=== Action Flow: ProcessOrder ===
+
+Action: ProcessOrder
+
+  Step 0: [perform] perform validate
+  Step 1: [perform] perform checkInventory
+  Step 2: [perform] perform ship
+  Step 3: [perform] perform notifyCustomer
+
+Status: completed (4 steps)
+```
+
+### Simulation Capabilities
+
+The simulation engine supports:
+
+- **Constraints**: Boolean expression evaluation with comparison, logical, and arithmetic operators
+- **Calculations**: Expression evaluation with parameterized inputs and built-in functions (`abs`, `sqrt`, `min`, `max`, etc.)
+- **State machines**: Entry state, signal triggers, guard conditions, entry/exit actions, effects, deadlock detection
+- **Action flows**: Sequential execution, fork/join, if/else, while loops, assign, send actions
+
+### Customization
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `sysml2-simulate-executable` | `"sysml-lint"` | Path to the sysml-lint binary |
+| `sysml2-simulate-max-steps` | `100` | Default maximum simulation steps |
+
+### Multi-File Import Resolution
+
+When models span multiple files with `import` statements, use `-I` to include additional files for resolution:
+
+```sh
+sysml-lint simulate list model.sysml -I lib/
+sysml-lint lint model.sysml -I shared-library/
+```
+
 ## Systems Modeling API
 
 REST client for the [Systems Modeling API](https://www.omg.org/spec/SystemsModelingAPI/) v1.0:
@@ -533,6 +641,12 @@ Plus `gd` for goto-definition in normal state. Neither evil nor general.el is a 
 | `C-c C-s r` | `sysml2-cosim-run` |
 | `C-c C-s p` | `sysml2-cosim-results` |
 | `C-c C-s c` | `sysml2-cosim-verify-requirements` |
+| **Native Simulation** | |
+| `C-c C-x s` | `sysml2-simulate` |
+| `C-c C-x l` | `sysml2-simulate-list` |
+| `C-c C-x e` | `sysml2-simulate-eval` |
+| `C-c C-x m` | `sysml2-simulate-state-machine` |
+| `C-c C-x a` | `sysml2-simulate-action-flow` |
 | **Inspect / Report** | |
 | `C-c C-i s` | `sysml2-report-summary` |
 | `C-c C-i t` | `sysml2-report-traceability` |
@@ -589,6 +703,7 @@ sysml2-report.el        Model summary, traceability (IDs, derivations, refinemen
 sysml2-api.el           Systems Modeling API REST client
 sysml2-fmi.el           FMU inspector, interface extraction, Modelica gen
 sysml2-cosim.el         SSP generation, simulation, results, verification
+sysml2-simulate.el      Native simulation via sysml-lint (constraints, state machines, actions)
 sysml2-outline.el       Outline side panel
 sysml2-eldoc.el         Definition/documentation at point (ElDoc)
 sysml2-evil.el          Optional evil-mode keybindings

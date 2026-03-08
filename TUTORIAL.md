@@ -906,6 +906,92 @@ built-in tree inspection commands:
 > **Doom tip:** You can bind these to `SPC m t i` and `SPC m t e` in
 > your `config.el` — see the Doom setup example in `sysml2-mode.el`.
 
+## Step 21: Simulate Your Model
+
+sysml2-mode integrates with [sysml-lint](https://github.com/jackhale98/sysml-lint) for native SysML v2 simulation. You can evaluate constraints, run calculations, simulate state machines, and execute action flows directly from Emacs.
+
+### Prerequisites
+
+Install `sysml-lint` and ensure it is on your `exec-path`:
+
+```sh
+git clone https://github.com/jackhale98/tree-sitter-sysml.git
+git clone https://github.com/jackhale98/sysml-lint.git
+cd sysml-lint
+cargo build --release
+cp target/release/sysml-lint ~/.local/bin/
+```
+
+### List Simulatable Constructs
+
+Press `C-c C-x l` to list all simulatable constructs in the current file. The output shows constraints, calculations, state machines, and actions with their parameters.
+
+### Evaluate a Constraint
+
+Our drone model has constraints like maximum weight and altitude limits. To evaluate one:
+
+1. Press `C-c C-x e`
+2. Select the constraint name (with completion)
+3. Enter variable bindings: `totalWeight=2.5,maxWeight=5.0`
+4. See the result: `constraint WeightLimit: satisfied`
+
+### Simulate a State Machine
+
+Our `FlightController` has states like `idle`, `takeoff`, `hover`, and `landing`. To simulate it:
+
+1. Press `C-c C-x m`
+2. Select `FlightController`
+3. Enter events: `startEngine,liftoff,stabilize`
+4. Set max steps (default 100)
+5. Watch the simulation trace:
+
+```
+State Machine: FlightController
+Initial state: idle
+
+  Step 0: idle -- [startEngine]--> preflight
+  Step 1: preflight -- [liftoff]--> takeoff
+  Step 2: takeoff -- [stabilize]--> hover
+
+Status: deadlocked (3 steps, current: hover)
+```
+
+The `deadlocked` status means no more transitions can fire — the simulation consumed all events and the machine is waiting for the next one.
+
+### Execute an Action Flow
+
+Our drone's `MissionExecution` action defines the flight sequence. To execute it:
+
+1. Press `C-c C-x a`
+2. Select `MissionExecution`
+3. Enter variable bindings (if any conditional logic needs them)
+4. Watch the action trace:
+
+```
+Action: MissionExecution
+
+  Step 0: [perform] perform preflight
+  Step 1: [perform] perform takeoff
+  Step 2: [perform] perform navigate
+  Step 3: [perform] perform land
+
+Status: completed (4 steps)
+```
+
+### Quick Simulation Menu
+
+Press `C-c C-x s` for a dispatch menu that lets you choose between list, eval, state-machine, and action-flow simulation modes.
+
+### Evil Keybindings
+
+| Binding | Command |
+|---------|---------|
+| `SPC m x s` | Simulation menu |
+| `SPC m x l` | List constructs |
+| `SPC m x e` | Eval constraint/calc |
+| `SPC m x m` | State machine |
+| `SPC m x a` | Action flow |
+
 ---
 
 ## Complete File
