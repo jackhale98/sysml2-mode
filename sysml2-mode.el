@@ -234,7 +234,7 @@
     (define-key map (kbd "C-c C-s r") #'sysml2-cosim-run)
     (define-key map (kbd "C-c C-s p") #'sysml2-cosim-results)
     (define-key map (kbd "C-c C-s c") #'sysml2-cosim-verify-requirements)
-    ;; Simulation (sysml-lint simulate)
+    ;; Simulation (sysml2-cli simulate)
     (define-key map (kbd "C-c C-x s") #'sysml2-simulate)
     (define-key map (kbd "C-c C-x l") #'sysml2-simulate-list)
     (define-key map (kbd "C-c C-x e") #'sysml2-simulate-eval)

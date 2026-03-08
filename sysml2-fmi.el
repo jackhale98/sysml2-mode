@@ -17,6 +17,11 @@
 ;;   - Interface contract extraction (SysML ports → FMI variables)
 ;;   - Modelica stub generation (partial model from SysML part def)
 ;;   - Interface validation (compare FMU against SysML port defs)
+;;
+;; When `sysml2-cli' is available on exec-path, interface extraction,
+;; Modelica generation, and SSP export use the tree-sitter AST via
+;; sysml2-cli instead of regex-based extraction.  FMU inspection and
+;; display remain in Emacs (they are UI-only operations).
 
 ;;; Code:
 
@@ -33,6 +38,35 @@
 (require 'dom)
 
 (require 'sysml2-model)
+
+;; --- sysml2-cli backend ---
+
+(defun sysml2--cli-available-p ()
+  "Return non-nil if sysml2-cli is available on exec-path."
+  (executable-find (or (bound-and-true-p sysml2-simulate-executable)
+                       "sysml2-cli")))
+
+(defun sysml2--cli-executable ()
+  "Return the sysml2-cli executable path."
+  (or (bound-and-true-p sysml2-simulate-executable) "sysml2-cli"))
+
+(defun sysml2--cli-call-json (&rest args)
+  "Call sysml2-cli with ARGS and parse JSON output.
+Prepends `-f json' to ARGS.  Returns parsed JSON as plists/lists."
+  (let* ((exe (sysml2--cli-executable))
+         (all-args (append (list "-f" "json") args))
+         (output (with-temp-buffer
+                   (apply #'call-process exe nil t nil all-args)
+                   (buffer-string))))
+    (when (and output (not (string-empty-p (string-trim output))))
+      (json-parse-string output :object-type 'plist :array-type 'list))))
+
+(defun sysml2--cli-call-text (&rest args)
+  "Call sysml2-cli with ARGS and return text output."
+  (let ((exe (sysml2--cli-executable)))
+    (with-temp-buffer
+      (apply #'call-process exe nil t nil args)
+      (buffer-string))))
 
 ;; --- Guard ---
 
@@ -256,9 +290,31 @@ Returns list of plists with `:name', `:direction', `:type'."
 
 (defun sysml2--fmi-extract-part-interface (part-def-name &optional buffer)
   "Extract FMI interface contract for PART-DEF-NAME from BUFFER.
-Combines port usages on the part def with port def item declarations.
+When sysml2-cli is available, uses tree-sitter AST extraction.
+Otherwise falls back to regex-based extraction.
 Returns list of plists with `:name', `:direction', `:sysml-type',
 `:fmi-type', `:causality', `:variability', `:source-port'."
+  (let ((file (buffer-file-name (or buffer (current-buffer)))))
+    (if (and file (sysml2--cli-available-p))
+        ;; Tree-sitter backend via sysml2-cli
+        (let* ((result (sysml2--cli-call-json
+                        "export" "interfaces" file
+                        "--part" part-def-name))
+               (items (plist-get result :items)))
+          (mapcar (lambda (item)
+                    (list :name (plist-get item :name)
+                          :direction (plist-get item :direction)
+                          :sysml-type (plist-get item :sysml_type)
+                          :fmi-type (plist-get item :fmi_type)
+                          :causality (plist-get item :causality)
+                          :variability (plist-get item :variability)
+                          :source-port (plist-get item :source_port)))
+                  items))
+      ;; Regex fallback
+      (sysml2--fmi-extract-part-interface--regex part-def-name buffer))))
+
+(defun sysml2--fmi-extract-part-interface--regex (part-def-name &optional buffer)
+  "Regex-based FMI interface extraction (fallback when sysml2-cli unavailable)."
   (with-current-buffer (or buffer (current-buffer))
     (let ((bounds (sysml2--model-find-def-bounds "part def" part-def-name)))
       (unless bounds
@@ -401,19 +457,26 @@ ATTRIBUTES is a list of typed attribute plists."
 ;;;###autoload
 (defun sysml2-fmi-generate-modelica (&optional part-def-name buffer)
   "Generate a Modelica stub for PART-DEF-NAME from BUFFER.
+When sysml2-cli is available, uses tree-sitter AST extraction.
 Interactive: prompts for part def name and output path."
   (interactive)
   (let* ((buf (or buffer (current-buffer)))
          (name (or part-def-name
                    (read-string "Part def name: ")))
-         (contract (sysml2--fmi-extract-part-interface name buf))
-         (bounds (with-current-buffer buf
-                   (sysml2--model-find-def-bounds "part def" name)))
-         (attributes (when bounds
-                       (with-current-buffer buf
-                         (sysml2--fmi-extract-typed-attributes
-                          (car bounds) (cdr bounds)))))
-         (mo-string (sysml2--fmi-generate-mo-string name contract attributes)))
+         (file (buffer-file-name buf))
+         (mo-string
+          (if (and file (sysml2--cli-available-p))
+              ;; Tree-sitter backend
+              (sysml2--cli-call-text "export" "modelica" file "--part" name)
+            ;; Regex fallback
+            (let* ((contract (sysml2--fmi-extract-part-interface name buf))
+                   (bounds (with-current-buffer buf
+                             (sysml2--model-find-def-bounds "part def" name)))
+                   (attributes (when bounds
+                                 (with-current-buffer buf
+                                   (sysml2--fmi-extract-typed-attributes
+                                    (car bounds) (cdr bounds))))))
+              (sysml2--fmi-generate-mo-string name contract attributes)))))
     (if (called-interactively-p 'any)
         (let ((output-path
                (read-file-name "Save Modelica file: "

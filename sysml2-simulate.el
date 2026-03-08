@@ -1,4 +1,4 @@
-;;; sysml2-simulate.el --- SysML v2 simulation via sysml-lint -*- lexical-binding: t; -*-
+;;; sysml2-simulate.el --- SysML v2 simulation via sysml2-cli -*- lexical-binding: t; -*-
 
 ;; Copyright (C) 2026 sysml2-mode contributors
 ;; Author: sysml2-mode contributors
@@ -13,7 +13,7 @@
 ;;; Commentary:
 
 ;; Interactive simulation support for SysML v2 models using the
-;; sysml-lint simulation engine.  Provides commands for:
+;; sysml2-cli simulation engine.  Provides commands for:
 ;;
 ;;   - Listing simulatable constructs in the current buffer
 ;;   - Evaluating constraints and calculations with variable bindings
@@ -23,7 +23,7 @@
 ;; All commands work on the current buffer's file and display results
 ;; in a dedicated *SysML Simulation* buffer.
 ;;
-;; Requires `sysml-lint' (v0.1.0+) on exec-path.
+;; Requires `sysml2-cli' (v0.2.0+) on exec-path.
 
 ;;; Code:
 
@@ -38,8 +38,8 @@
 ;;   `sysml2-simulate-action-flow'   -- Execute an action flow
 ;;   `sysml2-simulate'        -- Dispatch to simulation command
 
-(defcustom sysml2-simulate-executable "sysml-lint"
-  "Path to the sysml-lint executable."
+(defcustom sysml2-simulate-executable "sysml2-cli"
+  "Path to the sysml2-cli executable."
   :type 'string
   :group 'sysml2)
 
@@ -60,9 +60,9 @@
 ;; --- Internal helpers ---
 
 (defun sysml2-simulate--check-executable ()
-  "Check that sysml-lint is available.  Signal an error if not found."
+  "Check that sysml2-cli is available.  Signal an error if not found."
   (unless (executable-find sysml2-simulate-executable)
-    (user-error "Cannot find `%s' on exec-path.  Install sysml-lint from https://github.com/jackhale98/sysml-lint"
+    (user-error "Cannot find `%s' on exec-path.  Install sysml2-cli from https://github.com/jackhale98/sysml-lint"
                 sysml2-simulate-executable)))
 
 (defun sysml2-simulate--ensure-file ()
@@ -71,7 +71,7 @@
       (user-error "Buffer is not visiting a file.  Save first")))
 
 (defun sysml2-simulate--run (args &optional json-p)
-  "Run sysml-lint simulate with ARGS and display results.
+  "Run sysml2-cli simulate with ARGS and display results.
 When JSON-P is non-nil, pass -f json and parse the output."
   (sysml2-simulate--check-executable)
   (let* ((full-args (append (when json-p '("-f" "json"))

@@ -166,7 +166,7 @@
      "s r" '(sysml2-cosim-run :which-key "run co-simulation")
      "s p" '(sysml2-cosim-results :which-key "plot results")
      "s c" '(sysml2-cosim-verify-requirements :which-key "verify requirements")
-     ;; SysML Simulation (sysml-lint simulate)
+     ;; SysML Simulation (sysml2-cli simulate)
      "x"   '(:ignore t :which-key "simulate")
      "x s" '(sysml2-simulate :which-key "simulate menu")
      "x l" '(sysml2-simulate-list :which-key "list constructs")

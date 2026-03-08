@@ -909,18 +909,18 @@ built-in tree inspection commands:
 
 ## Step 21: Simulate Your Model
 
-sysml2-mode integrates with [sysml-lint](https://github.com/jackhale98/sysml-lint) for native SysML v2 simulation. You can evaluate constraints, run calculations, simulate state machines, and execute action flows directly from Emacs.
+sysml2-mode integrates with [sysml2-cli](https://github.com/jackhale98/sysml2-cli) for native SysML v2 simulation. You can evaluate constraints, run calculations, simulate state machines, and execute action flows directly from Emacs.
 
 ### Prerequisites
 
-Install `sysml-lint` and ensure it is on your `exec-path`:
+Install `sysml2-cli` and ensure it is on your `exec-path`:
 
 ```sh
 git clone https://github.com/jackhale98/tree-sitter-sysml.git
-git clone https://github.com/jackhale98/sysml-lint.git
-cd sysml-lint
+git clone https://github.com/jackhale98/sysml2-cli.git
+cd sysml2-cli
 cargo build --release
-cp target/release/sysml-lint ~/.local/bin/
+cp target/release/sysml2-cli ~/.local/bin/
 ```
 
 ### List Simulatable Constructs

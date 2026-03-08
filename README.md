@@ -400,9 +400,9 @@ Parses simple constraints from requirement `doc` comments (`signal <= bound`) an
 
 ## Native Simulation
 
-Built-in SysML v2 behavioral simulation powered by [sysml-lint](https://github.com/jackhale98/sysml-lint). Evaluate constraints, run calculations, simulate state machines, and execute action flows directly from Emacs.
+Built-in SysML v2 behavioral simulation powered by [sysml2-cli](https://github.com/jackhale98/sysml2-cli). Evaluate constraints, run calculations, simulate state machines, and execute action flows directly from Emacs.
 
-**Requires:** `sysml-lint` on `exec-path` (install from [sysml-lint releases](https://github.com/jackhale98/sysml-lint/releases))
+**Requires:** `sysml2-cli` on `exec-path` (install from [sysml2-cli releases](https://github.com/jackhale98/sysml2-cli/releases))
 
 ### Simulation Commands
 
@@ -493,7 +493,7 @@ The simulation engine supports:
 
 | Variable | Default | Description |
 |----------|---------|-------------|
-| `sysml2-simulate-executable` | `"sysml-lint"` | Path to the sysml-lint binary |
+| `sysml2-simulate-executable` | `"sysml2-cli"` | Path to the sysml2-cli binary |
 | `sysml2-simulate-max-steps` | `100` | Default maximum simulation steps |
 
 ### Multi-File Import Resolution
@@ -501,8 +501,8 @@ The simulation engine supports:
 When models span multiple files with `import` statements, use `-I` to include additional files for resolution:
 
 ```sh
-sysml-lint simulate list model.sysml -I lib/
-sysml-lint lint model.sysml -I shared-library/
+sysml2-cli simulate list model.sysml -I lib/
+sysml2-cli lint model.sysml -I shared-library/
 ```
 
 ## Systems Modeling API
@@ -703,7 +703,7 @@ sysml2-report.el        Model summary, traceability (IDs, derivations, refinemen
 sysml2-api.el           Systems Modeling API REST client
 sysml2-fmi.el           FMU inspector, interface extraction, Modelica gen
 sysml2-cosim.el         SSP generation, simulation, results, verification
-sysml2-simulate.el      Native simulation via sysml-lint (constraints, state machines, actions)
+sysml2-simulate.el      Native simulation via sysml2-cli (constraints, state machines, actions)
 sysml2-outline.el       Outline side panel
 sysml2-eldoc.el         Definition/documentation at point (ElDoc)
 sysml2-evil.el          Optional evil-mode keybindings

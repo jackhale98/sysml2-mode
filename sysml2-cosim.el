@@ -150,12 +150,20 @@ Connections are plists with `:name', `:source', `:target',
 ;;;###autoload
 (defun sysml2-cosim-generate-ssp (&optional buffer)
   "Generate SSP from SysML connections in BUFFER.
+When sysml2-cli is available, uses tree-sitter AST extraction.
 Interactive: prompts for output path."
   (interactive)
   (let* ((buf (or buffer (current-buffer)))
-         (structure (with-current-buffer buf
-                      (sysml2--cosim-extract-ssp-structure)))
-         (ssd-xml (sysml2--cosim-generate-ssd-xml structure)))
+         (file (buffer-file-name buf))
+         (ssd-xml
+          (if (and file (fboundp 'sysml2--cli-available-p)
+                   (sysml2--cli-available-p))
+              ;; Tree-sitter backend
+              (sysml2--cli-call-text "export" "ssp" file)
+            ;; Regex fallback
+            (let ((structure (with-current-buffer buf
+                               (sysml2--cosim-extract-ssp-structure))))
+              (sysml2--cosim-generate-ssd-xml structure)))))
     (if (called-interactively-p 'any)
         (let ((output-path (read-file-name "Save SSP file: "
                                            nil nil nil "system.ssp")))
