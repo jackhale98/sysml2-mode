@@ -377,32 +377,33 @@ without a `{' body)."
 
 (defun sysml2--diagram-read-scope (diagram-type)
   "Return a scope name for DIAGRAM-TYPE.
-Uses `sysml2-which-function' to auto-detect the enclosing definition,
-falling back to `completing-read' with candidates filtered by the
-applicable definition keyword for DIAGRAM-TYPE."
-  (or (sysml2-which-function)
-      (let* ((def-kw (pcase diagram-type
-                       ("IBD" "part def")
-                       ("State machine" "state def")
-                       ("Action flow" "action def")
-                       (_ nil)))
-             ;; For state machines, require body (skip forward declarations)
-             (require-body (string= diagram-type "State machine"))
-             (candidates (when def-kw
-                           (sysml2--diagram-scan-defs def-kw require-body)))
-             ;; For state machines, also include exhibit state names
-             (candidates (if (string= diagram-type "State machine")
-                             (delete-dups (append candidates
-                                                  (sysml2--diagram-scan-exhibit-states)))
-                           candidates))
-             (name (if candidates
-                       (completing-read
-                        (format "%s — select %s: " diagram-type
-                                (or def-kw "definition"))
-                        candidates nil t)
-                     (read-string
-                      (format "%s — scope (definition name): " diagram-type)))))
-        (if (string-empty-p name) nil name))))
+Always shows all matching candidates via `completing-read', with
+the enclosing definition at point as the default selection."
+  (let* ((def-kw (pcase diagram-type
+                   ("IBD" "part def")
+                   ("State machine" "state def")
+                   ("Action flow" "action def")
+                   (_ nil)))
+         ;; For state machines, require body (skip forward declarations)
+         (require-body (string= diagram-type "State machine"))
+         (candidates (when def-kw
+                       (sysml2--diagram-scan-defs def-kw require-body)))
+         ;; For state machines, also include exhibit state names
+         (candidates (if (string= diagram-type "State machine")
+                         (delete-dups (append candidates
+                                             (sysml2--diagram-scan-exhibit-states)))
+                       candidates))
+         ;; Use at-point definition as default, not auto-select
+         (default (sysml2-which-function))
+         (name (if candidates
+                   (completing-read
+                    (format "%s — select %s: " diagram-type
+                            (or def-kw "definition"))
+                    candidates nil t nil nil default)
+                 (read-string
+                  (format "%s — scope (definition name): " diagram-type)
+                  nil nil default))))
+    (if (string-empty-p name) nil name)))
 
 (defun sysml2--diagram-generate-and-show (type scope)
   "Generate a diagram of TYPE with SCOPE and display it."
@@ -501,8 +502,11 @@ Bound to `C-c C-d e'."
                                     "use-case" "package")
                                   nil t))))
   (let ((scope (when (memq type '(interconnection state-machine action-flow))
-                 (let ((s (read-string "Scope (definition name): ")))
-                   (if (string-empty-p s) nil s)))))
+                 (sysml2--diagram-read-scope
+                  (pcase type
+                    ('interconnection "IBD")
+                    ('state-machine "State machine")
+                    ('action-flow "Action flow"))))))
     (sysml2--diagram-generate-and-display type scope)))
 
 (defun sysml2-diagram-open-plantuml ()
