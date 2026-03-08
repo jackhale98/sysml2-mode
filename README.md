@@ -312,7 +312,7 @@ Interactive reporting and analysis commands for model understanding and ISO 1348
 
 ## FMI/FMU Integration
 
-FMI 3.0 support for model exchange and co-simulation workflows.
+FMI 3.0 support for model exchange and co-simulation workflows. See the **[FMI Integration Guide](examples/fmi-integration.md)** for a complete walkthrough from SysML model to co-simulation.
 
 ### FMU Inspector
 
@@ -342,6 +342,7 @@ Generate partial Modelica models from SysML part definitions:
 | Binding | Command | Description |
 |---------|---------|-------------|
 | `C-c C-s m` | `sysml2-fmi-generate-modelica` | Generate `.mo` file from part def |
+| `C-c C-s M` | `sysml2-fmi-generate-all-modelica` | Generate `.mo` files for all exportable parts |
 
 ```modelica
 partial model Engine
@@ -361,6 +362,22 @@ Compare FMU `modelDescription.xml` against SysML port definitions:
 | Binding | Command | Description |
 |---------|---------|-------------|
 | `C-c C-s v` | `sysml2-fmi-validate-interfaces` | Show match/mismatch/missing report |
+| `C-c C-s V` | `sysml2-fmi-validate-all` | Validate all FMUs against SysML |
+
+### FMU Compilation
+
+Compile Modelica models to FMUs via OpenModelica:
+
+| Binding | Command | Description |
+|---------|---------|-------------|
+| `C-c C-s b` | `sysml2-fmi-compile-fmu` | Compile single `.mo` to FMU |
+| `C-c C-s B` | `sysml2-fmi-compile-all-fmus` | Compile all `.mo` files to FMUs |
+
+### FMI Dashboard
+
+| Binding | Command | Description |
+|---------|---------|-------------|
+| `C-c C-s d` | `sysml2-fmi-dashboard` | Status overview (stubs, FMUs, validation) |
 
 ## Co-Simulation
 
@@ -397,6 +414,12 @@ Optional gnuplot integration for time-series plots.
 | `C-c C-s c` | `sysml2-cosim-verify-requirements` | Check simulation results against requirements |
 
 Parses simple constraints from requirement `doc` comments (`signal <= bound`) and checks simulation data. Complex constraints are flagged as `MANUAL`.
+
+### End-to-End Pipeline
+
+| Binding | Command | Description |
+|---------|---------|-------------|
+| `C-c C-s P` | `sysml2-cosim-pipeline` | Full pipeline: generate all stubs, compile FMUs, package SSP, run simulation |
 
 ## Native Simulation
 
@@ -636,11 +659,17 @@ Plus `gd` for goto-definition in normal state. Neither evil nor general.el is a 
 | `C-c C-s i` | `sysml2-fmi-inspect-fmu` |
 | `C-c C-s e` | `sysml2-fmi-extract-interfaces` |
 | `C-c C-s m` | `sysml2-fmi-generate-modelica` |
+| `C-c C-s M` | `sysml2-fmi-generate-all-modelica` |
+| `C-c C-s b` | `sysml2-fmi-compile-fmu` |
+| `C-c C-s B` | `sysml2-fmi-compile-all-fmus` |
 | `C-c C-s v` | `sysml2-fmi-validate-interfaces` |
+| `C-c C-s V` | `sysml2-fmi-validate-all` |
+| `C-c C-s d` | `sysml2-fmi-dashboard` |
 | `C-c C-s g` | `sysml2-cosim-generate-ssp` |
 | `C-c C-s r` | `sysml2-cosim-run` |
 | `C-c C-s p` | `sysml2-cosim-results` |
 | `C-c C-s c` | `sysml2-cosim-verify-requirements` |
+| `C-c C-s P` | `sysml2-cosim-pipeline` |
 | **Native Simulation** | |
 | `C-c C-x s` | `sysml2-simulate` |
 | `C-c C-x l` | `sysml2-simulate-list` |

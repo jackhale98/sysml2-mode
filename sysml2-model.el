@@ -490,29 +490,43 @@ Returns list of (:name :from :trigger :to)."
 
 (defun sysml2--model-extract-actions (&optional beg end)
   "Extract action usages within region BEG..END.
-Returns list of (:name :type)."
+Returns list of (:name :type).  Matches:
+  action NAME : TYPE ...
+  action NAME ;
+  action NAME { ... }
+  perform action NAME ;
+Actions without an explicit type get :type nil."
   (let ((beg (or beg (point-min)))
         (end (or end (point-max)))
+        (re (concat "\\(?:\\bperform[ \t]+\\)?\\baction[ \t]+"
+                     "\\(" sysml2--identifier-regexp "\\)"))
         (results nil))
     (save-excursion
       (goto-char beg)
-      (while (re-search-forward
-              (concat "\\baction[ \t]+"
-                      "\\(" sysml2--identifier-regexp "\\)"
-                      "[ \t]*:[ \t>]*"
-                      "\\(" sysml2--qualified-name-regexp "\\)")
-              end t)
-        (save-excursion
-          (goto-char (match-beginning 0))
-          (unless (looking-at "\\baction[ \t]+def\\b")
-            (push (list :name (match-string-no-properties 1)
-                        :type (match-string-no-properties 2))
-                  results)))))
+      (while (re-search-forward re end t)
+        (let ((name (match-string-no-properties 1))
+              (after (match-end 0)))
+          (save-excursion
+            (goto-char (match-beginning 0))
+            ;; Skip `action def` declarations
+            (unless (looking-at ".*\\baction[ \t]+def\\b")
+              ;; Try to find a type annotation after the name
+              (goto-char after)
+              (let ((typ nil))
+                (when (looking-at (concat "[ \t]*:[ \t>]*"
+                                          "\\(" sysml2--qualified-name-regexp "\\)"))
+                  (setq typ (match-string-no-properties 1)))
+                (push (list :name name :type typ) results)))))))
     (nreverse results)))
 
 (defun sysml2--model-extract-successions (&optional beg end)
   "Extract succession relationships (first X then Y) within BEG..END.
-Returns list of (:from :to)."
+Returns list of (:from :to).
+Skips `first ... then' that appear inside a transition statement.
+A transition statement runs from the `transition' keyword to the
+next semicolon, so we detect this by scanning backward from the
+match for a `transition' keyword without crossing a `;', `{', or
+`}' boundary."
   (let ((beg (or beg (point-min)))
         (end (or end (point-max)))
         (results nil))
@@ -524,23 +538,30 @@ Returns list of (:from :to)."
                       "[ \t]+then[ \t]+"
                       "\\(" sysml2--identifier-regexp "\\)[ \t]*;")
               end t)
-        (save-excursion
-          (goto-char (match-beginning 0))
-          (let ((line-start (line-beginning-position)))
-            (goto-char line-start)
-            (unless (looking-at ".*\\btransition\\b")
-              (let ((in-transition nil))
-                (save-excursion
-                  (forward-line -1)
-                  (while (and (not (bobp))
-                              (looking-at "^[ \t]*$"))
-                    (forward-line -1))
-                  (when (looking-at ".*\\b\\(transition\\|accept\\)\\b")
-                    (setq in-transition t)))
-                (unless in-transition
-                  (push (list :from (match-string-no-properties 1)
-                              :to (match-string-no-properties 2))
-                        results))))))))
+        (let ((from (match-string-no-properties 1))
+              (to (match-string-no-properties 2))
+              (match-start (match-beginning 0))
+              (in-transition nil))
+          (save-excursion
+            (goto-char match-start)
+            ;; Scan backward for `transition' keyword; stop at statement
+            ;; boundaries (`;', `{', `}') or buffer beginning.
+            (let ((done nil))
+              (while (not done)
+                (if (re-search-backward "[;{}]\\|\\btransition\\b" beg t)
+                    (cond
+                     ;; Hit a statement boundary — not inside a transition
+                     ((memq (char-after) '(?\; ?{ ?}))
+                      (setq done t))
+                     ;; Found `transition' keyword before any boundary
+                     ((looking-at "\\btransition\\b")
+                      (setq in-transition t
+                            done t))
+                     (t (setq done t)))
+                  ;; Reached beg without finding anything
+                  (setq done t)))))
+          (unless in-transition
+            (push (list :from from :to to) results)))))
     (nreverse results)))
 
 ;; ---------------------------------------------------------------------------

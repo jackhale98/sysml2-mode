@@ -62,7 +62,7 @@
 (defun sysml2-simulate--check-executable ()
   "Check that sysml2-cli is available.  Signal an error if not found."
   (unless (executable-find sysml2-simulate-executable)
-    (user-error "Cannot find `%s' on exec-path.  Install sysml2-cli from https://github.com/jackhale98/sysml-lint"
+    (user-error "Cannot find `%s' on exec-path.  Install from https://github.com/jackhale98/sysml2-cli"
                 sysml2-simulate-executable)))
 
 (defun sysml2-simulate--ensure-file ()
@@ -71,17 +71,29 @@
       (user-error "Buffer is not visiting a file.  Save first")))
 
 (defun sysml2-simulate--run (args &optional json-p)
-  "Run sysml2-cli simulate with ARGS and display results.
-When JSON-P is non-nil, pass -f json and parse the output."
+  "Run sysml2-cli simulate with ARGS and return combined output.
+When JSON-P is non-nil, pass -f json and parse the output.
+Captures both stdout and stderr for complete diagnostics."
   (sysml2-simulate--check-executable)
   (let* ((full-args (append (when json-p '("-f" "json"))
                             '("simulate") args))
-         (output (with-output-to-string
+         (stderr-file (make-temp-file "sysml2-sim-stderr"))
+         (stdout (with-output-to-string
                    (with-current-buffer standard-output
                      (apply #'call-process
-                            sysml2-simulate-executable nil t nil
-                            full-args)))))
-    output))
+                            sysml2-simulate-executable nil
+                            (list t stderr-file) nil
+                            full-args))))
+         (stderr (with-temp-buffer
+                   (insert-file-contents stderr-file)
+                   (prog1 (buffer-string)
+                     (ignore-errors (delete-file stderr-file))))))
+    ;; Combine stdout + stderr for display
+    (if (string-empty-p stderr)
+        stdout
+      (concat stdout
+              (unless (string-empty-p stdout) "\n")
+              stderr))))
 
 (defun sysml2-simulate--display (title output)
   "Display simulation OUTPUT in the results buffer with TITLE."
@@ -91,7 +103,39 @@ When JSON-P is non-nil, pass -f json and parse the output."
         (erase-buffer)
         (insert (propertize (concat "=== " title " ===\n\n")
                             'face 'bold))
-        (insert output)
+        (if (string-empty-p (string-trim output))
+            (insert (propertize "No output from sysml2-cli.\n" 'face 'warning)
+                    "\nPossible causes:\n"
+                    "  - The definition may be a forward declaration (no body)\n"
+                    "  - The construct name may not match any definition\n"
+                    "  - sysml2-cli may have crashed (check *Messages*)\n")
+          (insert output)
+          ;; Add diagnostic hints for common issues
+          (goto-char (point-min))
+          (cond
+           ;; State machine: 0 steps with no events
+           ((and (string-match-p "0 steps" output)
+                 (string-match-p "State Machine" title))
+            (goto-char (point-max))
+            (insert (propertize "\n\nHint: " 'face 'bold))
+            (cond
+             ((string-match-p "Initial state: *$" output)
+              (insert "No states found — this definition may be a forward "
+                      "declaration (semicolon-only, no body with states)."))
+             (t
+              (insert "0 steps with a valid initial state usually means no "
+                      "events were provided. State machines need trigger events "
+                      "to advance. Re-run with events matching your transition "
+                      "triggers (e.g., startCmd,stopCmd)."))))
+           ;; Action flow: 0 steps
+           ((and (string-match-p "0 steps" output)
+                 (string-match-p "Action Flow" title))
+            (goto-char (point-max))
+            (insert (propertize "\n\nHint: " 'face 'bold)
+                    "0 steps usually means the action definition has no "
+                    "sub-actions or successions (first/then). It may only "
+                    "contain port declarations (in/out items) or be a "
+                    "forward declaration."))))
         (goto-char (point-min)))
       (special-mode))
     (display-buffer buf '((display-buffer-reuse-window

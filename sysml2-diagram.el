@@ -234,10 +234,10 @@ Returns image data as a string."
 ;; --- Unified Generation and Display ---
 
 (defconst sysml2--diagram-svg-types '(tree requirement-tree)
-  "Diagram types rendered by the direct SVG backend.")
+  "Diagram types that have a direct SVG fallback backend.")
 
 (defconst sysml2--diagram-d2-types
-  '(interconnection state-machine action-flow use-case package)
+  '(tree requirement-tree interconnection state-machine action-flow use-case package)
   "Diagram types rendered by the D2 backend.")
 
 (defun sysml2--diagram-generate-and-display (type scope)
@@ -247,22 +247,23 @@ Uses the backend selected by `sysml2-diagram-backend'."
   (pcase sysml2-diagram-backend
     ('native
      (cond
-      ((memq type sysml2--diagram-svg-types)
-       ;; Direct SVG — no external tool needed
-       (let ((svg-data (sysml2-svg-generate type scope)))
-         (sysml2--diagram-display-image svg-data "svg")))
       ((memq type sysml2--diagram-d2-types)
-       ;; D2 — try local binary first, fall back to web playground
-       (let ((d2-src (sysml2-d2-generate type scope)))
-         (if (sysml2--diagram-resolve-d2)
+       ;; D2 — try local binary first, fall back to SVG or web playground
+       (if (sysml2--diagram-resolve-d2)
+           (let ((d2-src (sysml2-d2-generate type scope)))
              (sysml2--diagram-invoke-d2
               d2-src "svg"
               (lambda (success data)
                 (if success
                     (sysml2--diagram-display-image data "svg")
-                  (message "D2 error: %s" data))))
-           ;; No local D2 — open in web playground
-           (let* ((encoded (sysml2--d2-playground-encode d2-src))
+                  (message "D2 error: %s" data)))))
+         ;; No local D2 — fall back to SVG for types that support it
+         (if (memq type sysml2--diagram-svg-types)
+             (let ((svg-data (sysml2-svg-generate type scope)))
+               (sysml2--diagram-display-image svg-data "svg"))
+           ;; No SVG fallback — open in web playground
+           (let* ((d2-src (sysml2-d2-generate type scope))
+                  (encoded (sysml2--d2-playground-encode d2-src))
                   (url (concat "https://play.d2lang.com/?script=" encoded)))
              (browse-url url)
              (message "D2 not installed locally — opened in web playground")))))
@@ -463,24 +464,27 @@ Bound to `C-c C-d e'."
     (pcase sysml2-diagram-backend
       ('native
        (cond
-        ((memq dtype sysml2--diagram-svg-types)
-         (let ((svg-data (sysml2-svg-generate dtype scope)))
-           (with-temp-file filename
-             (set-buffer-multibyte nil)
-             (insert svg-data))
-           (message "Exported to %s" filename)))
         ((memq dtype sysml2--diagram-d2-types)
-         (let ((d2-src (sysml2-d2-generate dtype scope)))
-           (sysml2--diagram-invoke-d2
-            d2-src format
-            (lambda (success data)
-              (if success
-                  (progn
-                    (with-temp-file filename
-                      (set-buffer-multibyte nil)
-                      (insert data))
-                    (message "Exported to %s" filename))
-                (message "D2 error: %s" data))))))))
+         (if (sysml2--diagram-resolve-d2)
+             (let ((d2-src (sysml2-d2-generate dtype scope)))
+               (sysml2--diagram-invoke-d2
+                d2-src format
+                (lambda (success data)
+                  (if success
+                      (progn
+                        (with-temp-file filename
+                          (set-buffer-multibyte nil)
+                          (insert data))
+                        (message "Exported to %s" filename))
+                    (message "D2 error: %s" data)))))
+           ;; Fall back to SVG for types that support it
+           (if (memq dtype sysml2--diagram-svg-types)
+               (let ((svg-data (sysml2-svg-generate dtype scope)))
+                 (with-temp-file filename
+                   (set-buffer-multibyte nil)
+                   (insert svg-data))
+                 (message "Exported to %s (SVG fallback)" filename))
+             (user-error "D2 not installed; cannot export %s diagram" dtype))))))
       ('plantuml
        (let ((puml (sysml2-plantuml-generate dtype scope)))
          (sysml2--diagram-invoke-plantuml
@@ -520,16 +524,6 @@ Bound to `C-c C-d o'."
     (pcase sysml2-diagram-backend
       ('native
        (cond
-        ((memq dtype sysml2--diagram-svg-types)
-         (let ((svg (sysml2-svg-generate dtype scope))
-               (buf (get-buffer-create "*SysML2 SVG Source*")))
-           (with-current-buffer buf
-             (erase-buffer)
-             (insert svg)
-             (goto-char (point-min))
-             (when (fboundp 'nxml-mode)
-               (nxml-mode)))
-           (pop-to-buffer buf)))
         ((memq dtype sysml2--diagram-d2-types)
          (let ((d2-src (sysml2-d2-generate dtype scope))
                (buf (get-buffer-create "*SysML2 D2 Source*")))
@@ -578,9 +572,7 @@ No local D2 installation required."
                (url (concat "https://play.d2lang.com/?script=" encoded)))
           (browse-url url)
           (message "Opened diagram in D2 playground (read-only visualization)"))
-      (if (memq dtype sysml2--diagram-svg-types)
-          (message "SVG diagrams (tree, requirements) don't need D2 — they render directly")
-        (message "Unknown diagram type: %s" dtype)))))
+      (message "Unknown diagram type: %s" dtype))))
 
 ;; --- Synchronous Invocation ---
 
@@ -934,20 +926,21 @@ Supported PARAMS:
             (let ((format (or (file-name-extension out-file) "svg")))
               (pcase sysml2-diagram-backend
                 ('native
-                 (cond
-                  ((memq diagram-type sysml2--diagram-svg-types)
-                   (let ((svg (sysml2-svg-generate diagram-type scope)))
-                     (with-temp-file out-file
-                       (set-buffer-multibyte nil)
-                       (insert svg))
-                     out-file))
-                  ((memq diagram-type sysml2--diagram-d2-types)
-                   (let ((d2-src (sysml2-d2-generate diagram-type scope)))
-                     (let ((data (sysml2--diagram-invoke-d2-sync d2-src format)))
+                 (if (and (sysml2--diagram-resolve-d2)
+                          (memq diagram-type sysml2--diagram-d2-types))
+                     (let* ((d2-src (sysml2-d2-generate diagram-type scope))
+                            (data (sysml2--diagram-invoke-d2-sync d2-src format)))
                        (with-temp-file out-file
                          (set-buffer-multibyte nil)
                          (insert data))
-                       out-file)))))
+                       out-file)
+                   ;; Fall back to SVG
+                   (when (memq diagram-type sysml2--diagram-svg-types)
+                     (let ((svg (sysml2-svg-generate diagram-type scope)))
+                       (with-temp-file out-file
+                         (set-buffer-multibyte nil)
+                         (insert svg))
+                       out-file))))
                 ('plantuml
                  (let ((puml (sysml2-plantuml-generate diagram-type scope))
                        (result nil))
@@ -965,11 +958,10 @@ Supported PARAMS:
           ;; No output file — return source
           (pcase sysml2-diagram-backend
             ('native
-             (cond
-              ((memq diagram-type sysml2--diagram-svg-types)
-               (sysml2-svg-generate diagram-type scope))
-              ((memq diagram-type sysml2--diagram-d2-types)
-               (sysml2-d2-generate diagram-type scope))))
+             (if (memq diagram-type sysml2--diagram-d2-types)
+                 (sysml2-d2-generate diagram-type scope)
+               (when (memq diagram-type sysml2--diagram-svg-types)
+                 (sysml2-svg-generate diagram-type scope))))
             ('plantuml
              (sysml2-plantuml-generate diagram-type scope))))))))
 
