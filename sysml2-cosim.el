@@ -29,6 +29,7 @@
 ;;   `sysml2-cosim-results' -- Display simulation results
 ;;   `sysml2-cosim-verify-requirements' -- Verify requirements against results
 
+(require 'cl-lib)
 (require 'sysml2-vars)
 (require 'sysml2-lang)
 (require 'sysml2-fmi)

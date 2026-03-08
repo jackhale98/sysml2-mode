@@ -21,6 +21,7 @@
 
 ;;; Code:
 
+(require 'cl-lib)
 (require 'sysml2-lang)
 (require 'sysml2-vars)
 

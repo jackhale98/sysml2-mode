@@ -42,6 +42,7 @@
 ;;   `sysml2-diagram-preview-mode' -- Minor mode for auto-refresh
 ;;   `sysml2-diagram-view' -- Generate diagram from a view def's filter
 
+(require 'cl-lib)
 (require 'sysml2-vars)
 (require 'sysml2-lang)
 (require 'sysml2-model)

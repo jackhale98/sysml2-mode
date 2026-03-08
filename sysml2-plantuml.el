@@ -36,6 +36,7 @@
 ;;   `sysml2-plantuml-generate' -- Dispatcher by diagram type
 ;;   `sysml2-plantuml-detect-type-at-point' -- Auto-detect diagram type
 
+(require 'cl-lib)
 (require 'sysml2-lang)
 (require 'sysml2-navigation)
 

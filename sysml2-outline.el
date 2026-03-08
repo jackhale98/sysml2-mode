@@ -24,6 +24,7 @@
 ;;   `sysml2-outline-toggle' -- Toggle the outline side panel
 ;;   `sysml2-outline-refresh' -- Refresh the outline tree
 
+(require 'cl-lib)
 (require 'sysml2-vars)
 (require 'sysml2-lang)
 (require 'sysml2-navigation)
