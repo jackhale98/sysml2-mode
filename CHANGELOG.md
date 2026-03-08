@@ -30,9 +30,13 @@
 - Traceability: "Refined To" column in both interactive and Markdown export
   showing `#refinement dependency` relationships; requirement decomposition
   hierarchy with parent-child indentation; derivation chain tracking
-- 28 new tests: verification/allocation extraction, requirement IDs,
+- `sysml2-impact-analysis` command (`C-c C-i a` / `SPC m i a`): interactive
+  impact analysis at point showing upstream dependencies and downstream
+  dependents across compositions, specializations, connections, flows,
+  satisfy/verify, allocations, derivations, refinements, and requirements
+- 32 new tests: verification/allocation extraction, requirement IDs,
   hierarchical tree layout, view filter parsing, report enhancements,
-  analysis/constraint/refinement extraction and rendering
+  analysis/constraint/refinement extraction, impact analysis
 
 ### Fixed
 - Byte-compilation: added missing `(require 'cl-lib)` in 5 modules

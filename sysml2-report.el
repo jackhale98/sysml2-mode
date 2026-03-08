@@ -509,6 +509,235 @@ satisfy and verify relationships, and coverage status.  The buffer uses
     buf))
 
 ;; ---------------------------------------------------------------------------
+;; Impact analysis
+;; ---------------------------------------------------------------------------
+
+(declare-function sysml2-which-function "sysml2-navigation")
+
+(defun sysml2--impact-collect-links (element-name source-buf)
+  "Collect all upstream and downstream links for ELEMENT-NAME from SOURCE-BUF.
+Returns a plist (:upstream :downstream :total-up :total-down) where
+each direction is an alist of (CATEGORY . NAMES-LIST)."
+  (with-current-buffer source-buf
+    (let ((upstream nil) (downstream nil))
+      ;; --- Composition relationships ---
+      (let ((comps (sysml2--model-extract-usage-compositions)))
+        ;; Downstream: element is parent -> children depend on it
+        (dolist (c comps)
+          (when (string= (plist-get c :parent-type) element-name)
+            (push (plist-get c :child-type)
+                  (alist-get "Composes (children)" downstream nil nil #'string=))))
+        ;; Upstream: element is child -> it depends on parent
+        (dolist (c comps)
+          (when (string= (plist-get c :child-type) element-name)
+            (push (plist-get c :parent-type)
+                  (alist-get "Composed in (parent)" upstream nil nil #'string=)))))
+
+      ;; --- Specialization (supertype) ---
+      (let ((defs (sysml2--model-extract-part-defs)))
+        (dolist (d defs)
+          (let ((name (plist-get d :name))
+                (super (plist-get d :super)))
+            (when (and (string= name element-name) super)
+              (push super
+                    (alist-get "Specializes (supertype)" upstream nil nil #'string=)))
+            (when (and super (string= super element-name))
+              (push name
+                    (alist-get "Specialized by (subtypes)" downstream nil nil #'string=))))))
+
+      ;; --- Typed defs (port def, interface def, etc.) ---
+      (dolist (kw '("port def" "interface def" "flow def" "action def"
+                    "state def" "use case def" "calc def" "constraint def"
+                    "requirement def" "enum def"))
+        (let* ((kind (car (split-string kw)))
+               (defs (sysml2--model-extract-typed-defs kw kind)))
+          (dolist (d defs)
+            (let ((name (plist-get d :name))
+                  (super (plist-get d :super)))
+              (when (and (string= name element-name) super)
+                (push super
+                      (alist-get "Specializes (supertype)" upstream nil nil #'string=)))
+              (when (and super (string= super element-name))
+                (push name
+                      (alist-get "Specialized by (subtypes)" downstream nil nil #'string=)))))))
+
+      ;; --- Connections ---
+      (let ((conns (sysml2--model-extract-connections)))
+        (dolist (c conns)
+          (let ((src (plist-get c :source))
+                (tgt (plist-get c :target)))
+            ;; Normalize dot-paths: check if element appears in path
+            (when (or (string= src element-name)
+                      (string-prefix-p (concat element-name ".") src))
+              (push (or tgt "?")
+                    (alist-get "Connected to" downstream nil nil #'string=)))
+            (when (or (string= tgt element-name)
+                      (string-prefix-p (concat element-name ".") tgt))
+              (push (or src "?")
+                    (alist-get "Connected from" upstream nil nil #'string=))))))
+
+      ;; --- Flows ---
+      (let ((flows (sysml2--model-extract-flows)))
+        (dolist (f flows)
+          (let ((src (plist-get f :source))
+                (tgt (plist-get f :target)))
+            (when (or (string= src element-name)
+                      (string-prefix-p (concat element-name ".") src))
+              (push (or tgt "?")
+                    (alist-get "Flow to" downstream nil nil #'string=)))
+            (when (or (string= tgt element-name)
+                      (string-prefix-p (concat element-name ".") tgt))
+              (push (or src "?")
+                    (alist-get "Flow from" upstream nil nil #'string=))))))
+
+      ;; --- Satisfy relationships ---
+      (let ((sats (sysml2--model-extract-satisfactions)))
+        (dolist (s sats)
+          (let ((req (plist-get s :requirement))
+                (by (plist-get s :by)))
+            (when (string= req element-name)
+              (push by
+                    (alist-get "Satisfied by" downstream nil nil #'string=)))
+            (when (string= by element-name)
+              (push req
+                    (alist-get "Satisfies" upstream nil nil #'string=))))))
+
+      ;; --- Verify relationships ---
+      (let ((vers (sysml2--model-extract-verifications)))
+        (dolist (v vers)
+          (let ((req (plist-get v :requirement))
+                (by (plist-get v :by)))
+            (when (string= req element-name)
+              (push by
+                    (alist-get "Verified by" downstream nil nil #'string=)))
+            (when (string= by element-name)
+              (push req
+                    (alist-get "Verifies" upstream nil nil #'string=))))))
+
+      ;; --- Allocations ---
+      (let ((allocs (sysml2--model-extract-allocations)))
+        (dolist (a allocs)
+          (let ((src (plist-get a :source))
+                (tgt (plist-get a :target)))
+            (when (string= src element-name)
+              (push tgt
+                    (alist-get "Allocated to" downstream nil nil #'string=)))
+            (when (or (string= tgt element-name)
+                      (string-suffix-p (concat "." element-name) tgt))
+              (push src
+                    (alist-get "Allocated from" upstream nil nil #'string=))))))
+
+      ;; --- Derivations ---
+      (let ((derivs (sysml2--model-extract-derivations)))
+        (dolist (d derivs)
+          (let ((orig (replace-regexp-in-string "\\`.*[:.]" ""
+                                                (plist-get d :original)))
+                (derv (replace-regexp-in-string "\\`.*[:.]" ""
+                                                (plist-get d :derived))))
+            (when (string= orig element-name)
+              (push derv
+                    (alist-get "Derived to" downstream nil nil #'string=)))
+            (when (string= derv element-name)
+              (push orig
+                    (alist-get "Derived from" upstream nil nil #'string=))))))
+
+      ;; --- Refinements ---
+      (let ((refs (sysml2--model-extract-refinements)))
+        (dolist (r refs)
+          (let ((name (replace-regexp-in-string "\\`.*[:.]" ""
+                                                (plist-get r :name)))
+                (target (replace-regexp-in-string "\\`.*[:.]" ""
+                                                  (plist-get r :target))))
+            (when (string= name element-name)
+              (push target
+                    (alist-get "Refines" upstream nil nil #'string=)))
+            (when (string= target element-name)
+              (push name
+                    (alist-get "Refined by" downstream nil nil #'string=))))))
+
+      ;; --- Requirement children/parent ---
+      (let ((req-usages (sysml2--model-extract-requirement-usages)))
+        (dolist (r req-usages)
+          (when (string= (plist-get r :name) element-name)
+            (dolist (child (plist-get r :children))
+              (push (plist-get child :name)
+                    (alist-get "Sub-requirements" downstream nil nil #'string=))))
+          (dolist (child (plist-get r :children))
+            (when (string= (plist-get child :name) element-name)
+              (push (plist-get r :name)
+                    (alist-get "Parent requirement" upstream nil nil #'string=))))))
+
+      ;; --- Port usages (typed ports reference element as type) ---
+      (let ((ports (sysml2--model-extract-port-usages)))
+        (dolist (p ports)
+          (when (string= (plist-get p :type) element-name)
+            (push (plist-get p :name)
+                  (alist-get "Used as port type" downstream nil nil #'string=)))))
+
+      ;; De-duplicate all lists
+      (dolist (entry upstream)
+        (setcdr entry (delete-dups (cdr entry))))
+      (dolist (entry downstream)
+        (setcdr entry (delete-dups (cdr entry))))
+
+      ;; Count totals
+      (let ((total-up (apply #'+ (mapcar (lambda (e) (length (cdr e))) upstream)))
+            (total-down (apply #'+ (mapcar (lambda (e) (length (cdr e))) downstream))))
+        (list :upstream (sort upstream (lambda (a b) (string< (car a) (car b))))
+              :downstream (sort downstream (lambda (a b) (string< (car a) (car b))))
+              :total-up total-up
+              :total-down total-down)))))
+
+;;;###autoload
+(defun sysml2-impact-analysis ()
+  "Display an impact analysis for the definition at point.
+Shows all upstream dependencies (what this element depends on) and
+downstream dependents (what depends on this element) in a tree view."
+  (interactive)
+  (let* ((source-buf (current-buffer))
+         (element-name (sysml2-which-function))
+         (buf (get-buffer-create "*SysML2 Impact Analysis*")))
+    (unless element-name
+      (user-error "No definition found at point"))
+    (let ((links (sysml2--impact-collect-links element-name source-buf)))
+      (with-current-buffer buf
+        (let ((inhibit-read-only t))
+          (erase-buffer)
+          (insert (format "=== Impact Analysis: %s ===\n\n" element-name))
+          (let ((total-up (plist-get links :total-up))
+                (total-down (plist-get links :total-down)))
+            (insert (format "Total links: %d  (upstream: %d, downstream: %d)\n\n"
+                            (+ total-up total-down) total-up total-down)))
+          ;; Upstream
+          (insert "━━━ UPSTREAM (depends on) ━━━\n\n")
+          (let ((upstream (plist-get links :upstream)))
+            (if (null upstream)
+                (insert "  (none)\n\n")
+              (dolist (category upstream)
+                (let ((cat-name (car category))
+                      (items (cdr category)))
+                  (insert (format "  %s (%d):\n" cat-name (length items)))
+                  (dolist (item (sort (copy-sequence items) #'string<))
+                    (insert (format "    • %s\n" item)))
+                  (insert "\n")))))
+          ;; Downstream
+          (insert "━━━ DOWNSTREAM (depended on by) ━━━\n\n")
+          (let ((downstream (plist-get links :downstream)))
+            (if (null downstream)
+                (insert "  (none)\n\n")
+              (dolist (category downstream)
+                (let ((cat-name (car category))
+                      (items (cdr category)))
+                  (insert (format "  %s (%d):\n" cat-name (length items)))
+                  (dolist (item (sort (copy-sequence items) #'string<))
+                    (insert (format "    • %s\n" item)))
+                  (insert "\n"))))))
+        (goto-char (point-min))
+        (special-mode)))
+    (display-buffer buf)
+    buf))
+
+;; ---------------------------------------------------------------------------
 ;; Markdown export — section renderers
 ;; ---------------------------------------------------------------------------
 

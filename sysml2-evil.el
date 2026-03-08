@@ -81,6 +81,7 @@
 (declare-function sysml2-scaffold-calc-def "sysml2-completion")
 (declare-function sysml2-report-summary "sysml2-report")
 (declare-function sysml2-report-traceability "sysml2-report")
+(declare-function sysml2-impact-analysis "sysml2-report")
 (declare-function sysml2-report-export-markdown "sysml2-report")
 (declare-function sysml2-report-export "sysml2-report")
 
@@ -164,6 +165,7 @@
      "i"   '(:ignore t :which-key "inspect")
      "i s" '(sysml2-report-summary :which-key "model summary")
      "i t" '(sysml2-report-traceability :which-key "traceability matrix")
+     "i a" '(sysml2-impact-analysis :which-key "impact analysis")
      "i m" '(sysml2-report-export-markdown :which-key "export Markdown")
      "i e" '(sysml2-report-export :which-key "export (Pandoc)")
      ;; Model Scaffolding

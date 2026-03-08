@@ -742,5 +742,60 @@
       (should (string-match-p "Refined To" md))
       (should (string-match-p "engine" md)))))
 
+;; --- Impact Analysis ---
+
+(ert-deftest sysml2-test-impact-collect-composition ()
+  "Test that impact analysis finds composition links."
+  (with-temp-buffer
+    (insert "part def Vehicle {\n"
+            "    part engine : Engine;\n"
+            "    part trans : Transmission;\n"
+            "}\n"
+            "part def Engine;\n"
+            "part def Transmission;\n")
+    (sysml2-mode)
+    (let ((links (sysml2--impact-collect-links "Vehicle" (current-buffer))))
+      ;; Vehicle should have children downstream
+      (should (> (plist-get links :total-down) 0))
+      (let ((down (plist-get links :downstream)))
+        (should (assoc "Composes (children)" down))))))
+
+(ert-deftest sysml2-test-impact-collect-specialization ()
+  "Test that impact analysis finds specialization links."
+  (with-temp-buffer
+    (insert "part def PowerSource;\n"
+            "part def Engine :> PowerSource;\n"
+            "part def Motor :> PowerSource;\n")
+    (sysml2-mode)
+    (let ((links (sysml2--impact-collect-links "PowerSource" (current-buffer))))
+      ;; PowerSource should have subtypes downstream
+      (let ((down (plist-get links :downstream)))
+        (should (assoc "Specialized by (subtypes)" down))
+        (should (member "Engine"
+                        (cdr (assoc "Specialized by (subtypes)" down))))))))
+
+(ert-deftest sysml2-test-impact-collect-satisfy ()
+  "Test that impact analysis finds satisfy relationships."
+  (with-temp-buffer
+    (insert "requirement def MassReq;\n"
+            "requirement vehicleMassReq : MassReq;\n"
+            "satisfy vehicleMassReq by engine;\n")
+    (sysml2-mode)
+    (let ((links (sysml2--impact-collect-links "vehicleMassReq" (current-buffer))))
+      (let ((down (plist-get links :downstream)))
+        (should (assoc "Satisfied by" down))))))
+
+(ert-deftest sysml2-test-impact-analysis-annex-a ()
+  "Test impact analysis on annex-a Vehicle."
+  (with-temp-buffer
+    (insert-file-contents
+     (expand-file-name "test/fixtures/annex-a-simple-vehicle-model.sysml"
+                       (or (locate-dominating-file default-directory "test")
+                           default-directory)))
+    (sysml2-mode)
+    (let ((links (sysml2--impact-collect-links "Vehicle" (current-buffer))))
+      ;; Vehicle should have at least some downstream links (compositions)
+      (should (> (plist-get links :total-down) 0)))))
+
 (provide 'test-diagram)
 ;;; test-diagram.el ends here

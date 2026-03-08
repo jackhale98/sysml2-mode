@@ -231,6 +231,7 @@
     ;; Inspect / Report
     (define-key map (kbd "C-c C-i s") #'sysml2-report-summary)
     (define-key map (kbd "C-c C-i t") #'sysml2-report-traceability)
+    (define-key map (kbd "C-c C-i a") #'sysml2-impact-analysis)
     (define-key map (kbd "C-c C-i m") #'sysml2-report-export-markdown)
     (define-key map (kbd "C-c C-i e") #'sysml2-report-export)
     ;; Code folding

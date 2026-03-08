@@ -14,6 +14,7 @@ Provides syntax highlighting, indentation, completion, navigation, diagram gener
 - [Features](#features)
 - [Diagram Generation](#diagram-generation)
 - [Model Scaffolding](#model-scaffolding)
+- [Model Inspection](#model-inspection)
 - [FMI/FMU Integration](#fmifmu-integration)
 - [Co-Simulation](#co-simulation)
 - [Systems Modeling API](#systems-modeling-api)
@@ -290,6 +291,24 @@ Interactive commands to bootstrap common SysML v2 model structures. Each command
 | `C-c m u` | `sysml2-scaffold-use-case-def` | Use case def with subject, actors, includes |
 | `C-c m c` | `sysml2-scaffold-calc-def` | Calc def with in params and return value |
 
+## Model Inspection
+
+Interactive reporting and analysis commands for model understanding and ISO 13485 traceability.
+
+| Binding | Command | Description |
+|---------|---------|-------------|
+| `C-c C-i s` | `sysml2-report-summary` | Model statistics (definitions, usages, relationships, coverage) |
+| `C-c C-i t` | `sysml2-report-traceability` | Sortable traceability matrix (IDs, satisfy, verify, derive, refine) |
+| `C-c C-i a` | `sysml2-impact-analysis` | Upstream/downstream dependency analysis at point |
+| `C-c C-i m` | `sysml2-report-export-markdown` | Export model report as Markdown (13 sections) |
+| `C-c C-i e` | `sysml2-report-export` | Export via Pandoc (PDF/HTML/DOCX) |
+
+**Impact analysis** (`C-c C-i a`) shows all relationships for the definition at point:
+- **Upstream**: supertypes, parent compositions, connections from, flows from, satisfies, verifies, derived from, refines
+- **Downstream**: subtypes, child compositions, connections to, flows to, satisfied by, verified by, derived to, refined by, sub-requirements, port type usages
+
+**Markdown report sections**: Model Summary, Part Decomposition (BOM), Interface Table, Connection Matrix, Requirements Specification, Traceability Matrix, Allocation Matrix, State Machines, Action Flows, Calculations, Analysis Cases, Constraint Definitions, Enumerations.
+
 ## FMI/FMU Integration
 
 FMI 3.0 support for model exchange and co-simulation workflows.
@@ -517,6 +536,7 @@ Plus `gd` for goto-definition in normal state. Neither evil nor general.el is a 
 | **Inspect / Report** | |
 | `C-c C-i s` | `sysml2-report-summary` |
 | `C-c C-i t` | `sysml2-report-traceability` |
+| `C-c C-i a` | `sysml2-impact-analysis` |
 | `C-c C-i m` | `sysml2-report-export-markdown` |
 | `C-c C-i e` | `sysml2-report-export` |
 | **Code Folding** | |
@@ -578,7 +598,7 @@ sysml2-mode.el          Entry point, syntax table, keymap, mode definition
 
 ## Testing
 
-240 ERT tests across 16 test files:
+244 ERT tests across 16 test files:
 
 ```bash
 make test
