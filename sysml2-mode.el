@@ -89,6 +89,7 @@
 (require 'sysml2-evil)
 (require 'sysml2-outline)
 (require 'sysml2-report)
+(require 'sysml2-simulate)
 (require 'sysml2-eldoc)
 
 ;; --- Version ---
@@ -154,6 +155,11 @@
 (declare-function sysml2-insert-verify "sysml2-completion")
 (declare-function sysml2-insert-subject "sysml2-completion")
 (declare-function sysml2-diagram-open-in-playground "sysml2-diagram")
+(declare-function sysml2-simulate "sysml2-simulate")
+(declare-function sysml2-simulate-list "sysml2-simulate")
+(declare-function sysml2-simulate-eval "sysml2-simulate")
+(declare-function sysml2-simulate-state-machine "sysml2-simulate")
+(declare-function sysml2-simulate-action-flow "sysml2-simulate")
 (declare-function sysml2-scaffold "sysml2-completion")
 (declare-function sysml2-scaffold-model "sysml2-completion")
 (declare-function sysml2-scaffold-package "sysml2-completion")
@@ -228,6 +234,12 @@
     (define-key map (kbd "C-c C-s r") #'sysml2-cosim-run)
     (define-key map (kbd "C-c C-s p") #'sysml2-cosim-results)
     (define-key map (kbd "C-c C-s c") #'sysml2-cosim-verify-requirements)
+    ;; Simulation (sysml-lint simulate)
+    (define-key map (kbd "C-c C-x s") #'sysml2-simulate)
+    (define-key map (kbd "C-c C-x l") #'sysml2-simulate-list)
+    (define-key map (kbd "C-c C-x e") #'sysml2-simulate-eval)
+    (define-key map (kbd "C-c C-x m") #'sysml2-simulate-state-machine)
+    (define-key map (kbd "C-c C-x a") #'sysml2-simulate-action-flow)
     ;; Inspect / Report
     (define-key map (kbd "C-c C-i s") #'sysml2-report-summary)
     (define-key map (kbd "C-c C-i t") #'sysml2-report-traceability)

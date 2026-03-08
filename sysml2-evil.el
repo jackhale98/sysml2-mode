@@ -84,6 +84,11 @@
 (declare-function sysml2-impact-analysis "sysml2-report")
 (declare-function sysml2-report-export-markdown "sysml2-report")
 (declare-function sysml2-report-export "sysml2-report")
+(declare-function sysml2-simulate "sysml2-simulate")
+(declare-function sysml2-simulate-list "sysml2-simulate")
+(declare-function sysml2-simulate-eval "sysml2-simulate")
+(declare-function sysml2-simulate-state-machine "sysml2-simulate")
+(declare-function sysml2-simulate-action-flow "sysml2-simulate")
 
 (defvar sysml2-mode-map)
 
@@ -151,16 +156,23 @@
      "l"   '(:ignore t :which-key "lsp")
      "l s" '(sysml2-lsp-ensure :which-key "start")
      "l r" '(sysml2-lsp-restart :which-key "restart")
-     ;; Simulation / FMI
-     "s"   '(:ignore t :which-key "simulation")
+     ;; FMI / Co-simulation
+     "s"   '(:ignore t :which-key "simulation/fmi")
      "s i" '(sysml2-fmi-inspect-fmu :which-key "inspect FMU")
      "s e" '(sysml2-fmi-extract-interfaces :which-key "extract interfaces")
      "s m" '(sysml2-fmi-generate-modelica :which-key "generate Modelica")
      "s v" '(sysml2-fmi-validate-interfaces :which-key "validate interfaces")
      "s g" '(sysml2-cosim-generate-ssp :which-key "generate SSP")
-     "s r" '(sysml2-cosim-run :which-key "run simulation")
+     "s r" '(sysml2-cosim-run :which-key "run co-simulation")
      "s p" '(sysml2-cosim-results :which-key "plot results")
      "s c" '(sysml2-cosim-verify-requirements :which-key "verify requirements")
+     ;; SysML Simulation (sysml-lint simulate)
+     "x"   '(:ignore t :which-key "simulate")
+     "x s" '(sysml2-simulate :which-key "simulate menu")
+     "x l" '(sysml2-simulate-list :which-key "list constructs")
+     "x e" '(sysml2-simulate-eval :which-key "eval constraint/calc")
+     "x m" '(sysml2-simulate-state-machine :which-key "state machine")
+     "x a" '(sysml2-simulate-action-flow :which-key "action flow")
      ;; Inspect / Report
      "i"   '(:ignore t :which-key "inspect")
      "i s" '(sysml2-report-summary :which-key "model summary")
