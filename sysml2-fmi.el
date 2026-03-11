@@ -18,9 +18,9 @@
 ;;   - Modelica stub generation (partial model from SysML part def)
 ;;   - Interface validation (compare FMU against SysML port defs)
 ;;
-;; When `sysml2-cli' is available on exec-path, interface extraction,
+;; When the sysml CLI is available on exec-path, interface extraction,
 ;; Modelica generation, and SSP export use the tree-sitter AST via
-;; sysml2-cli instead of regex-based extraction.  FMU inspection and
+;; the CLI instead of regex-based extraction.  FMU inspection and
 ;; display remain in Emacs (they are UI-only operations).
 
 ;;; Code:
@@ -46,24 +46,28 @@
 
 (require 'sysml2-model)
 
-;; --- sysml2-cli backend ---
+;; --- sysml CLI backend ---
+
+(defun sysml2--cli-exe-name ()
+  "Return the CLI executable name.
+Uses `sysml2-cli-executable' with fallbacks."
+  (or (bound-and-true-p sysml2-cli-executable)
+      (bound-and-true-p sysml2-simulate-executable)
+      "sysml"))
 
 (defun sysml2--cli-available-p ()
-  "Return non-nil if sysml2-cli is available.
+  "Return non-nil if the sysml CLI is available.
 Uses platform-aware executable resolution."
-  (sysml2--find-executable
-   (or (bound-and-true-p sysml2-simulate-executable) "sysml2-cli")))
+  (sysml2--find-executable (sysml2--cli-exe-name)))
 
 (defun sysml2--cli-executable ()
-  "Return the resolved sysml2-cli executable path.
+  "Return the resolved sysml CLI executable path.
 Uses platform-aware executable resolution."
-  (or (sysml2--find-executable
-       (or (bound-and-true-p sysml2-simulate-executable) "sysml2-cli"))
-      (sysml2--platform-exe-name
-       (or (bound-and-true-p sysml2-simulate-executable) "sysml2-cli"))))
+  (or (sysml2--find-executable (sysml2--cli-exe-name))
+      (sysml2--platform-exe-name (sysml2--cli-exe-name))))
 
 (defun sysml2--cli-call-json (&rest args)
-  "Call sysml2-cli with ARGS and parse JSON output.
+  "Call sysml CLI with ARGS and parse JSON output.
 Prepends `-f json' to ARGS.  Returns parsed JSON as plists/lists."
   (let* ((exe (sysml2--cli-executable))
          (all-args (append (list "-f" "json") args))
@@ -74,7 +78,7 @@ Prepends `-f json' to ARGS.  Returns parsed JSON as plists/lists."
       (json-parse-string output :object-type 'plist :array-type 'list))))
 
 (defun sysml2--cli-call-text (&rest args)
-  "Call sysml2-cli with ARGS and return text output."
+  "Call sysml CLI with ARGS and return text output."
   (let ((exe (sysml2--cli-executable)))
     (with-temp-buffer
       (apply #'call-process exe nil t nil args)
@@ -313,13 +317,13 @@ Returns list of plists with `:name', `:direction', `:type'."
 
 (defun sysml2--fmi-extract-part-interface (part-def-name &optional buffer)
   "Extract FMI interface contract for PART-DEF-NAME from BUFFER.
-When sysml2-cli is available, uses tree-sitter AST extraction.
+When the sysml CLI is available, uses tree-sitter AST extraction.
 Otherwise falls back to regex-based extraction.
 Returns list of plists with `:name', `:direction', `:sysml-type',
 `:fmi-type', `:causality', `:variability', `:source-port'."
   (let ((file (buffer-file-name (or buffer (current-buffer)))))
     (if (and file (sysml2--cli-available-p))
-        ;; Tree-sitter backend via sysml2-cli
+        ;; Tree-sitter backend via sysml CLI
         (let* ((result (sysml2--cli-call-json
                         "export" "interfaces" file
                         "--part" part-def-name))
@@ -337,7 +341,7 @@ Returns list of plists with `:name', `:direction', `:sysml-type',
       (sysml2--fmi-extract-part-interface--regex part-def-name buffer))))
 
 (defun sysml2--fmi-extract-part-interface--regex (part-def-name &optional buffer)
-  "Regex-based FMI interface extraction (fallback when sysml2-cli unavailable)."
+  "Regex-based FMI interface extraction (fallback when sysml CLI unavailable)."
   (with-current-buffer (or buffer (current-buffer))
     (let ((bounds (sysml2--model-find-def-bounds "part def" part-def-name)))
       (unless bounds
@@ -485,7 +489,7 @@ ATTRIBUTES is a list of typed attribute plists."
 ;;;###autoload
 (defun sysml2-fmi-generate-modelica (&optional part-def-name buffer)
   "Generate a Modelica stub for PART-DEF-NAME from BUFFER.
-When sysml2-cli is available, uses tree-sitter AST extraction.
+When the sysml CLI is available, uses tree-sitter AST extraction.
 Interactive: prompts for part def name (with completion) and output path."
   (interactive)
   (let* ((buf (or buffer (current-buffer)))
@@ -525,7 +529,7 @@ Interactive: prompts for part def name (with completion) and output path."
 
 (defun sysml2--fmi-list-exportable-parts (&optional buffer)
   "List exportable part defs in BUFFER.
-When sysml2-cli is available, uses tree-sitter AST.
+When the sysml CLI is available, uses tree-sitter AST.
 Otherwise extracts part defs via regex.
 Returns list of plists with `:name', `:ports', `:attributes', `:connections'."
   (let ((file (buffer-file-name (or buffer (current-buffer)))))

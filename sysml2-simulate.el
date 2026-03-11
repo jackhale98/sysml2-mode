@@ -1,4 +1,4 @@
-;;; sysml2-simulate.el --- SysML v2 simulation via sysml2-cli -*- lexical-binding: t; -*-
+;;; sysml2-simulate.el --- SysML v2 simulation via sysml CLI -*- lexical-binding: t; -*-
 
 ;; Copyright (C) 2026 sysml2-mode contributors
 ;; Author: sysml2-mode contributors
@@ -13,7 +13,7 @@
 ;;; Commentary:
 
 ;; Interactive simulation support for SysML v2 models using the
-;; sysml2-cli simulation engine.  Provides commands for:
+;; sysml CLI simulation engine.  Provides commands for:
 ;;
 ;;   - Listing simulatable constructs in the current buffer
 ;;   - Evaluating constraints and calculations with variable bindings
@@ -27,7 +27,7 @@
 ;; All commands work on the current buffer's file and display results
 ;; in a dedicated *SysML Simulation* buffer.
 ;;
-;; Requires `sysml2-cli' (v0.2.0+) on exec-path.
+;; Requires `sysml' CLI (v0.3.0+) on exec-path.
 
 ;;; Code:
 
@@ -43,9 +43,13 @@
 ;;   `sysml2-simulate-action-flow'   -- Execute an action flow
 ;;   `sysml2-simulate'        -- Dispatch to simulation command
 
-(defcustom sysml2-simulate-executable "sysml2-cli"
-  "Path to the sysml2-cli executable."
-  :type 'string
+(defcustom sysml2-simulate-executable nil
+  "Path to the sysml CLI executable for simulation.
+When nil, uses `sysml2-cli-executable' (which defaults to \"sysml\").
+This variable is kept for backward compatibility; prefer setting
+`sysml2-cli-executable' instead."
+  :type '(choice (const :tag "Use sysml2-cli-executable" nil)
+                 (string :tag "Executable path"))
   :group 'sysml2)
 
 (defcustom sysml2-simulate-max-steps 100
@@ -64,17 +68,21 @@
 
 ;; --- Internal helpers ---
 
+(defun sysml2-simulate--exe-name ()
+  "Return the CLI executable name for simulation."
+  (or sysml2-simulate-executable sysml2-cli-executable "sysml"))
+
 (defun sysml2-simulate--check-executable ()
-  "Check that sysml2-cli is available.  Signal an error if not found."
-  (unless (sysml2--find-executable sysml2-simulate-executable)
-    (user-error "Cannot find `%s' on exec-path.  Install from https://github.com/jackhale98/sysml2-cli"
-                sysml2-simulate-executable)))
+  "Check that the sysml CLI is available.  Signal an error if not found."
+  (unless (sysml2--find-executable (sysml2-simulate--exe-name))
+    (user-error "Cannot find `%s' on exec-path.  Install from https://github.com/jackhale98/sysml-cli"
+                (sysml2-simulate--exe-name))))
 
 (defun sysml2-simulate--resolve-executable ()
-  "Return the full path to sysml2-cli.
+  "Return the full path to the sysml CLI.
 Uses platform-aware executable resolution."
-  (or (sysml2--find-executable sysml2-simulate-executable)
-      (sysml2--platform-exe-name sysml2-simulate-executable)))
+  (or (sysml2--find-executable (sysml2-simulate--exe-name))
+      (sysml2--platform-exe-name (sysml2-simulate--exe-name))))
 
 (defun sysml2-simulate--ensure-file ()
   "Return the current buffer's file name.  Signal error if unsaved."
@@ -115,11 +123,11 @@ Captures both stdout and stderr for complete diagnostics."
         (insert (propertize (concat "=== " title " ===\n\n")
                             'face 'bold))
         (if (string-empty-p (string-trim output))
-            (insert (propertize "No output from sysml2-cli.\n" 'face 'warning)
+            (insert (propertize "No output from sysml CLI.\n" 'face 'warning)
                     "\nPossible causes:\n"
                     "  - The definition may be a forward declaration (no body)\n"
                     "  - The construct name may not match any definition\n"
-                    "  - sysml2-cli may have crashed (check *Messages*)\n")
+                    "  - The sysml CLI may have crashed (check *Messages*)\n")
           (insert output)
           ;; Add diagnostic hints for common issues
           (goto-char (point-min))

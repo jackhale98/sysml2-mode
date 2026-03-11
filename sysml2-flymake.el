@@ -392,11 +392,11 @@ Skips package declarations."
                 diagnostics))))
     diagnostics))
 
-;; --- Flymake backend ---
+;; --- In-process Flymake backend ---
 
 (defun sysml2--flymake-backend (report-fn &rest _args)
   "Flymake backend for SysML v2 syntax checking.
-Calls REPORT-FN with collected diagnostics from all checks."
+Calls REPORT-FN with collected diagnostics from all in-process checks."
   (let ((diagnostics (append (sysml2--check-unmatched-delimiters)
                              (sysml2--check-unknown-keywords)
                              (sysml2--check-missing-semicolons)
@@ -406,19 +406,124 @@ Calls REPORT-FN with collected diagnostics from all checks."
                              (sysml2--check-library-references))))
     (funcall report-fn diagnostics)))
 
+;; --- External CLI Flymake backend ---
+
+(defvar-local sysml2--flymake-cli-process nil
+  "Current `sysml lint' process for Flymake.")
+
+(defun sysml2-cli--flymake-backend (report-fn &rest _args)
+  "Flymake backend using `sysml lint' for validation.
+Runs `sysml lint -f json' asynchronously and parses JSON diagnostics.
+Checks: syntax (E001), duplicates (E002), unused (W001),
+unsatisfied (W002), unverified (W003), unresolved (W004/W005),
+port-types (W006), constraints (W007), calculations (W008).
+
+Falls back silently if the sysml CLI is not available.
+Calls REPORT-FN with the collected diagnostics."
+  (let* ((exe-name (or (bound-and-true-p sysml2-cli-executable) "sysml"))
+         (exe (sysml2--find-executable exe-name)))
+    (unless exe
+      (funcall report-fn nil)
+      (cl-return-from sysml2-cli--flymake-backend))
+    ;; Kill any in-progress process
+    (when (and sysml2--flymake-cli-process
+               (process-live-p sysml2--flymake-cli-process))
+      (kill-process sysml2--flymake-cli-process))
+    (let* ((source-buf (current-buffer))
+           (file buffer-file-name)
+           (tmp (when file
+                  (make-temp-file "sysml2-lint-" nil ".sysml"))))
+      (unless file
+        (funcall report-fn nil)
+        (cl-return-from sysml2-cli--flymake-backend))
+      ;; Write current buffer content to temp file for unsaved changes
+      (write-region (point-min) (point-max) tmp nil 'nomessage)
+      (let* ((output-buf (generate-new-buffer " *sysml-lint*"))
+             (proc (start-process "sysml-lint" output-buf
+                                  exe "-f" "json" "lint" tmp)))
+        (setq sysml2--flymake-cli-process proc)
+        (set-process-sentinel
+         proc
+         (lambda (p _event)
+           (unwind-protect
+               (when (and (eq (process-status p) 'exit)
+                          (buffer-live-p source-buf))
+                 (with-current-buffer source-buf
+                   (let ((diagnostics
+                          (sysml2--flymake-parse-cli-json
+                           output-buf source-buf file tmp)))
+                     (funcall report-fn diagnostics))))
+             (ignore-errors (delete-file tmp))
+             (when (buffer-live-p output-buf)
+               (kill-buffer output-buf)))))))))
+
+(defun sysml2--flymake-parse-cli-json (output-buf source-buf
+                                                   _orig-file _tmp-file)
+  "Parse JSON diagnostics from OUTPUT-BUF for SOURCE-BUF.
+_ORIG-FILE is the real file path, _TMP-FILE is the temp file used.
+Returns a list of Flymake diagnostics."
+  (let ((diagnostics nil))
+    (with-current-buffer output-buf
+      (goto-char (point-min))
+      (condition-case nil
+          (let ((json-data (json-parse-buffer
+                            :object-type 'alist :array-type 'list)))
+            (dolist (item (if (listp json-data) json-data nil))
+              (let* ((msg (alist-get 'message item))
+                     (code (alist-get 'code item))
+                     (severity-str (alist-get 'severity item))
+                     (span (alist-get 'span item))
+                     (start-row (alist-get 'start_row span))
+                     (start-col (alist-get 'start_col span))
+                     (end-row (alist-get 'end_row span))
+                     (end-col (alist-get 'end_col span))
+                     (severity (pcase severity-str
+                                 ("error" :error)
+                                 ("warning" :warning)
+                                 (_ :note)))
+                     (label (if code (format "[%s] %s" code msg) msg)))
+                (with-current-buffer source-buf
+                  (save-excursion
+                    (let ((beg (sysml2--flymake-row-col-to-pos
+                                start-row start-col))
+                          (end (sysml2--flymake-row-col-to-pos
+                                end-row end-col)))
+                      ;; Ensure at least 1 character span
+                      (when (= beg end)
+                        (setq end (min (1+ beg) (point-max))))
+                      (push (flymake-make-diagnostic
+                             source-buf beg end severity label)
+                            diagnostics)))))))
+        (error nil)))
+    (nreverse diagnostics)))
+
+(defun sysml2--flymake-row-col-to-pos (row col)
+  "Convert 0-based ROW and COL to a buffer position."
+  (save-excursion
+    (goto-char (point-min))
+    (forward-line (or row 0))
+    (let ((line-end (line-end-position)))
+      (forward-char (min (or col 0) (- line-end (point))))
+      (point))))
+
 ;; --- Setup ---
 
 (defun sysml2-flymake-setup ()
   "Set up the Flymake backend for the current SysML v2 buffer.
-Registers the regexp-based backend unconditionally, and also
-registers the tree-sitter backend when tree-sitter is available
-and the `sysml' grammar is installed."
+Registers the in-process regexp-based backend unconditionally,
+the tree-sitter backend when available, and the external `sysml lint'
+backend when the CLI is installed."
   (add-hook 'flymake-diagnostic-functions #'sysml2--flymake-backend nil t)
   (when (and (fboundp 'treesit-available-p)
              (treesit-available-p)
              (treesit-ready-p 'sysml t))
     (add-hook 'flymake-diagnostic-functions
-              #'sysml2-ts--flymake-backend nil t)))
+              #'sysml2-ts--flymake-backend nil t))
+  ;; External CLI backend (runs async, provides deeper analysis)
+  (when (sysml2--find-executable
+         (or (bound-and-true-p sysml2-cli-executable) "sysml"))
+    (add-hook 'flymake-diagnostic-functions
+              #'sysml2-cli--flymake-backend nil t)))
 
 (provide 'sysml2-flymake)
 ;;; sysml2-flymake.el ends here

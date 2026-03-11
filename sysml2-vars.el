@@ -305,6 +305,16 @@ These override the built-in default mapping."
   :type '(choice (const "csv") (const "mat"))
   :group 'sysml2-fmi)
 
+;; --- SysML CLI ---
+
+(defcustom sysml2-cli-executable "sysml"
+  "Path to the sysml CLI executable.
+The sysml CLI provides lint, format, simulate, diagram, export,
+and many other commands.  When nil, searches `exec-path' for `sysml'."
+  :type '(choice (const :tag "Search exec-path" nil)
+                 (string :tag "Executable name or path"))
+  :group 'sysml2)
+
 ;; --- Report / Export ---
 
 (defcustom sysml2-report-pandoc-executable nil

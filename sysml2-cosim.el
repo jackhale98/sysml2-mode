@@ -159,7 +159,7 @@ PowerShell on Windows)."
 ;;;###autoload
 (defun sysml2-cosim-generate-ssp (&optional buffer)
   "Generate SSP from SysML connections in BUFFER.
-When sysml2-cli is available, uses tree-sitter AST extraction.
+When the sysml CLI is available, uses tree-sitter AST extraction.
 Interactive: prompts for output path."
   (interactive)
   (let* ((buf (or buffer (current-buffer)))
