@@ -171,5 +171,72 @@
     ;; Should indent inside the parens
     (should (> indent 0))))
 
+;; --- Case 16: State body with entry/do/exit ---
+
+(ert-deftest sysml2-test-indent-state-body ()
+  "Test indentation inside state body with entry/do/exit."
+  (should (= 4 (sysml2-test--indent-line-at
+                 "state def Running {\nentry action init;\ndo providePower;\nexit applyBrake;\n}" 2)))
+  (should (= 4 (sysml2-test--indent-line-at
+                 "state def Running {\nentry action init;\ndo providePower;\nexit applyBrake;\n}" 3)))
+  (should (= 4 (sysml2-test--indent-line-at
+                 "state def Running {\nentry action init;\ndo providePower;\nexit applyBrake;\n}" 4))))
+
+;; --- Case 17: Enumeration body ---
+
+(ert-deftest sysml2-test-indent-enum-body ()
+  "Test indentation inside enumeration body."
+  (should (= 4 (sysml2-test--indent-line-at
+                 "enum def Color {\nenum red;\nenum green;\nenum blue;\n}" 2)))
+  (should (= 4 (sysml2-test--indent-line-at
+                 "enum def Color {\nenum red;\nenum green;\nenum blue;\n}" 3))))
+
+;; --- Case 18: Use case with actors and objective ---
+
+(ert-deftest sysml2-test-indent-use-case ()
+  "Test indentation inside use case definition."
+  (should (= 4 (sysml2-test--indent-line-at
+                 "use case def Transport {\nsubject vehicle : Vehicle;\nactor driver;\nobjective {\nrequire transportReqs;\n}\n}" 2)))
+  (should (= 4 (sysml2-test--indent-line-at
+                 "use case def Transport {\nsubject vehicle : Vehicle;\nactor driver;\nobjective {\nrequire transportReqs;\n}\n}" 3)))
+  ;; Objective body should be indented
+  (should (= 8 (sysml2-test--indent-line-at
+                 "use case def Transport {\nsubject vehicle : Vehicle;\nactor driver;\nobjective {\nrequire transportReqs;\n}\n}" 5))))
+
+;; --- Case 19: Verification case ---
+
+(ert-deftest sysml2-test-indent-verification ()
+  "Test indentation inside verification case."
+  (should (= 4 (sysml2-test--indent-line-at
+                 "verification def MassTest {\nsubject vehicle;\nobjective {\nverify massReq;\n}\n}" 2)))
+  (should (= 8 (sysml2-test--indent-line-at
+                 "verification def MassTest {\nsubject vehicle;\nobjective {\nverify massReq;\n}\n}" 4))))
+
+;; --- Case 20: Connection with end keywords ---
+
+(ert-deftest sysml2-test-indent-connection-ends ()
+  "Test indentation of end keywords inside connection."
+  (should (= 8 (sysml2-test--indent-line-at
+                 "part def Sys {\nconnection FuelLine {\nend = tank.fuelOut;\nend = engine.fuelIn;\n}\n}" 3)))
+  (should (= 8 (sysml2-test--indent-line-at
+                 "part def Sys {\nconnection FuelLine {\nend = tank.fuelOut;\nend = engine.fuelIn;\n}\n}" 4))))
+
+;; --- Case 21: Idempotent re-indent of annex-a patterns ---
+
+(ert-deftest sysml2-test-indent-idempotent-nested ()
+  "Test that correctly-indented nested code is idempotent."
+  (let* ((correct (concat "package Foo {\n"
+                          "    part def Vehicle {\n"
+                          "        attribute mass;\n"
+                          "        port fuelPort;\n"
+                          "        exhibit state vehicleStates {\n"
+                          "            state off;\n"
+                          "            state on;\n"
+                          "        }\n"
+                          "    }\n"
+                          "}"))
+         (result (sysml2-test--indent-string correct)))
+    (should (string= correct result))))
+
 (provide 'test-indent)
 ;;; test-indent.el ends here

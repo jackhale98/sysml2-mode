@@ -219,33 +219,109 @@
 
   (defvar sysml2-ts--indent-rules
     `((sysml
-       ;; Closing delimiters align with parent
+       ;; Closing delimiters align with opening line
        ((node-is "}") parent-bol 0)
        ((node-is "]") parent-bol 0)
        ((node-is ")") parent-bol 0)
-       ;; Top-level
+
+       ;; Top-level: no indentation
        ((parent-is "source_file") column-0 0)
-       ;; Body blocks
+
+       ;; ── Body blocks (all braced containers) ──
+       ;; These 6 node types are the ONLY brace-delimited body nodes in
+       ;; the grammar.  Every definition and usage that has a `{...}` body
+       ;; uses one of these, so these rules cover ~95% of indentation.
        ((parent-is "package_body") parent-bol ,sysml2-indent-offset)
        ((parent-is "definition_body") parent-bol ,sysml2-indent-offset)
        ((parent-is "enumeration_body") parent-bol ,sysml2-indent-offset)
        ((parent-is "state_body") parent-bol ,sysml2-indent-offset)
        ((parent-is "requirement_body") parent-bol ,sysml2-indent-offset)
        ((parent-is "constraint_body") parent-bol ,sysml2-indent-offset)
-       ;; Connection/flow/allocation clauses indent their sub-parts
+
+       ;; ── Multi-line statements (no braces, but children span lines) ──
+       ;; Transitions: `transition NAME first X accept Y if Z do W then X;`
+       ((parent-is "transition_statement") parent-bol ,sysml2-indent-offset)
+       ((parent-is "succession_statement") parent-bol ,sysml2-indent-offset)
+       ((parent-is "then_succession") parent-bol ,sysml2-indent-offset)
+
+       ;; Connection/flow/allocation: `end = ...; end = ...;`
        ((parent-is "connection_usage") parent-bol ,sysml2-indent-offset)
        ((parent-is "flow_usage") parent-bol ,sysml2-indent-offset)
        ((parent-is "allocation_usage") parent-bol ,sysml2-indent-offset)
+       ((parent-is "interface_usage") parent-bol ,sysml2-indent-offset)
+       ((parent-is "binding_usage") parent-bol ,sysml2-indent-offset)
+
+       ;; Satisfy/verify/assert statements
        ((parent-is "satisfy_statement") parent-bol ,sysml2-indent-offset)
+       ((parent-is "verify_statement") parent-bol ,sysml2-indent-offset)
        ((parent-is "bind_statement") parent-bol ,sysml2-indent-offset)
-       ;; Transition and succession
-       ((parent-is "transition_statement") parent-bol ,sysml2-indent-offset)
-       ((parent-is "succession_statement") parent-bol ,sysml2-indent-offset)
-       ;; Action/state usages with bodies
+       ((parent-is "assert_statement") parent-bol ,sysml2-indent-offset)
+
+       ;; Control flow actions
+       ((parent-is "if_action") parent-bol ,sysml2-indent-offset)
+       ((parent-is "while_action") parent-bol ,sysml2-indent-offset)
+       ((parent-is "for_action") parent-bol ,sysml2-indent-offset)
+       ((parent-is "loop_action") parent-bol ,sysml2-indent-offset)
+       ((parent-is "assign_action") parent-bol ,sysml2-indent-offset)
+
+       ;; Fork/join/merge/decide nodes
+       ((parent-is "fork_node") parent-bol ,sysml2-indent-offset)
+       ((parent-is "join_node") parent-bol ,sysml2-indent-offset)
+       ((parent-is "merge_node") parent-bol ,sysml2-indent-offset)
+       ((parent-is "decide_node") parent-bol ,sysml2-indent-offset)
+
+       ;; State entry/do/exit actions
+       ((parent-is "entry_action") parent-bol ,sysml2-indent-offset)
+       ((parent-is "do_action") parent-bol ,sysml2-indent-offset)
+       ((parent-is "exit_action") parent-bol ,sysml2-indent-offset)
+
+       ;; Perform/exhibit/include statements
+       ((parent-is "perform_statement") parent-bol ,sysml2-indent-offset)
+       ((parent-is "exhibit_statement") parent-bol ,sysml2-indent-offset)
+       ((parent-is "include_statement") parent-bol ,sysml2-indent-offset)
+
+       ;; Metadata annotations
+       ((parent-is "metadata_usage") parent-bol ,sysml2-indent-offset)
+       ((parent-is "metadata_annotation_list") parent-bol ,sysml2-indent-offset)
+
+       ;; ── Parenthesized expressions (multi-line argument lists) ──
+       ((parent-is "paren_expression") parent-bol ,sysml2-indent-offset)
+       ((parent-is "invocation_expression") parent-bol ,sysml2-indent-offset)
+
+       ;; ── Usage types with potential multi-line content ──
        ((parent-is "action_usage") parent-bol ,sysml2-indent-offset)
        ((parent-is "state_usage") parent-bol ,sysml2-indent-offset)
-       ;; Fallback
-       (no-node parent-bol ,sysml2-indent-offset)))
+       ((parent-is "part_usage") parent-bol ,sysml2-indent-offset)
+       ((parent-is "port_usage") parent-bol ,sysml2-indent-offset)
+       ((parent-is "requirement_usage") parent-bol ,sysml2-indent-offset)
+       ((parent-is "constraint_usage") parent-bol ,sysml2-indent-offset)
+       ((parent-is "calc_usage") parent-bol ,sysml2-indent-offset)
+       ((parent-is "use_case_usage") parent-bol ,sysml2-indent-offset)
+       ((parent-is "analysis_usage") parent-bol ,sysml2-indent-offset)
+       ((parent-is "verification_usage") parent-bol ,sysml2-indent-offset)
+       ((parent-is "view_usage") parent-bol ,sysml2-indent-offset)
+       ((parent-is "concern_usage") parent-bol ,sysml2-indent-offset)
+       ((parent-is "item_usage") parent-bol ,sysml2-indent-offset)
+       ((parent-is "attribute_usage") parent-bol ,sysml2-indent-offset)
+       ((parent-is "occurrence_usage") parent-bol ,sysml2-indent-offset)
+       ((parent-is "snapshot_usage") parent-bol ,sysml2-indent-offset)
+       ((parent-is "timeslice_usage") parent-bol ,sysml2-indent-offset)
+       ((parent-is "ref_usage") parent-bol ,sysml2-indent-offset)
+
+       ;; ── Definitions with multi-line headers ──
+       ;; (rare, but e.g. `part def Vehicle :> Base` spanning lines)
+       ((parent-is "part_definition") parent-bol ,sysml2-indent-offset)
+       ((parent-is "action_definition") parent-bol ,sysml2-indent-offset)
+       ((parent-is "state_definition") parent-bol ,sysml2-indent-offset)
+       ((parent-is "requirement_definition") parent-bol ,sysml2-indent-offset)
+       ((parent-is "use_case_definition") parent-bol ,sysml2-indent-offset)
+       ((parent-is "verification_case_definition") parent-bol ,sysml2-indent-offset)
+       ((parent-is "analysis_case_definition") parent-bol ,sysml2-indent-offset)
+
+       ;; ── Catch-all: same indentation as parent ──
+       ;; This avoids spurious indentation for nodes we haven't matched.
+       (no-node parent-bol 0)
+       (catch-all parent-bol 0)))
     "Tree-sitter indentation rules for SysML v2.")
 
   ;; --- Navigation ---

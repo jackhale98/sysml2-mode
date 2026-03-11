@@ -411,12 +411,23 @@ Calls REPORT-FN with collected diagnostics from all in-process checks."
 (defvar-local sysml2--flymake-cli-process nil
   "Current `sysml lint' process for Flymake.")
 
+(defconst sysml2--flymake-cli-only-codes '("W004" "W005" "W006" "W007" "W008")
+  "Diagnostic codes that only the CLI can produce.
+These require cross-file import resolution or type analysis:
+  W004 — Unresolved type reference
+  W005 — Unresolved target reference
+  W006 — Port type mismatch (needs type resolution)
+  W007 — Empty constraint body
+  W008 — Calc missing return
+The in-process backends already handle syntax errors, duplicates,
+unsatisfied/unverified requirements, and unused definitions.")
+
 (defun sysml2-cli--flymake-backend (report-fn &rest _args)
-  "Flymake backend using `sysml lint' for validation.
-Runs `sysml lint -f json' asynchronously and parses JSON diagnostics.
-Checks: syntax (E001), duplicates (E002), unused (W001),
-unsatisfied (W002), unverified (W003), unresolved (W004/W005),
-port-types (W006), constraints (W007), calculations (W008).
+  "Flymake backend using `sysml lint' for cross-file validation.
+Runs `sysml lint -f json' asynchronously and filters results to only
+report diagnostics that require cross-file analysis (W004-W008).
+Syntax errors, duplicates, and requirement checks are already
+handled by the in-process and tree-sitter backends.
 
 Falls back silently if the sysml CLI is not available.
 Calls REPORT-FN with the collected diagnostics."
@@ -469,31 +480,34 @@ Returns a list of Flymake diagnostics."
           (let ((json-data (json-parse-buffer
                             :object-type 'alist :array-type 'list)))
             (dolist (item (if (listp json-data) json-data nil))
-              (let* ((msg (alist-get 'message item))
-                     (code (alist-get 'code item))
-                     (severity-str (alist-get 'severity item))
-                     (span (alist-get 'span item))
-                     (start-row (alist-get 'start_row span))
-                     (start-col (alist-get 'start_col span))
-                     (end-row (alist-get 'end_row span))
-                     (end-col (alist-get 'end_col span))
-                     (severity (pcase severity-str
-                                 ("error" :error)
-                                 ("warning" :warning)
-                                 (_ :note)))
-                     (label (if code (format "[%s] %s" code msg) msg)))
-                (with-current-buffer source-buf
-                  (save-excursion
-                    (let ((beg (sysml2--flymake-row-col-to-pos
-                                start-row start-col))
-                          (end (sysml2--flymake-row-col-to-pos
-                                end-row end-col)))
-                      ;; Ensure at least 1 character span
-                      (when (= beg end)
-                        (setq end (min (1+ beg) (point-max))))
-                      (push (flymake-make-diagnostic
-                             source-buf beg end severity label)
-                            diagnostics)))))))
+              (let* ((code (alist-get 'code item)))
+                ;; Only keep diagnostics that require cross-file analysis.
+                ;; E001/E002/W001/W002/W003 are already covered in-process.
+                (when (member code sysml2--flymake-cli-only-codes)
+                  (let* ((msg (alist-get 'message item))
+                         (severity-str (alist-get 'severity item))
+                         (span (alist-get 'span item))
+                         (start-row (alist-get 'start_row span))
+                         (start-col (alist-get 'start_col span))
+                         (end-row (alist-get 'end_row span))
+                         (end-col (alist-get 'end_col span))
+                         (severity (pcase severity-str
+                                     ("error" :error)
+                                     ("warning" :warning)
+                                     (_ :note)))
+                         (label (if code (format "[%s] %s" code msg) msg)))
+                    (with-current-buffer source-buf
+                      (save-excursion
+                        (let ((beg (sysml2--flymake-row-col-to-pos
+                                    start-row start-col))
+                              (end (sysml2--flymake-row-col-to-pos
+                                    end-row end-col)))
+                          ;; Ensure at least 1 character span
+                          (when (= beg end)
+                            (setq end (min (1+ beg) (point-max))))
+                          (push (flymake-make-diagnostic
+                                 source-buf beg end severity label)
+                                diagnostics)))))))))
         (error nil)))
     (nreverse diagnostics)))
 
