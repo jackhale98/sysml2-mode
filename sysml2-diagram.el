@@ -895,11 +895,39 @@ inheritance via `:>' or `:' specialization."
                   (push (cons name usage-dtype) results)))))))
       (nreverse results))))
 
+(defun sysml2--diagram-parse-view-expose (view-name)
+  "Parse the `expose' clause from view VIEW-NAME in the current buffer.
+Returns the expose scope string (e.g. \"PartsTree\" from
+`expose PartsTree::**;'), or nil if no expose clause found."
+  (save-excursion
+    (goto-char (point-min))
+    (let ((re (concat "\\bview[ \t]+" (regexp-quote view-name)
+                      "\\b")))
+      (when (re-search-forward re nil t)
+        (let ((view-start (match-end 0)))
+          (when (re-search-forward "{" (+ view-start 200) t)
+            (let ((brace-start (1- (point)))
+                  (brace-end nil))
+              (goto-char brace-start)
+              (condition-case nil
+                  (progn (forward-sexp 1) (setq brace-end (point)))
+                (scan-error nil))
+              (when brace-end
+                (let ((body (buffer-substring-no-properties
+                             brace-start brace-end)))
+                  (when (string-match
+                         "\\bexpose[ \t]+\\([A-Za-z_][A-Za-z0-9_:]*\\)"
+                         body)
+                    (let ((scope (match-string 1 body)))
+                      ;; Strip trailing ::* or ::** wildcards
+                      (replace-regexp-in-string "::?\\*+\\'" "" scope))))))))))))
+
 (defun sysml2-diagram-view ()
-  "Generate a diagram based on a `view def' in the current buffer.
+  "Generate a diagram based on a view definition in the current buffer.
 Parses all view definitions with `filter @SysML::...' clauses,
 prompts the user to select one, then generates and displays the
-corresponding diagram type."
+corresponding diagram type.  When the view has an `expose' clause,
+uses the exposed scope as the diagram scope."
   (interactive)
   (let ((views (sysml2--diagram-parse-views)))
     (unless views
@@ -910,9 +938,13 @@ corresponding diagram type."
            (choice (completing-read "View: " candidates nil t))
            (idx (cl-position choice candidates :test #'string=))
            (view (nth idx views))
+           (view-name (car view))
            (dtype (cdr view))
-           (scope (when (memq dtype '(interconnection state-machine action-flow))
-                    (sysml2--diagram-read-scope (symbol-name dtype)))))
+           ;; Try to get scope from expose clause first
+           (expose-scope (sysml2--diagram-parse-view-expose view-name))
+           (scope (or expose-scope
+                      (when (memq dtype '(interconnection state-machine action-flow))
+                        (sysml2--diagram-read-scope (symbol-name dtype))))))
       (sysml2--diagram-generate-and-show dtype scope))))
 
 ;; --- Preview Minor Mode ---

@@ -57,7 +57,7 @@ Replaces characters that are invalid in D2 identifiers."
          (lines nil))
     (push "direction: down" lines)
     (push "" lines)
-    ;; Part def nodes
+    ;; Part def nodes with attributes, ports, and parts compartments
     (dolist (d part-defs)
       (let* ((name (plist-get d :name))
              (id (sysml2--d2-sanitize-id name))
@@ -65,19 +65,35 @@ Replaces characters that are invalid in D2 identifiers."
              (abstract (plist-get d :abstract))
              (attrs (plist-get d :attributes))
              (parts (plist-get d :parts))
+             ;; Look up port usages from this definition
+             (def-ports (sysml2--model-extract-port-usages-for-def name))
              (display-name (if abstract (format "/%s/" name) name))
              (content-lines (list (format "<<part def>>\\n**%s**" display-name))))
-        ;; Add attributes
-        (dolist (attr attrs)
-          (push (format "\\n%s" attr) content-lines))
-        ;; Add parts
-        (dolist (p parts)
-          (let ((pname (plist-get p :name))
-                (ptype (plist-get p :type))
-                (mult (plist-get p :multiplicity)))
-            (push (format "\\n%s : %s%s" pname ptype
-                          (if mult (format " [%s]" mult) ""))
-                  content-lines)))
+        ;; Add port compartment
+        (when def-ports
+          (push "\\n---" content-lines)
+          (dolist (port def-ports)
+            (let ((pname (plist-get port :name))
+                  (ptype (plist-get port :type))
+                  (conj (plist-get port :conjugated)))
+              (push (format "\\n%sport %s : %s"
+                            (if conj "~" "") pname (or ptype ""))
+                    content-lines))))
+        ;; Add attribute compartment
+        (when attrs
+          (push "\\n---" content-lines)
+          (dolist (attr attrs)
+            (push (format "\\n%s" attr) content-lines)))
+        ;; Add parts compartment
+        (when parts
+          (push "\\n---" content-lines)
+          (dolist (p parts)
+            (let ((pname (plist-get p :name))
+                  (ptype (plist-get p :type))
+                  (mult (plist-get p :multiplicity)))
+              (push (format "\\npart %s : %s%s" pname ptype
+                            (if mult (format " [%s]" mult) ""))
+                    content-lines))))
         (push (format "%s: \"%s\" {" id
                       (apply #'concat (nreverse content-lines)))
               lines)
@@ -331,20 +347,35 @@ Replaces characters that are invalid in D2 identifiers."
                 (when (gethash part part-name-set)
                   (puthash (cons part port) t port-refs))))))
 
-        ;; Parts as containers
+        ;; Parts as containers with ports and attributes
         (dolist (p parts)
           (let* ((pname (plist-get p :name))
                  (ptype (plist-get p :type))
                  (mult (plist-get p :multiplicity))
-                 ;; Try to look up ports from the type definition
+                 ;; Try to look up ports and attributes from the type definition
                  (type-bounds (sysml2--model-find-def-bounds "part def" ptype))
                  (inner-ports (when type-bounds
                                 (sysml2--model-extract-port-usages
                                  (car type-bounds) (cdr type-bounds))))
-                 (declared-port-names (make-hash-table :test 'equal)))
-            (push (format "%s: \"%s : %s%s\" {" pname pname ptype
-                          (if mult (format " [%s]" mult) ""))
-                  lines)
+                 (inner-attrs (when type-bounds
+                                (let ((type-part-defs
+                                       (sysml2--model-extract-part-defs)))
+                                  (plist-get
+                                   (car (cl-remove-if-not
+                                         (lambda (d)
+                                           (equal (plist-get d :name) ptype))
+                                         type-part-defs))
+                                   :attributes))))
+                 (declared-port-names (make-hash-table :test 'equal))
+                 ;; Build label with attributes if available
+                 (label (format "%s : %s%s" pname ptype
+                                (if mult (format " [%s]" mult) "")))
+                 (content (if inner-attrs
+                              (concat label
+                                      (mapconcat (lambda (a) (format "\\n%s" a))
+                                                 inner-attrs ""))
+                            label)))
+            (push (format "%s: \"%s\" {" pname content) lines)
             (push "  style.border-radius: 4" lines)
             (push "  style.fill: \"#E8F4FD\"" lines)
             (push "  style.stroke: \"#2196F3\"" lines)
@@ -452,10 +483,23 @@ Replaces characters that are invalid in D2 identifiers."
 ;; State machine diagram
 ;; ---------------------------------------------------------------------------
 
+(defun sysml2--d2-transition-label (tr)
+  "Build a SysML-style transition label from transition plist TR.
+Format: trigger [guard] / effect"
+  (let ((trigger (plist-get tr :trigger))
+        (guard (plist-get tr :guard))
+        (effect (plist-get tr :effect))
+        (parts nil))
+    (when trigger (push trigger parts))
+    (when guard (push (format " [%s]" guard) parts))
+    (when effect (push (format " / %s" effect) parts))
+    (if parts (apply #'concat (nreverse parts)) "")))
+
 (defun sysml2-d2-state-machine (scope-name)
   "Generate D2 source for a state machine diagram of SCOPE-NAME.
 Looks for `state def SCOPE-NAME { ... }' first, then falls back to
-`exhibit state SCOPE-NAME { ... }' inside part definitions."
+`exhibit state SCOPE-NAME { ... }' inside part definitions.
+States show entry/do/exit action compartments."
   (let ((bounds (or (sysml2--model-find-def-bounds "state def" scope-name)
                     (sysml2--model-find-exhibit-state-bounds scope-name)))
         (lines nil))
@@ -485,10 +529,22 @@ Looks for `state def SCOPE-NAME { ... }' first, then falls back to
         (push "  height: 16" lines)
         (push "}" lines)
         (push "" lines)
-        ;; State nodes
+        ;; State nodes with entry/do/exit compartments
         (dolist (s states)
-          (let ((sname (plist-get s :name)))
-            (push (format "%s: \"%s\" {" sname sname) lines)
+          (let* ((sname (plist-get s :name))
+                 (entry-act (plist-get s :entry))
+                 (do-act (plist-get s :do))
+                 (exit-act (plist-get s :exit))
+                 (has-actions (or entry-act do-act exit-act))
+                 (content (format "**%s**" sname)))
+            (when has-actions
+              (when entry-act
+                (setq content (concat content (format "\\nentry / %s" entry-act))))
+              (when do-act
+                (setq content (concat content (format "\\ndo / %s" do-act))))
+              (when exit-act
+                (setq content (concat content (format "\\nexit / %s" exit-act)))))
+            (push (format "%s: \"%s\" {" sname content) lines)
             (push "  style.border-radius: 12" lines)
             (push "  style.fill: \"#E8F5E9\"" lines)
             (push "  style.stroke: \"#4CAF50\"" lines)
@@ -500,14 +556,12 @@ Looks for `state def SCOPE-NAME { ... }' first, then falls back to
           (when init-target
             (push (format "__start__ -> %s" init-target) lines)
             (push "" lines)))
-        ;; Transitions — use trigger as label (not the auto-generated name)
+        ;; Transitions with full labels: trigger [guard] / effect
         (dolist (tr transitions)
           (let ((from (plist-get tr :from))
                 (to (plist-get tr :to))
-                (trigger (plist-get tr :trigger)))
-            (push (format "%s -> %s: \"%s\"" from to
-                          (or trigger ""))
-                  lines)))))
+                (label (sysml2--d2-transition-label tr)))
+            (push (format "%s -> %s: \"%s\"" from to label) lines)))))
     (string-join (nreverse lines) "\n")))
 
 ;; ---------------------------------------------------------------------------
@@ -515,8 +569,12 @@ Looks for `state def SCOPE-NAME { ... }' first, then falls back to
 ;; ---------------------------------------------------------------------------
 
 (defun sysml2-d2-action-flow (scope-name)
-  "Generate D2 source for an action flow diagram of SCOPE-NAME."
-  (let ((bounds (sysml2--model-find-def-bounds "action def" scope-name))
+  "Generate D2 source for an action flow diagram of SCOPE-NAME.
+Renders actions as rounded rectangles, fork/join as bars, and
+decide/merge as diamonds.  Connects via succession edges."
+  (let ((bounds (or (sysml2--model-find-def-bounds "action def" scope-name)
+                    ;; Also search use case usages for action-like bodies
+                    (sysml2--model-find-def-bounds "use case def" scope-name)))
         (lines nil))
     (push (format "title: \"%s — Action Flow\" {" scope-name) lines)
     (push "  near: top-center" lines)
@@ -530,12 +588,16 @@ Looks for `state def SCOPE-NAME { ... }' first, then falls back to
       (let ((actions (sysml2--model-extract-actions (car bounds) (cdr bounds)))
             (successions (sysml2--model-extract-successions
                           (car bounds) (cdr bounds)))
-            (action-names nil)
+            (control-nodes (sysml2--model-extract-control-nodes
+                            (car bounds) (cdr bounds)))
+            (all-node-names nil)
             (has-incoming (make-hash-table :test 'equal))
             (has-outgoing (make-hash-table :test 'equal)))
-        ;; Collect action names
+        ;; Collect all node names
         (dolist (a actions)
-          (push (plist-get a :name) action-names))
+          (push (plist-get a :name) all-node-names))
+        (dolist (cn control-nodes)
+          (push (plist-get cn :name) all-node-names))
         ;; Start node
         (push "__start__: \"\" {" lines)
         (push "  shape: circle" lines)
@@ -544,7 +606,7 @@ Looks for `state def SCOPE-NAME { ... }' first, then falls back to
         (push "  height: 16" lines)
         (push "}" lines)
         (push "" lines)
-        ;; Action nodes
+        ;; Action nodes (rounded rectangles)
         (dolist (a actions)
           (let ((aname (plist-get a :name))
                 (atype (plist-get a :type)))
@@ -556,6 +618,28 @@ Looks for `state def SCOPE-NAME { ... }' first, then falls back to
             (push "  style.stroke: \"#9C27B0\"" lines)
             (push "}" lines)
             (push "" lines)))
+        ;; Control nodes (fork/join = bars, decide/merge = diamonds)
+        (dolist (cn control-nodes)
+          (let ((cname (plist-get cn :name))
+                (ckind (plist-get cn :kind)))
+            (pcase ckind
+              ((or 'fork 'join)
+               (push (format "%s: \"%s\" {" cname
+                             (format "<<%s>>" (symbol-name ckind)))
+                     lines)
+               (push "  shape: rectangle" lines)
+               (push "  width: 8" lines)
+               (push "  height: 60" lines)
+               (push "  style.fill: \"#263238\"" lines)
+               (push "  style.stroke: \"#263238\"" lines)
+               (push "}" lines))
+              ((or 'decide 'merge)
+               (push (format "%s: \"%s\" {" cname cname) lines)
+               (push "  shape: diamond" lines)
+               (push "  style.fill: \"#FFF8E1\"" lines)
+               (push "  style.stroke: \"#FFC107\"" lines)
+               (push "}" lines)))
+            (push "" lines)))
         ;; End node
         (push "__end__: \"\" {" lines)
         (push "  shape: circle" lines)
@@ -566,20 +650,35 @@ Looks for `state def SCOPE-NAME { ... }' first, then falls back to
         (push "  height: 16" lines)
         (push "}" lines)
         (push "" lines)
-        ;; Track which actions have incoming/outgoing edges
+        ;; Track incoming/outgoing edges
         (dolist (s successions)
           (puthash (plist-get s :to) t has-incoming)
           (puthash (plist-get s :from) t has-outgoing))
-        ;; Connect start to actions with no incoming edge
-        (dolist (a action-names)
-          (unless (gethash a has-incoming)
+        ;; Connect start to nodes with no incoming edge
+        ;; (skip "start" and "done" pseudo-nodes)
+        (dolist (a all-node-names)
+          (unless (or (gethash a has-incoming)
+                      (member a '("start" "done")))
             (push (format "__start__ -> %s" a) lines)))
-        ;; Succession edges
+        ;; Handle "first start then X" pattern
         (dolist (s successions)
-          (push (format "%s -> %s" (plist-get s :from) (plist-get s :to)) lines))
-        ;; Connect actions with no outgoing edge to end
-        (dolist (a action-names)
-          (unless (gethash a has-outgoing)
+          (when (equal (plist-get s :from) "start")
+            (push (format "__start__ -> %s" (plist-get s :to)) lines)
+            (puthash "start" t has-outgoing)))
+        ;; Succession edges (skip start/done pseudo-nodes)
+        (dolist (s successions)
+          (let ((from (plist-get s :from))
+                (to (plist-get s :to)))
+            (cond
+             ((equal from "start") nil)  ; already handled
+             ((equal to "done")
+              (push (format "%s -> __end__" from) lines))
+             (t
+              (push (format "%s -> %s" from to) lines)))))
+        ;; Connect nodes with no outgoing edge to end
+        (dolist (a all-node-names)
+          (unless (or (gethash a has-outgoing)
+                      (member a '("start" "done")))
             (push (format "%s -> __end__" a) lines)))))
     (string-join (nreverse lines) "\n")))
 

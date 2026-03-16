@@ -385,7 +385,8 @@ Returns list of (:source :target)."
 (defun sysml2--model-extract-states (&optional beg end)
   "Extract state declarations within region BEG..END.
 Matches both `state NAME;' and `state NAME { ... }'.
-Returns list of (:name)."
+Returns list of (:name :entry :do :exit) where the action fields
+are the action name strings or nil."
   (let ((beg (or beg (point-min)))
         (end (or end (point-max)))
         (results nil))
@@ -394,17 +395,49 @@ Returns list of (:name)."
       (while (re-search-forward
               (concat "\\bstate[ \t]+"
                       "\\(" sysml2--identifier-regexp "\\)"
-                      "[ \t]*[;{]")
+                      "[ \t]*\\([;{]\\)")
               end t)
         (save-excursion
           (goto-char (match-beginning 0))
           (unless (or (looking-at "\\bstate[ \t]+def\\b")
-                      ;; Skip "exhibit state NAME" patterns
                       (save-excursion
                         (beginning-of-line)
                         (looking-at ".*\\bexhibit[ \t]+state\\b")))
-            (push (list :name (match-string-no-properties 1))
-                  results)))))
+            (let ((name (match-string-no-properties 1))
+                  (delim (match-string-no-properties 2))
+                  (entry-act nil) (do-act nil) (exit-act nil))
+              ;; If state has a body, extract entry/do/exit actions
+              (when (string= delim "{")
+                (let ((body-start (match-end 0))
+                      (body-end (save-excursion
+                                  (goto-char (1- (match-end 0)))
+                                  (condition-case nil
+                                      (progn (forward-sexp 1) (point))
+                                    (scan-error end)))))
+                  (save-excursion
+                    (goto-char body-start)
+                    (when (re-search-forward
+                           (concat "\\bentry[ \t]+\\(?:action[ \t]+\\)?"
+                                   "\\(" sysml2--identifier-regexp "\\)")
+                           body-end t)
+                      (setq entry-act (match-string-no-properties 1))))
+                  (save-excursion
+                    (goto-char body-start)
+                    (when (re-search-forward
+                           (concat "\\bdo[ \t]+\\(?:action[ \t]+\\)?"
+                                   "\\(" sysml2--identifier-regexp "\\)")
+                           body-end t)
+                      (setq do-act (match-string-no-properties 1))))
+                  (save-excursion
+                    (goto-char body-start)
+                    (when (re-search-forward
+                           (concat "\\bexit[ \t]+\\(?:action[ \t]+\\)?"
+                                   "\\(" sysml2--identifier-regexp "\\)")
+                           body-end t)
+                      (setq exit-act (match-string-no-properties 1))))))
+              (push (list :name name :entry entry-act
+                          :do do-act :exit exit-act)
+                    results))))))
     (nreverse results)))
 
 (defun sysml2--model-extract-initial-state (&optional beg end)
@@ -441,8 +474,8 @@ Returns the initial state name string, or nil."
 (defun sysml2--model-extract-transitions (&optional beg end)
   "Extract transitions within region BEG..END.
 Handles both shorthand (`transition FROM then TO;') and full form
-\(`transition NAME first FROM [accept TRIGGER] then TO;').
-Returns list of (:name :from :trigger :to)."
+\(`transition NAME first FROM [accept TRIGGER] [if GUARD] [do EFFECT] then TO;').
+Returns list of (:name :from :trigger :guard :effect :to)."
   (let ((beg (or beg (point-min)))
         (end (or end (point-max)))
         (results nil))
@@ -454,7 +487,7 @@ Returns list of (:name :from :trigger :to)."
               end t)
         (let ((name (match-string-no-properties 1))
               (trans-start (match-end 0))
-              (from nil) (trigger nil) (to nil))
+              (from nil) (trigger nil) (guard nil) (effect nil) (to nil))
           (save-excursion
             (goto-char trans-start)
             (let ((search-end (min end (+ trans-start 500))))
@@ -465,7 +498,8 @@ Returns list of (:name :from :trigger :to)."
                     (setq from name)
                     (setq to (match-string-no-properties 1))
                     (setq name (concat from "_to_" to)))
-                ;; Full form: transition NAME first FROM [accept TRIGGER] then TO;
+                ;; Full form: transition NAME first FROM [accept TRIGGER]
+                ;;   [if GUARD] [do EFFECT] then TO;
                 (when (re-search-forward
                        (concat "\\bfirst[ \t]+"
                                "\\(" sysml2--identifier-regexp "\\)")
@@ -479,12 +513,24 @@ Returns list of (:name :from :trigger :to)."
                   (setq trigger (match-string-no-properties 1)))
                 (goto-char trans-start)
                 (when (re-search-forward
+                       "\\bif[ \t]+\\(.+?\\)[ \t]*\\(?:\\bthen\\b\\|\\bdo\\b\\|;\\)"
+                       search-end t)
+                  (setq guard (string-trim (match-string-no-properties 1))))
+                (goto-char trans-start)
+                (when (re-search-forward
+                       (concat "\\bdo[ \t]+\\(?:send[ \t]+\\)?"
+                               "\\(.+?\\)[ \t]*\\(?:\\bthen\\b\\|;\\)")
+                       search-end t)
+                  (setq effect (string-trim (match-string-no-properties 1))))
+                (goto-char trans-start)
+                (when (re-search-forward
                        (concat "\\bthen[ \t]+"
                                "\\(" sysml2--identifier-regexp "\\)")
                        search-end t)
                   (setq to (match-string-no-properties 1))))))
           (when (and from to)
-            (push (list :name name :from from :trigger trigger :to to)
+            (push (list :name name :from from :trigger trigger
+                        :guard guard :effect effect :to to)
                   results)))))
     (nreverse results)))
 
@@ -563,6 +609,31 @@ match for a `transition' keyword without crossing a `;', `{', or
           (unless in-transition
             (push (list :from from :to to) results)))))
     (nreverse results)))
+
+(defun sysml2--model-extract-control-nodes (&optional beg end)
+  "Extract fork, join, merge, and decide nodes within BEG..END.
+Returns list of (:name :kind) where :kind is fork, join, merge, or decide."
+  (let ((beg (or beg (point-min)))
+        (end (or end (point-max)))
+        (results nil)
+        (re (concat "\\b\\(fork\\|join\\|merge\\|decide\\)[ \t]+"
+                    "\\(" sysml2--identifier-regexp "\\)[ \t]*;")))
+    (save-excursion
+      (goto-char beg)
+      (while (re-search-forward re end t)
+        (let ((kind (intern (match-string-no-properties 1)))
+              (name (match-string-no-properties 2)))
+          (push (list :name name :kind kind) results))))
+    (nreverse results)))
+
+(defun sysml2--model-extract-port-usages-for-def (def-name)
+  "Extract port usages from the definition named DEF-NAME.
+Searches for `part def DEF-NAME', `port def DEF-NAME', etc.
+Returns list of (:name :type :direction :conjugated)."
+  (let ((bounds (or (sysml2--model-find-def-bounds "part def" def-name)
+                    (sysml2--model-find-def-bounds "port def" def-name))))
+    (when bounds
+      (sysml2--model-extract-port-usages (car bounds) (cdr bounds)))))
 
 ;; ---------------------------------------------------------------------------
 ;; Requirement extractors
