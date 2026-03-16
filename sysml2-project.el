@@ -64,7 +64,15 @@ Returns the path or nil.  Sets `sysml2--current-library-path'."
                         (expand-file-name "sysml.library" root))))
             (when (and lib (file-directory-p lib))
               lib)))
-         ;; 3. Bundled standard-library/ relative to package
+         ;; 3. Bundled SysML v2 standard library (git submodule)
+         ((let* ((pkg-dir (file-name-directory
+                           (or load-file-name buffer-file-name
+                               default-directory)))
+                 (bundled (expand-file-name
+                           "sysml-v2-stdlib/sysml.library" pkg-dir)))
+            (when (file-directory-p bundled)
+              bundled)))
+         ;; 4. Legacy fallback: standard-library/ relative to package
          ((let ((bundled (expand-file-name
                           "standard-library"
                           (file-name-directory

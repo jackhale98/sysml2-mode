@@ -96,6 +96,7 @@
 (declare-function sysml2-simulate-eval "sysml2-simulate")
 (declare-function sysml2-simulate-state-machine "sysml2-simulate")
 (declare-function sysml2-simulate-action-flow "sysml2-simulate")
+(declare-function sysml2-find-references "sysml2-navigation")
 (declare-function sysml2-format-buffer "sysml2-format")
 (declare-function sysml2-format-region "sysml2-format")
 (declare-function sysml2-cli-lint "sysml2-cli-commands")
@@ -136,6 +137,7 @@
      "n"   '(:ignore t :which-key "navigate")
      "n o" '(imenu :which-key "outline (imenu)")
      "n d" '(sysml2-goto-definition :which-key "go to definition")
+     "n r" '(sysml2-find-references :which-key "find references")
      "r" '(sysml2-rename-symbol :which-key "rename symbol")
      "o"   '(sysml2-outline-toggle :which-key "outline panel")
      ;; Connections

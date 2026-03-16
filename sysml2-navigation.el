@@ -396,5 +396,165 @@ identifier matching instead of regex."
                    old-name new-name count
                    (if (= count 1) "" "s")))))))
 
+;; --- Find References ---
+
+(defvar sysml2-references-mode-map
+  (let ((map (make-sparse-keymap)))
+    (define-key map (kbd "RET") #'sysml2--references-goto)
+    (define-key map (kbd "o") #'sysml2--references-goto-other)
+    (define-key map (kbd "q") #'quit-window)
+    (define-key map (kbd "n") #'next-line)
+    (define-key map (kbd "p") #'previous-line)
+    map)
+  "Keymap for `sysml2-references-mode'.")
+
+(define-derived-mode sysml2-references-mode special-mode "SysML2-Refs"
+  "Major mode for displaying SysML v2 reference results."
+  :group 'sysml2
+  (setq truncate-lines t))
+
+(defun sysml2--references-goto ()
+  "Jump to the reference at point."
+  (interactive)
+  (let ((marker (get-text-property (point) 'sysml2-ref-marker)))
+    (when marker
+      (let ((buf (marker-buffer marker)))
+        (when (buffer-live-p buf)
+          (pop-to-buffer buf)
+          (goto-char marker)
+          (recenter))))))
+
+(defun sysml2--references-goto-other ()
+  "Jump to the reference at point in another window."
+  (interactive)
+  (let ((marker (get-text-property (point) 'sysml2-ref-marker)))
+    (when marker
+      (let ((buf (marker-buffer marker)))
+        (when (buffer-live-p buf)
+          (display-buffer buf '((display-buffer-reuse-window
+                                 display-buffer-use-some-window)))
+          (with-selected-window (get-buffer-window buf)
+            (goto-char marker)
+            (recenter)))))))
+
+;;;###autoload
+(defun sysml2-find-references ()
+  "Find all references to the symbol at point in the current buffer.
+Displays results in a dedicated buffer with navigation.
+Each result shows the line number, context, and the role of the
+reference (definition, type reference, usage, etc.)."
+  (interactive)
+  (let ((sym (thing-at-point 'symbol t)))
+    (unless sym
+      (user-error "No identifier at point"))
+    (let ((re (concat "\\_<" (regexp-quote sym) "\\_>"))
+          (results nil)
+          (source-buf (current-buffer)))
+      ;; Collect all occurrences
+      (save-excursion
+        (goto-char (point-min))
+        (while (re-search-forward re nil t)
+          (let ((pos (match-beginning 0)))
+            (save-excursion
+              (goto-char pos)
+              (unless (let ((ppss (syntax-ppss)))
+                        (or (nth 3 ppss) (nth 4 ppss)))
+                (let* ((line-num (line-number-at-pos pos))
+                       (line-text (string-trim
+                                   (buffer-substring-no-properties
+                                    (line-beginning-position)
+                                    (line-end-position))))
+                       (role (sysml2--reference-role pos sym))
+                       (marker (copy-marker pos)))
+                  (push (list :line line-num :text line-text
+                              :role role :marker marker)
+                        results)))))))
+      (setq results (nreverse results))
+      (if (null results)
+          (message "No references found for `%s'" sym)
+        ;; Display results
+        (let ((buf (get-buffer-create (format "*SysML Refs: %s*" sym))))
+          (with-current-buffer buf
+            (let ((inhibit-read-only t))
+              (erase-buffer)
+              (sysml2-references-mode)
+              (insert (propertize (format "References to `%s'" sym)
+                                  'face 'bold))
+              (insert (format " — %d found in %s\n\n"
+                              (length results)
+                              (buffer-name source-buf)))
+              (dolist (r results)
+                (let ((start (point))
+                      (line (plist-get r :line))
+                      (text (plist-get r :text))
+                      (role (plist-get r :role))
+                      (marker (plist-get r :marker)))
+                  (insert (propertize (format "%4d" line)
+                                      'face 'line-number))
+                  (insert "  ")
+                  (insert (propertize (format "%-12s" role)
+                                      'face (pcase role
+                                              ("definition" 'sysml2-definition-name-face)
+                                              ("type-ref" 'font-lock-type-face)
+                                              ("satisfy" 'success)
+                                              ("verify" 'success)
+                                              (_ 'default))))
+                  (insert "  ")
+                  ;; Highlight the symbol in the line text
+                  (let ((highlighted text)
+                        (case-fold-search nil))
+                    (when (string-match (regexp-quote sym) highlighted)
+                      (setq highlighted
+                            (concat (substring highlighted 0 (match-beginning 0))
+                                    (propertize (match-string 0 highlighted)
+                                                'face 'match)
+                                    (substring highlighted (match-end 0)))))
+                    (insert highlighted))
+                  (insert "\n")
+                  (put-text-property start (point) 'sysml2-ref-marker marker)))
+              (goto-char (point-min))))
+          (display-buffer buf '((display-buffer-reuse-window
+                                 display-buffer-below-selected)
+                                (window-height . 0.35))))))))
+
+(defun sysml2--reference-role (pos sym)
+  "Determine the role of symbol SYM at buffer position POS.
+Returns a string like \"definition\", \"type-ref\", \"usage\",
+\"satisfy\", \"verify\", \"import\", or \"reference\"."
+  (save-excursion
+    (goto-char pos)
+    (let ((line (buffer-substring-no-properties
+                 (line-beginning-position) (line-end-position))))
+      (cond
+       ;; Definition: "KEYWORD def SYM"
+       ((string-match (concat "\\bdef\\s-+" (regexp-quote sym) "\\_>") line)
+        "definition")
+       ;; Package: "package SYM"
+       ((string-match (concat "\\bpackage\\s-+" (regexp-quote sym) "\\_>") line)
+        "definition")
+       ;; Type reference: ": SYM" or ":> SYM"
+       ((string-match (concat ":>?\\s-*" (regexp-quote sym) "\\_>") line)
+        "type-ref")
+       ;; Satisfy
+       ((string-match "\\bsatisfy\\b" line)
+        "satisfy")
+       ;; Verify
+       ((string-match "\\bverify\\b" line)
+        "verify")
+       ;; Import
+       ((string-match "\\bimport\\b" line)
+        "import")
+       ;; Allocate
+       ((string-match "\\ballocat" line)
+        "allocate")
+       ;; Usage: "KEYWORD SYM" (part, port, attribute, action, state, etc.)
+       ((string-match (concat "\\b\\(?:part\\|port\\|attribute\\|action\\|state"
+                              "\\|item\\|connection\\|flow\\|constraint"
+                              "\\|requirement\\|calc\\|ref\\|enum\\)\\s-+"
+                              (regexp-quote sym) "\\_>")
+                      line)
+        "usage")
+       (t "reference")))))
+
 (provide 'sysml2-navigation)
 ;;; sysml2-navigation.el ends here

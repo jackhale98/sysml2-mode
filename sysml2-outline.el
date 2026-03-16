@@ -39,12 +39,13 @@
           "\\(?:\\(?:" (regexp-opt sysml2-visibility-keywords) "\\)\\s-+\\)?"
           "\\(?:abstract\\s-+\\)?"
           "\\(package\\|"
-          (regexp-opt sysml2-definition-keywords)
+          (regexp-opt (append sysml2-definition-keywords
+                              sysml2-usage-keywords))
           "\\)"
           "\\s-+\\(" sysml2--identifier-regexp "\\)")
   "Regexp for scanning outline entries.
 Group 1: leading whitespace (for indent level).
-Group 2: keyword (package, part def, etc.).
+Group 2: keyword (package, part def, action, port, etc.).
 Group 3: name.")
 
 (defconst sysml2--outline-width 35
@@ -54,7 +55,9 @@ Group 3: name.")
 
 (defun sysml2--outline-scan (&optional buffer)
   "Scan BUFFER for outline entries.
-Returns a list of plists (:name :type :level :pos :line)."
+Returns a list of plists (:name :type :type-ref :level :pos :line).
+Captures both definitions (part def, port def, etc.) and usages
+\(part, port, action, state, etc.) with their type annotations."
   (with-current-buffer (or buffer (current-buffer))
     (save-excursion
       (goto-char (point-min))
@@ -68,9 +71,17 @@ Returns a list of plists (:name :type :level :pos :line)."
                 (let* ((indent (length (match-string-no-properties 1)))
                        (kw (match-string-no-properties 2))
                        (name (match-string-no-properties 3))
-                       (level (/ indent sysml2-indent-offset)))
+                       (level (/ indent sysml2-indent-offset))
+                       ;; Try to capture type annotation after name
+                       (type-ref nil))
+                  ;; Look for : TYPE or :> TYPE after the name
+                  (goto-char (match-end 3))
+                  (when (looking-at (concat "[ \t]*:>?[ \t]*"
+                                            "\\(" sysml2--qualified-name-regexp "\\)"))
+                    (setq type-ref (match-string-no-properties 1)))
                   (push (list :name name
                               :type kw
+                              :type-ref type-ref
                               :level level
                               :pos pos
                               :line (line-number-at-pos pos))
@@ -102,8 +113,10 @@ A child is the next entry with a higher level."
                (indent-str (make-string (* level 2) ?\s))
                (kw (plist-get entry :type))
                (name (plist-get entry :name))
+               (type-ref (plist-get entry :type-ref))
                (pos (plist-get entry :pos))
                (line (plist-get entry :line))
+               (is-def (string-match-p "\\bdef\\b\\|\\bpackage\\b" kw))
                (has-children (sysml2--outline-has-children-p entry entries))
                (start (point)))
           ;; Collapse indicator
@@ -118,7 +131,14 @@ A child is the next entry with a higher level."
           (insert " ")
           (let ((name-start (point)))
             (insert name)
-            (put-text-property name-start (point) 'face 'sysml2-definition-name-face))
+            (put-text-property name-start (point) 'face
+                               (if is-def
+                                   'sysml2-definition-name-face
+                                 'sysml2-usage-name-face)))
+          ;; Show type annotation for usages
+          (when type-ref
+            (insert (propertize (format " : %s" type-ref)
+                                'face 'sysml2-type-reference-face)))
           (insert "\n")
           ;; Store properties for navigation and collapsing
           (put-text-property start (point) 'sysml2-outline-marker pos)

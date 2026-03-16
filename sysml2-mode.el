@@ -162,6 +162,7 @@
 (declare-function sysml2-simulate-eval "sysml2-simulate")
 (declare-function sysml2-simulate-state-machine "sysml2-simulate")
 (declare-function sysml2-simulate-action-flow "sysml2-simulate")
+(declare-function sysml2-find-references "sysml2-navigation")
 (declare-function sysml2-format-buffer "sysml2-format")
 (declare-function sysml2-format-region "sysml2-format")
 (declare-function sysml2-format-on-save-mode "sysml2-format")
@@ -194,6 +195,7 @@
     (define-key map (kbd "C-c C-n o") #'imenu)
     (define-key map (kbd "C-c C-n t") #'sysml2-outline-toggle)
     (define-key map (kbd "M-.") #'sysml2-goto-definition)
+    (define-key map (kbd "M-?") #'sysml2-find-references)
     (define-key map (kbd "C-c C-r") #'sysml2-rename-symbol)
     ;; LSP
     (define-key map (kbd "C-c C-l s") #'sysml2-lsp-ensure)
