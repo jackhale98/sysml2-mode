@@ -25,6 +25,8 @@ Provides syntax highlighting, indentation, completion, navigation, diagram gener
 - [FMI/FMU Integration](#fmifmu-integration)
 - [Co-Simulation](#co-simulation)
 - [Native Simulation](#native-simulation)
+- [CLI Analysis](#cli-analysis)
+- [Formatting](#formatting)
 - [Systems Modeling API](#systems-modeling-api)
 - [LSP Support](#lsp-support)
 - [Evil-Mode Integration](#evil-mode-integration)
@@ -157,20 +159,30 @@ Context-aware `completion-at-point` with annotation hints:
 
 ### Flymake Diagnostics
 
-Seven in-buffer checks with no external tools required:
+Three layers of diagnostics, from zero-dependency to deep cross-file analysis:
 
-**Syntax checks:**
+**In-process checks** (no external tools):
 
-1. **Unmatched delimiters** -- detects mismatched `{}`, `[]`, `()`
-2. **Unknown definition keywords** -- catches typos like `prat def`
-3. **Missing semicolons** -- warns on single-line usages without trailing `;`
+1. **Unmatched delimiters** — detects mismatched `{}`, `[]`, `()`
+2. **Unknown definition keywords** — catches typos like `prat def`
+3. **Missing semicolons** — warns on single-line usages without trailing `;`
+4. **Unsatisfied requirements** — requirement defs with no `satisfy` statement
+5. **Unverified requirements** — requirement defs with no `verify` statement
+6. **Unused definitions** — definitions never referenced elsewhere in the buffer
+7. **Invalid library references** — validates ISQ, SI, and ScalarValues qualified names
 
-**Semantic checks** (note-level hints):
+**Tree-sitter checks** (when grammar installed):
 
-4. **Unsatisfied requirements** -- requirement defs with no `satisfy` statement
-5. **Unverified requirements** -- requirement defs with no `verify` statement
-6. **Unused definitions** -- definitions never referenced elsewhere in the buffer
-7. **Invalid library references** -- validates ISQ, SI, and ScalarValues qualified names
+8. **Syntax errors** — ERROR nodes from the incremental parser
+9. **Missing nodes** — expected tokens the parser couldn't find
+
+**CLI checks** (when `sysml` CLI installed, async):
+
+10. **Unresolved types** (W004) — type references that don't resolve across files
+11. **Unresolved targets** (W005) — reference targets that don't resolve
+12. **Port type mismatches** (W006) — connected ports with incompatible types
+13. **Empty constraints** (W007) — constraint defs with body but no expression
+14. **Missing returns** (W008) — calc defs with body but no return
 
 ### Project Detection
 
@@ -187,7 +199,8 @@ Standard library path is auto-resolved from project root or a custom path.
 When the [`sysml` tree-sitter grammar](https://github.com/jackhale98/tree-sitter-sysml) is installed, `sysml2-mode` automatically remaps to `sysml2-ts-mode` for:
 
 - **Font-lock** — node-type-aware highlighting (7 feature groups)
-- **Indentation** — parent-type-based indent rules
+- **Indentation** — 65+ parent-type-based indent rules covering all body types, control flow, fork/join/merge/decide, metadata, and multi-line expressions
+- **Formatting** — `C-c C-= =` re-indents the buffer using tree-sitter rules (no external tool needed)
 - **Imenu** — 28 definition categories from parse tree
 - **Which-function** — accurate enclosing definition via `treesit-parent-until`
 - **Completion** — context-aware CAPF using parse tree queries
@@ -228,9 +241,14 @@ enclosing definition or prompt for a scope name. Diagram export
 
 Diagrams are automatically scaled to fit the preview window.
 
-View-filtered diagrams (`C-c C-d v`) parse `view def` declarations with
-`render` clauses, `filter @SysML::...` metatype filters, and `:>`
-inheritance to determine the diagram type automatically.
+**UML-style compartments:** Block diagrams (BDD/tree) show ports, attributes, and parts in separate compartments. State machine nodes show entry/do/exit actions. IBD parts show attributes from their type definitions.
+
+**Transition labels:** State machine transitions display the full `trigger [guard] / effect` label.
+
+**Control flow nodes:** Action flow diagrams render fork/join as bars and decide/merge as diamonds.
+
+**View-filtered diagrams** (`C-c C-d v`) parse `view def` declarations with
+`render` clauses, `filter @SysML::...` metatype filters, `expose` clauses (for automatic scope resolution), and `:>` inheritance to determine the diagram type automatically.
 
 ### Native Backend (default)
 
@@ -434,9 +452,9 @@ Parses simple constraints from requirement `doc` comments (`signal <= bound`) an
 
 ## Native Simulation
 
-Built-in SysML v2 behavioral simulation powered by [sysml2-cli](https://github.com/jackhale98/sysml2-cli). Evaluate constraints, run calculations, simulate state machines, and execute action flows directly from Emacs.
+Built-in SysML v2 behavioral simulation powered by the [sysml CLI](https://github.com/jackhale98/sysml-cli). Evaluate constraints, run calculations, simulate state machines, and execute action flows directly from Emacs.
 
-**Requires:** `sysml2-cli` on `exec-path` (install from [sysml2-cli releases](https://github.com/jackhale98/sysml2-cli/releases))
+**Requires:** `sysml` on `exec-path` (install from [sysml-cli releases](https://github.com/jackhale98/sysml-cli/releases))
 
 ### Simulation Commands
 
@@ -529,7 +547,7 @@ The simulation engine supports:
 
 | Variable | Default | Description |
 |----------|---------|-------------|
-| `sysml2-simulate-executable` | `"sysml2-cli"` | Path to the sysml2-cli binary |
+| `sysml2-cli-executable` | `"sysml"` | Path to the sysml CLI binary |
 | `sysml2-simulate-max-steps` | `100` | Default maximum simulation steps |
 
 ### Multi-File Import Resolution
@@ -537,9 +555,35 @@ The simulation engine supports:
 When models span multiple files with `import` statements, use `-I` to include additional files for resolution:
 
 ```sh
-sysml2-cli simulate list model.sysml -I lib/
-sysml2-cli lint model.sysml -I shared-library/
+sysml simulate list model.sysml -I lib/
+sysml lint model.sysml -I shared-library/
 ```
+
+## CLI Analysis
+
+When the `sysml` CLI is installed, additional analysis commands are available for cross-file validation and project-level queries:
+
+| Binding | Command | Description |
+|---------|---------|-------------|
+| `C-c C-t l` | `sysml2-cli-lint` | Run lint checks (syntax, duplicates, references) |
+| `C-c C-t c` | `sysml2-cli-check` | Comprehensive checks + project integrity |
+| `C-c C-t s` | `sysml2-cli-list` | List model elements (with kind filter) |
+| `C-c C-t w` | `sysml2-cli-show` | Show element details |
+| `C-c C-t t` | `sysml2-cli-trace` | Requirements traceability matrix |
+| `C-c C-t a` | `sysml2-cli-stats` | Aggregate model statistics |
+| `C-c C-t d` | `sysml2-cli-deps` | Forward/reverse dependency analysis |
+| `C-c C-t v` | `sysml2-cli-coverage` | Model completeness and quality score |
+
+## Formatting
+
+Re-indent the buffer or region using the tree-sitter indentation engine (no external tools needed):
+
+| Binding | Command | Description |
+|---------|---------|-------------|
+| `C-c C-= =` | `sysml2-format-buffer` | Re-indent entire buffer |
+| `C-c C-= r` | `sysml2-format-region` | Re-indent selected region |
+
+Enable `sysml2-format-on-save-mode` to auto-format before every save.
 
 ## Systems Modeling API
 
@@ -615,6 +659,9 @@ Optional keybindings for [evil-mode](https://github.com/emacs-evil/evil) users v
 | `SPC m a` | API |
 | `SPC m l` | LSP |
 | `SPC m s` | Simulation / FMI |
+| `SPC m x` | Native simulation |
+| `SPC m =` | Format (buffer, region) |
+| `SPC m t` | CLI analysis (lint, trace, deps, coverage) |
 | `SPC m i` | Inspect / Report |
 | `SPC m f` | Code folding |
 
@@ -690,6 +737,18 @@ Plus `gd` for goto-definition in normal state. Neither evil nor general.el is a 
 | `C-c C-x e` | `sysml2-simulate-eval` |
 | `C-c C-x m` | `sysml2-simulate-state-machine` |
 | `C-c C-x a` | `sysml2-simulate-action-flow` |
+| **Format** | |
+| `C-c C-= =` | `sysml2-format-buffer` |
+| `C-c C-= r` | `sysml2-format-region` |
+| **CLI Analysis** | |
+| `C-c C-t l` | `sysml2-cli-lint` |
+| `C-c C-t c` | `sysml2-cli-check` |
+| `C-c C-t s` | `sysml2-cli-list` |
+| `C-c C-t w` | `sysml2-cli-show` |
+| `C-c C-t t` | `sysml2-cli-trace` |
+| `C-c C-t a` | `sysml2-cli-stats` |
+| `C-c C-t d` | `sysml2-cli-deps` |
+| `C-c C-t v` | `sysml2-cli-coverage` |
 | **Inspect / Report** | |
 | `C-c C-i s` | `sysml2-report-summary` |
 | `C-c C-i t` | `sysml2-report-traceability` |
@@ -720,6 +779,7 @@ Key variables:
 | `sysml2-lsp-server` | `'pilot` | LSP server (`pilot`, `syside`, `syson`, `none`) |
 | `sysml2-plantuml-exec-mode` | `'executable` | PlantUML invocation mode |
 | `sysml2-diagram-output-format` | `"svg"` | Diagram output format |
+| `sysml2-cli-executable` | `"sysml"` | Path to sysml CLI binary |
 | `sysml2-cosim-tool` | `'fmpy` | Co-simulation tool (`fmpy`, `omsimulator`) |
 | `sysml2-cosim-stop-time` | `10.0` | Default simulation stop time |
 | `sysml2-fmi-type-mapping-alist` | `nil` | User SysML-to-FMI type overrides |
@@ -746,7 +806,9 @@ sysml2-report.el        Model summary, traceability (IDs, derivations, refinemen
 sysml2-api.el           Systems Modeling API REST client
 sysml2-fmi.el           FMU inspector, interface extraction, Modelica gen
 sysml2-cosim.el         SSP generation, simulation, results, verification
-sysml2-simulate.el      Native simulation via sysml2-cli (constraints, state machines, actions)
+sysml2-simulate.el      Native simulation via sysml CLI (constraints, state machines, actions)
+sysml2-format.el        In-process formatting (tree-sitter indent-region)
+sysml2-cli-commands.el  CLI analysis wrappers (lint, check, list, show, trace, stats, deps, coverage)
 sysml2-outline.el       Outline side panel
 sysml2-eldoc.el         Definition/documentation at point (ElDoc)
 sysml2-evil.el          Optional evil-mode keybindings
@@ -756,7 +818,7 @@ sysml2-mode.el          Entry point, syntax table, keymap, mode definition
 
 ## Testing
 
-244 ERT tests across 16 test files:
+250 ERT tests across 16 test files:
 
 ```bash
 make test

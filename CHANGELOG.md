@@ -1,5 +1,52 @@
 # Changelog
 
+## 0.3.0 — 2026-03-15
+
+### Added
+- **sysml CLI integration**: Unified `sysml2-cli-executable` defcustom
+  (default `"sysml"`) replaces the old `sysml2-simulate-executable`
+  (`"sysml2-cli"`). All CLI-dependent features now use this single setting.
+- **CLI analysis commands** (`sysml2-cli-commands.el`): 8 new interactive
+  commands for cross-file analysis — lint, check, list (with kind filter),
+  show, trace, stats, deps, coverage (`C-c C-t` prefix)
+- **In-process formatting** (`sysml2-format.el`): `sysml2-format-buffer`
+  (`C-c C-= =`) and `sysml2-format-region` (`C-c C-= r`) re-indent using
+  tree-sitter rules — no external tools needed. `sysml2-format-on-save-mode`
+  for auto-format on save.
+- **Async Flymake CLI backend**: When the sysml CLI is installed, runs
+  `sysml lint -f json` asynchronously and reports cross-file diagnostics
+  (W004-W008: unresolved refs, port types, empty constraints, missing
+  returns) alongside in-process checks
+- **65+ tree-sitter indent rules**: Expanded from 15 to cover all body
+  types, control flow (if/while/for/loop), fork/join/merge/decide,
+  entry/do/exit actions, perform/exhibit/include, metadata annotations,
+  parenthesized expressions, all usage types, and multi-line definitions
+- **Diagram compartments**: BDD/tree blocks show 3 compartments (ports,
+  attributes, parts) separated by dividers. IBD parts show attributes from
+  type definitions. Matches UML class diagram style.
+- **State machine entry/do/exit**: State nodes display action compartments
+  (e.g. `entry / performSelfTest`, `do / providePower`)
+- **Transition labels**: Full SysML format `trigger [guard] / effect`
+- **Action flow control nodes**: Fork/join rendered as bars, decide/merge as
+  diamonds. Handles `start`/`done` pseudo-nodes.
+- **View expose clauses**: `sysml2-diagram-view` parses `expose` clauses to
+  auto-resolve diagram scope
+- **Model extractors**: States return `:entry/:do/:exit` actions. Transitions
+  capture `:guard` and `:effect`. New `sysml2--model-extract-control-nodes`
+  for fork/join/merge/decide.
+- 6 new indentation tests (state body, enum, use case, verification,
+  connection ends, idempotent nested re-indent)
+- Evil/general.el keybindings for format (`SPC m =`) and CLI analysis
+  (`SPC m t`) commands
+
+### Changed
+- CLI executable default changed from `"sysml2-cli"` to `"sysml"` (the
+  sysml-lint project was restructured into a 12-crate sysml-cli workspace)
+- `sysml2-simulate-executable` is now optional; defaults to
+  `sysml2-cli-executable` when nil
+- Tree-sitter indent catch-all changed from `parent-bol + offset` to
+  `parent-bol + 0` to avoid spurious indentation
+
 ## 0.2.1 — 2026-03-08
 
 ### Added
