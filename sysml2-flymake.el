@@ -38,6 +38,10 @@
 (declare-function treesit-node-type "treesit")
 (declare-function treesit-node-parent "treesit")
 
+;; Project forward declarations
+(declare-function sysml2-project-root "sysml2-project")
+(declare-function sysml2-project-library-path "sysml2-project")
+
 ;; --- Delimiter matching ---
 
 (defun sysml2--check-unmatched-delimiters ()
@@ -449,24 +453,35 @@ Calls REPORT-FN with the collected diagnostics."
         (cl-return-from sysml2-cli--flymake-backend))
       ;; Write current buffer content to temp file for unsaved changes
       (write-region (point-min) (point-max) tmp nil 'nomessage)
-      (let* ((output-buf (generate-new-buffer " *sysml-lint*"))
-             (proc (start-process "sysml-lint" output-buf
-                                  exe "-f" "json" "lint" tmp)))
-        (setq sysml2--flymake-cli-process proc)
-        (set-process-sentinel
-         proc
-         (lambda (p _event)
-           (unwind-protect
-               (when (and (eq (process-status p) 'exit)
-                          (buffer-live-p source-buf))
-                 (with-current-buffer source-buf
-                   (let ((diagnostics
-                          (sysml2--flymake-parse-cli-json
-                           output-buf source-buf file tmp)))
-                     (funcall report-fn diagnostics))))
-             (ignore-errors (delete-file tmp))
-             (when (buffer-live-p output-buf)
-               (kill-buffer output-buf)))))))))
+      ;; Build args: -f json lint FILE [-I project-root] [--stdlib-path PATH]
+      (let* ((args (list "-f" "json" "lint" tmp))
+             ;; Add project root as include path for import resolution
+             (project-root (when (fboundp 'sysml2-project-root)
+                             (sysml2-project-root)))
+             (stdlib-path (when (fboundp 'sysml2-project-library-path)
+                            (sysml2-project-library-path))))
+        (when project-root
+          (setq args (append args (list "-I" project-root))))
+        (when stdlib-path
+          (setq args (append args (list "--stdlib-path" stdlib-path))))
+        (let* ((output-buf (generate-new-buffer " *sysml-lint*"))
+               (proc (apply #'start-process "sysml-lint" output-buf
+                             exe args)))
+          (setq sysml2--flymake-cli-process proc)
+          (set-process-sentinel
+           proc
+           (lambda (p _event)
+             (unwind-protect
+                 (when (and (eq (process-status p) 'exit)
+                            (buffer-live-p source-buf))
+                   (with-current-buffer source-buf
+                     (let ((diagnostics
+                            (sysml2--flymake-parse-cli-json
+                             output-buf source-buf file tmp)))
+                       (funcall report-fn diagnostics))))
+               (ignore-errors (delete-file tmp))
+               (when (buffer-live-p output-buf)
+                 (kill-buffer output-buf))))))))))
 
 (defun sysml2--flymake-parse-cli-json (output-buf source-buf
                                                    _orig-file _tmp-file)
