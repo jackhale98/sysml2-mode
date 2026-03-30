@@ -454,7 +454,7 @@ Calls REPORT-FN with the collected diagnostics."
       ;; Write current buffer content to temp file for unsaved changes
       (write-region (point-min) (point-max) tmp nil 'nomessage)
       ;; Build args: -f json lint FILE [-I project-root] [--stdlib-path PATH]
-      (let* ((args (list "-f" "json" "lint" tmp))
+      (let* ((args (list "-f" "json" "check" tmp))
              ;; Add project root as include path for import resolution
              (project-root (when (fboundp 'sysml2-project-root)
                              (sysml2-project-root)))

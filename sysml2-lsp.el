@@ -16,15 +16,18 @@
 ;; Supports both eglot (built-in since Emacs 29) and lsp-mode.
 ;;
 ;; Supported servers:
+;;   - sysml-lsp (sysml-cli project) — Rust-based, recommended
 ;;   - SySide LSP (Sensmetry) — ARCHIVED since Oct 2025
-;;   - SysML v2 Pilot Implementation — Java jar (recommended)
+;;   - SysML v2 Pilot Implementation — Java jar
 ;;   - Eclipse SysON LSP — VS Code-oriented, experimental
 ;;
 ;; Server auto-detection tries custom path, then $PATH, then known jars.
 ;; Integration uses `with-eval-after-load' to avoid hard dependencies.
 ;;
-;; Note: The Syside (Sensmetry) LSP server was archived in October 2025.
-;; The recommended server is now the Pilot Implementation Xtext-based server.
+;; The sysml-lsp server (from the sysml-cli project) provides 17 LSP
+;; capabilities including inlay hints, type hierarchy, add-import code
+;; actions, and semantic tokens.  Install with:
+;;   cargo install --path crates/sysml-lsp
 
 ;;; Code:
 
@@ -53,13 +56,18 @@
 Returns a list of strings (command + args) or nil if not found.
 Checks in order:
   1. `sysml2-lsp-server-path' (custom path)
-  2. `syside-lsp' on PATH (for Syside)
-  3. Java + known jar paths (for Pilot Implementation)"
+  2. `sysml-lsp' on PATH (Rust-based, from sysml-cli project)
+  3. `syside-lsp' on PATH (for Syside, archived)
+  4. Java + known jar paths (for Pilot Implementation / SysON)"
   (cond
    ;; Explicit custom path
    ((and sysml2-lsp-server-path
          (file-executable-p sysml2-lsp-server-path))
     (list sysml2-lsp-server-path))
+   ;; sysml-lsp (Rust-based, recommended)
+   ((and (memq sysml2-lsp-server '(sysml-lsp nil))
+         (sysml2--find-executable "sysml-lsp"))
+    (list (sysml2--find-executable "sysml-lsp") "--stdio"))
    ;; Pilot Implementation (Java jar)
    ((and (memq sysml2-lsp-server '(pilot nil))
          (executable-find "java")
@@ -68,8 +76,8 @@ Checks in order:
     (list (executable-find "java") "-jar" sysml2-lsp-server-path))
    ;; Syside LSP (archived)
    ((and (eq sysml2-lsp-server 'syside)
-         (executable-find "syside-lsp"))
-    (list (executable-find "syside-lsp") "--stdio"))
+         (sysml2--find-executable "syside-lsp"))
+    (list (sysml2--find-executable "syside-lsp") "--stdio"))
    ;; Eclipse SysON (Java jar)
    ((and (eq sysml2-lsp-server 'syson)
          (executable-find "java")

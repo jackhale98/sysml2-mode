@@ -107,6 +107,9 @@
 (declare-function sysml2-cli-stats "sysml2-cli-commands")
 (declare-function sysml2-cli-deps "sysml2-cli-commands")
 (declare-function sysml2-cli-coverage "sysml2-cli-commands")
+(declare-function sysml2-cli-find "sysml2-cli-commands")
+(declare-function sysml2-cli-doc "sysml2-cli-commands")
+(declare-function sysml2-cli-analyze "sysml2-cli-commands")
 
 (defvar sysml2-mode-map)
 
@@ -213,6 +216,9 @@
      "t a" '(sysml2-cli-stats :which-key "statistics")
      "t d" '(sysml2-cli-deps :which-key "dependencies")
      "t v" '(sysml2-cli-coverage :which-key "coverage")
+     "t f" '(sysml2-cli-find :which-key "find elements")
+     "t g" '(sysml2-cli-doc :which-key "generate docs")
+     "t n" '(sysml2-cli-analyze :which-key "analyze")
      ;; Inspect / Report
      "i"   '(:ignore t :which-key "inspect")
      "i s" '(sysml2-report-summary :which-key "model summary")

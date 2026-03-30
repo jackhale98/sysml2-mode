@@ -13,11 +13,11 @@
 ;;; Commentary:
 
 ;; Interactive wrappers for sysml CLI analysis commands.
-;; These run `sysml lint', `sysml check', `sysml list', `sysml show',
-;; `sysml trace', `sysml stats', `sysml deps', and `sysml coverage'
-;; on the current buffer's file and display results.
+;; These run `sysml check', `sysml list', `sysml show', `sysml trace',
+;; `sysml stats', `sysml deps', `sysml coverage', `sysml find',
+;; `sysml doc', and `sysml analyze' on the current buffer's file.
 ;;
-;; Requires `sysml' CLI (v0.3.0+) on exec-path.
+;; Requires `sysml' CLI (v0.5.0+) on exec-path.
 
 ;;; Code:
 
@@ -27,14 +27,17 @@
 ;;; Public API:
 ;;
 ;; Functions:
-;;   `sysml2-cli-lint'     -- Run lint checks on current file
-;;   `sysml2-cli-check'    -- Run comprehensive checks
+;;   `sysml2-cli-lint'     -- Run lint/check on current file
+;;   `sysml2-cli-check'    -- Run comprehensive checks (same as lint)
 ;;   `sysml2-cli-list'     -- List model elements
 ;;   `sysml2-cli-show'     -- Show element details
 ;;   `sysml2-cli-trace'    -- Requirements traceability
 ;;   `sysml2-cli-stats'    -- Aggregate statistics
 ;;   `sysml2-cli-deps'     -- Dependency analysis
 ;;   `sysml2-cli-coverage' -- Model coverage analysis
+;;   `sysml2-cli-find'     -- Search elements by name pattern
+;;   `sysml2-cli-doc'      -- Generate documentation
+;;   `sysml2-cli-analyze'  -- Run analysis cases
 
 (defvar sysml2-cli-output-buffer "*SysML CLI*"
   "Name of the CLI output buffer.")
@@ -104,13 +107,14 @@ Returns the output string."
 
 ;;;###autoload
 (defun sysml2-cli-lint ()
-  "Run `sysml lint' on the current file.
-Displays syntax and structural validation results."
+  "Run `sysml check' on the current file.
+Displays syntax and structural validation results.
+\(In CLI v0.5+, `lint' is an alias for `check'.)"
   (interactive)
   (let ((file (sysml2-cli--ensure-file)))
     (sysml2-cli--run
-     (list "lint" file)
-     (format "Lint: %s" (file-name-nondirectory file)))))
+     (list "check" file)
+     (format "Check: %s" (file-name-nondirectory file)))))
 
 ;;;###autoload
 (defun sysml2-cli-check ()
@@ -200,6 +204,36 @@ Shows model completeness and quality score."
     (sysml2-cli--run
      (list "coverage" file)
      (format "Coverage: %s" (file-name-nondirectory file)))))
+
+;;;###autoload
+(defun sysml2-cli-find (pattern)
+  "Run `sysml find' to search elements matching PATTERN.
+Searches across all project files by name or regex."
+  (interactive "sSearch pattern: ")
+  (let ((file (sysml2-cli--ensure-file)))
+    (sysml2-cli--run
+     (list "find" file "--pattern" pattern)
+     (format "Find: %s" pattern))))
+
+;;;###autoload
+(defun sysml2-cli-doc ()
+  "Run `sysml doc' on the current file.
+Generates Markdown documentation from the model."
+  (interactive)
+  (let ((file (sysml2-cli--ensure-file)))
+    (sysml2-cli--run
+     (list "doc" file)
+     (format "Doc: %s" (file-name-nondirectory file)))))
+
+;;;###autoload
+(defun sysml2-cli-analyze ()
+  "Run `sysml analyze list' on the current file.
+Lists analysis cases defined in the model."
+  (interactive)
+  (let ((file (sysml2-cli--ensure-file)))
+    (sysml2-cli--run
+     (list "analyze" "list" file)
+     (format "Analyze: %s" (file-name-nondirectory file)))))
 
 (provide 'sysml2-cli-commands)
 ;;; sysml2-cli-commands.el ends here
