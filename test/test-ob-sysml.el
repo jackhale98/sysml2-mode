@@ -139,5 +139,54 @@
   "Test that sysml src blocks use sysml2-mode."
   (should (equal 'sysml2 (cdr (assoc "sysml" org-src-lang-modes)))))
 
+;; --- Include args building ---
+
+(ert-deftest sysml2-test-ob-include-args-single ()
+  "Test building include args from a single :includes path."
+  (let* ((dir (make-temp-file "ob-sysml-test-" t))
+         (args (ob-sysml--build-include-args
+                `((:includes . ,dir)))))
+    (unwind-protect
+        (progn
+          (should (member "-I" args))
+          (should (member dir args)))
+      (delete-directory dir t))))
+
+(ert-deftest sysml2-test-ob-include-args-empty ()
+  "Test building include args with no :includes."
+  (let ((buffer-file-name nil))
+    (let ((args (ob-sysml--build-include-args nil)))
+      ;; No includes and no buffer-file-name => no args
+      (should (null args)))))
+
+(ert-deftest sysml2-test-ob-include-args-org-dir ()
+  "Test that org file directory is auto-included."
+  (let ((buffer-file-name "/tmp/test-model.org"))
+    (let ((args (ob-sysml--build-include-args nil)))
+      (should (member "-I" args))
+      (should (member "/tmp/" args)))))
+
+(ert-deftest sysml2-test-ob-execute-check-with-includes ()
+  "Test :cmd check with :includes passes -I to CLI."
+  (skip-unless (sysml2--find-executable (or sysml2-cli-executable "sysml")))
+  (let* ((dir (make-temp-file "ob-sysml-inc-" t))
+         (lib-file (expand-file-name "defs.sysml" dir)))
+    (unwind-protect
+        (progn
+          ;; Write a definitions file
+          (with-temp-file lib-file
+            (insert "package Defs { part def Widget; }"))
+          ;; Check a file that imports from it
+          (let ((buffer-file-name nil)
+                (result (org-babel-execute:sysml
+                         (concat "package Main {\n"
+                                 "    import Defs::*;\n"
+                                 "    part w : Widget;\n"
+                                 "}")
+                         `((:cmd . "check")
+                           (:includes . ,dir)))))
+            (should (stringp result))))
+      (delete-directory dir t))))
+
 (provide 'test-ob-sysml)
 ;;; test-ob-sysml.el ends here

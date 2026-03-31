@@ -67,6 +67,19 @@
 ;;         attribute maxPower = $power;
 ;;     }
 ;;     #+END_SRC
+;;
+;;   Import from other tangled files:
+;;
+;;     #+BEGIN_SRC sysml :tangle subsystems/propulsion.sysml
+;;     package Propulsion { part def Motor { } }
+;;     #+END_SRC
+;;
+;;     #+BEGIN_SRC sysml :cmd check :tangle-before yes :includes "subsystems/"
+;;     package Main {
+;;         import Propulsion::*;
+;;         part myMotor : Motor;
+;;     }
+;;     #+END_SRC
 
 ;;; Code:
 
@@ -156,7 +169,12 @@ Additional parameters:
   :simulate-type  — eval, sm/state-machine, af/action-flow, list
   :name           — element name for simulate/show
   :events         — comma-separated events for state machine
-  :bindings       — comma-separated name=value for simulation"
+  :bindings       — comma-separated name=value for simulation
+  :includes       — additional .sysml files or directories for import
+                    resolution (passed as -I to the CLI)
+  :tangle-before  — when \"yes\", tangle all blocks in the document
+                    before execution so imports across tangled files
+                    resolve correctly"
   (let* ((cmd (cdr (assq :cmd params)))
          (expanded (org-babel-expand-body:sysml body params)))
     (cond
@@ -180,12 +198,20 @@ Additional parameters:
 ;; ---------------------------------------------------------------------------
 
 (defun ob-sysml--execute-cli (cmd body params)
-  "Execute CLI command CMD on BODY with PARAMS."
+  "Execute CLI command CMD on BODY with PARAMS.
+When :tangle-before is \"yes\", tangles all SysML blocks in the
+current org document first, then passes the tangle output directory
+as an include path so cross-file imports resolve.
+The :includes parameter adds additional -I paths."
+  ;; Tangle first if requested
+  (when (equal (cdr (assq :tangle-before params)) "yes")
+    (ob-sysml--tangle-for-includes))
   (let* ((tmp (make-temp-file "ob-sysml-" nil ".sysml"))
          (exe (or (sysml2--find-executable
                    (or sysml2-cli-executable "sysml"))
                   (user-error "sysml CLI not found on exec-path")))
-         (args nil))
+         (args nil)
+         (include-args (ob-sysml--build-include-args params)))
     (unwind-protect
         (progn
           (with-temp-file tmp (insert body))
@@ -206,10 +232,45 @@ Additional parameters:
                        (list "show" tmp))))
                   ("simulate"
                    (ob-sysml--simulate-args tmp params))))
+          ;; Append include paths
+          (setq args (append args include-args))
           (with-temp-buffer
-            (let ((exit-code (apply #'call-process exe nil t nil args)))
-              (buffer-string))))
+            (apply #'call-process exe nil t nil args)
+            (buffer-string)))
       (ignore-errors (delete-file tmp)))))
+
+(defun ob-sysml--build-include-args (params)
+  "Build -I flags from :includes in PARAMS and tangle directories.
+Returns a list of strings like (\"-I\" \"path1\" \"-I\" \"path2\")."
+  (let ((includes (cdr (assq :includes params)))
+        (result nil))
+    ;; :includes can be a string (single path) or space-separated paths
+    (when includes
+      (dolist (path (if (stringp includes)
+                        (split-string includes)
+                      (list includes)))
+        (let ((expanded (expand-file-name path)))
+          (when (or (file-directory-p expanded)
+                    (file-exists-p expanded))
+            (push "-I" result)
+            (push expanded result)))))
+    ;; Also include the directory of the org file (where tangles land)
+    (when buffer-file-name
+      (let ((org-dir (file-name-directory buffer-file-name)))
+        (push "-I" result)
+        (push org-dir result)))
+    (nreverse result)))
+
+(declare-function org-babel-tangle "ob-tangle")
+
+(defun ob-sysml--tangle-for-includes ()
+  "Tangle all SysML blocks in the current org buffer.
+This ensures that tangled .sysml files exist on disk so that
+cross-file import statements resolve during CLI execution."
+  (when (and (derived-mode-p 'org-mode)
+             (fboundp 'org-babel-tangle))
+    (let ((inhibit-message t))
+      (org-babel-tangle nil nil "sysml"))))
 
 (defun ob-sysml--simulate-args (file params)
   "Build simulate command args for FILE from PARAMS."
