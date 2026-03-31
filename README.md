@@ -13,6 +13,7 @@ Provides syntax highlighting, indentation, completion, navigation, diagram gener
 | **[Tutorial](TUTORIAL.md)** | Step-by-step guide to building a complete SysML v2 model (drone system example covering all 20 SysML v2 concepts) |
 | **[SysML v2 Syntax Reference](SYNTAX-REFERENCE.md)** | Language syntax reference and best practices for SysML v2 textual notation |
 | **[FMI Integration Guide](examples/fmi-integration.md)** | Complete workflow for SysML v2 + Modelica/FMI co-simulation (8-step process from model to results) |
+| **[Literate SysML Guide](examples/literate-sysml.md)** | Org-babel literate programming: tangle, noweb, inline validation, simulation, and diagrams |
 | **[Changelog](CHANGELOG.md)** | Release history and version notes |
 
 ## Table of Contents
