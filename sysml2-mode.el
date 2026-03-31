@@ -92,6 +92,7 @@
 (require 'sysml2-simulate)
 (require 'sysml2-format)
 (require 'sysml2-cli-commands)
+(require 'ob-sysml)
 (require 'sysml2-eldoc)
 
 ;; --- Version ---

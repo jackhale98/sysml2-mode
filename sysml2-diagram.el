@@ -966,63 +966,8 @@ uses the exposed scope as the diagram scope."
     (remove-hook 'after-save-hook #'sysml2--diagram-preview-on-save t)))
 
 ;; --- Org-Babel Integration ---
-
-(with-eval-after-load 'org
-  (defun org-babel-execute:sysml (body params)
-    "Execute a SysML v2 code block via diagram generation.
-Supported PARAMS:
-  :diagram-type — one of tree, interconnection, state-machine,
-                  action-flow, requirement-tree (default: tree)
-  :scope — definition name for scoped diagrams
-  :file — output file path"
-    (let* ((diagram-type (intern (or (cdr (assq :diagram-type params)) "tree")))
-           (scope (cdr (assq :scope params)))
-           (out-file (cdr (assq :file params))))
-      (with-temp-buffer
-        (insert body)
-        (sysml2-mode)
-        (if out-file
-            (let ((format (or (file-name-extension out-file) "svg")))
-              (pcase sysml2-diagram-backend
-                ('native
-                 (if (and (sysml2--diagram-resolve-d2)
-                          (memq diagram-type sysml2--diagram-d2-types))
-                     (let* ((d2-src (sysml2-d2-generate diagram-type scope))
-                            (data (sysml2--diagram-invoke-d2-sync d2-src format)))
-                       (with-temp-file out-file
-                         (set-buffer-multibyte nil)
-                         (insert data))
-                       out-file)
-                   ;; Fall back to SVG
-                   (when (memq diagram-type sysml2--diagram-svg-types)
-                     (let ((svg (sysml2-svg-generate diagram-type scope)))
-                       (with-temp-file out-file
-                         (set-buffer-multibyte nil)
-                         (insert svg))
-                       out-file))))
-                ('plantuml
-                 (let ((puml (sysml2-plantuml-generate diagram-type scope))
-                       (result nil))
-                   (sysml2--diagram-invoke-plantuml
-                    puml format
-                    (lambda (success data)
-                      (if success
-                          (progn
-                            (with-temp-file out-file
-                              (set-buffer-multibyte nil)
-                              (insert data))
-                            (setq result out-file))
-                        (setq result (format "Error: %s" data)))))
-                   result))))
-          ;; No output file — return source
-          (pcase sysml2-diagram-backend
-            ('native
-             (if (memq diagram-type sysml2--diagram-d2-types)
-                 (sysml2-d2-generate diagram-type scope)
-               (when (memq diagram-type sysml2--diagram-svg-types)
-                 (sysml2-svg-generate diagram-type scope))))
-            ('plantuml
-             (sysml2-plantuml-generate diagram-type scope))))))))
+;; Moved to ob-sysml.el for full literate programming support
+;; (tangle, noweb, variable substitution, multiple result types).
 
 (provide 'sysml2-diagram)
 ;;; sysml2-diagram.el ends here
