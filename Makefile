@@ -7,7 +7,8 @@ TEST_FILES := test/test-helper.el test/test-lang.el test/test-font-lock.el \
 	test/test-indent.el test/test-completion.el test/test-navigation.el \
 	test/test-plantuml.el test/test-diagram.el test/test-project.el \
 	test/test-flymake.el test/test-outline.el test/test-fmi.el \
-	test/test-cosim.el test/test-evil.el test/test-api.el test/test-ts.el
+	test/test-cosim.el test/test-evil.el test/test-api.el test/test-ts.el \
+	test/test-ob-sysml.el
 
 .PHONY: all test compile clean lint tree-sitter-test
 
