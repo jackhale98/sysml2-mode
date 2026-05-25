@@ -335,6 +335,7 @@ Scales the image to fit the preview window dimensions."
        (display-buffer buf)))))
 
 ;; --- Interactive Commands ---
+;;;###autoload
 
 (defun sysml2-diagram-preview ()
   "Preview diagram for the definition at point.
@@ -344,6 +345,7 @@ Auto-detects the diagram type.  Bound to `C-c C-d p'."
          (dtype (car detected))
          (scope (cdr detected)))
     (sysml2--diagram-generate-and-display dtype scope)))
+;;;###autoload
 
 (defun sysml2-diagram-preview-buffer ()
   "Preview a tree diagram for the entire buffer.
@@ -424,11 +426,13 @@ the enclosing definition at point as the default selection."
 (defun sysml2--diagram-generate-and-show (type scope)
   "Generate a diagram of TYPE with SCOPE and display it."
   (sysml2--diagram-generate-and-display type scope))
+;;;###autoload
 
 (defun sysml2-diagram-tree ()
   "Preview a parts tree diagram for the current buffer."
   (interactive)
   (sysml2--diagram-generate-and-show 'tree nil))
+;;;###autoload
 
 (defun sysml2-diagram-ibd ()
   "Preview an internal block diagram (interconnection).
@@ -436,6 +440,7 @@ Auto-detects scope from enclosing definition, or prompts."
   (interactive)
   (sysml2--diagram-generate-and-show
    'interconnection (sysml2--diagram-read-scope "IBD")))
+;;;###autoload
 
 (defun sysml2-diagram-state-machine ()
   "Preview a state machine diagram.
@@ -443,6 +448,7 @@ Auto-detects scope from enclosing definition, or prompts."
   (interactive)
   (sysml2--diagram-generate-and-show
    'state-machine (sysml2--diagram-read-scope "State machine")))
+;;;###autoload
 
 (defun sysml2-diagram-action-flow ()
   "Preview an action flow diagram.
@@ -450,21 +456,25 @@ Auto-detects scope from enclosing definition, or prompts."
   (interactive)
   (sysml2--diagram-generate-and-show
    'action-flow (sysml2--diagram-read-scope "Action flow")))
+;;;###autoload
 
 (defun sysml2-diagram-requirement ()
   "Preview a requirement tree diagram for the current buffer."
   (interactive)
   (sysml2--diagram-generate-and-show 'requirement-tree nil))
+;;;###autoload
 
 (defun sysml2-diagram-use-case ()
   "Preview a use case diagram for the current buffer."
   (interactive)
   (sysml2--diagram-generate-and-show 'use-case nil))
+;;;###autoload
 
 (defun sysml2-diagram-package ()
   "Preview a package diagram for the current buffer."
   (interactive)
   (sysml2--diagram-generate-and-show 'package nil))
+;;;###autoload
 
 (defun sysml2-diagram-export (dtype scope filename)
   "Export diagram of type DTYPE with SCOPE to FILENAME.
@@ -524,6 +534,7 @@ Bound to `C-c C-d e'."
                     (insert data))
                   (message "Exported to %s" filename))
               (message "PlantUML error: %s" data)))))))))
+;;;###autoload
 
 (defun sysml2-diagram-type (type)
   "Generate a diagram of TYPE via completing-read."
@@ -540,6 +551,7 @@ Bound to `C-c C-d e'."
                     ('state-machine "State machine")
                     ('action-flow "Action flow"))))))
     (sysml2--diagram-generate-and-display type scope)))
+;;;###autoload
 
 (defun sysml2-diagram-open-plantuml ()
   "Open the diagram source for the current diagram in a buffer.
@@ -581,6 +593,7 @@ Uses base64url encoding."
     (setq b64 (replace-regexp-in-string "/" "_" b64))
     (setq b64 (replace-regexp-in-string "=+$" "" b64))
     b64))
+;;;###autoload
 
 (defun sysml2-diagram-open-in-playground ()
   "Open the current diagram in the D2 web playground.
@@ -921,6 +934,7 @@ Returns the expose scope string (e.g. \"PartsTree\" from
                     (let ((scope (match-string 1 body)))
                       ;; Strip trailing ::* or ::** wildcards
                       (replace-regexp-in-string "::?\\*+\\'" "" scope))))))))))))
+;;;###autoload
 
 (defun sysml2-diagram-view ()
   "Generate a diagram based on a view definition in the current buffer.

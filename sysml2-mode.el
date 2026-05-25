@@ -94,6 +94,8 @@
 (require 'sysml2-cli-commands)
 (require 'ob-sysml)
 (require 'sysml2-eldoc)
+(require 'sysml2-doctor)
+(require 'sysml2-repl)
 
 ;; --- Version ---
 
@@ -178,6 +180,14 @@
 (declare-function sysml2-cli-find "sysml2-cli-commands")
 (declare-function sysml2-cli-doc "sysml2-cli-commands")
 (declare-function sysml2-cli-analyze "sysml2-cli-commands")
+(declare-function sysml2-cli-rollup "sysml2-cli-commands")
+(declare-function sysml2-cli-interfaces "sysml2-cli-commands")
+(declare-function sysml2-cli-allocation "sysml2-cli-commands")
+(declare-function sysml2-cli-diff "sysml2-cli-commands")
+(declare-function sysml2-cli-index "sysml2-cli-commands")
+(declare-function sysml2-cli-rename "sysml2-cli-commands")
+(declare-function sysml2-cli-add "sysml2-cli-commands")
+(declare-function sysml2-cli-remove "sysml2-cli-commands")
 (declare-function sysml2-scaffold "sysml2-completion")
 (declare-function sysml2-scaffold-model "sysml2-completion")
 (declare-function sysml2-scaffold-package "sysml2-completion")
@@ -266,6 +276,7 @@
     (define-key map (kbd "C-c C-x e") #'sysml2-simulate-eval)
     (define-key map (kbd "C-c C-x m") #'sysml2-simulate-state-machine)
     (define-key map (kbd "C-c C-x a") #'sysml2-simulate-action-flow)
+    (define-key map (kbd "C-c C-x r") #'sysml2-repl)
     ;; Format (tree-sitter indent)
     (define-key map (kbd "C-c C-= =") #'sysml2-format-buffer)
     (define-key map (kbd "C-c C-= r") #'sysml2-format-region)
@@ -281,6 +292,14 @@
     (define-key map (kbd "C-c C-t f") #'sysml2-cli-find)
     (define-key map (kbd "C-c C-t g") #'sysml2-cli-doc)
     (define-key map (kbd "C-c C-t n") #'sysml2-cli-analyze)
+    (define-key map (kbd "C-c C-t r") #'sysml2-cli-rollup)
+    (define-key map (kbd "C-c C-t i") #'sysml2-cli-interfaces)
+    (define-key map (kbd "C-c C-t o") #'sysml2-cli-allocation)
+    (define-key map (kbd "C-c C-t D") #'sysml2-cli-diff)
+    (define-key map (kbd "C-c C-t X") #'sysml2-cli-index)
+    (define-key map (kbd "C-c C-t R") #'sysml2-cli-rename)
+    (define-key map (kbd "C-c C-t A") #'sysml2-cli-add)
+    (define-key map (kbd "C-c C-t K") #'sysml2-cli-remove)
     ;; Inspect / Report
     (define-key map (kbd "C-c C-i s") #'sysml2-report-summary)
     (define-key map (kbd "C-c C-i t") #'sysml2-report-traceability)
@@ -300,6 +319,14 @@
 ;; --- Tree-sitter mode (loaded after syntax table and keymap) ---
 
 (require 'sysml2-ts)
+
+;; --- Menu bar and which-key (loaded after keymap) ---
+
+(require 'sysml2-menu)
+(sysml2-menu-install)
+
+(require 'sysml2-transient)
+(sysml2-transient-install)
 
 ;; --- Outline Regexp ---
 

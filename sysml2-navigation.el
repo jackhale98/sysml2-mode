@@ -312,6 +312,7 @@ Returns a list of (FILE . LINE-NUMBER) entries."
   (goto-char (point-min))
   (forward-line (1- line))
   (recenter))
+;;;###autoload
 
 (defun sysml2-goto-definition ()
   "Jump to the definition of the identifier at point.
@@ -363,6 +364,7 @@ with \\[pop-global-mark]."
                  (car selected) (cdr selected)))))))))))
 
 ;; --- Rename Symbol ---
+;;;###autoload
 
 (defun sysml2-rename-symbol ()
   "Rename the symbol at point throughout the current buffer.
@@ -436,6 +438,7 @@ identifier matching instead of regex."
           (with-selected-window (get-buffer-window buf)
             (goto-char marker)
             (recenter)))))))
+;;;###autoload
 
 ;;;###autoload
 (defun sysml2-find-references ()

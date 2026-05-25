@@ -415,16 +415,47 @@ Calls REPORT-FN with collected diagnostics from all in-process checks."
 (defvar-local sysml2--flymake-cli-process nil
   "Current `sysml lint' process for Flymake.")
 
-(defconst sysml2--flymake-cli-only-codes '("W004" "W005" "W006" "W007" "W008")
+(defconst sysml2--flymake-in-process-codes
+  '("E001" "E002" "W001" "W002" "W003")
+  "Diagnostic codes already produced by in-process Flymake checkers.
+These are filtered out of CLI output to avoid duplicate diagnostics:
+  E001 — Syntax error / unmatched delimiter
+  E002 — Duplicate definition
+  W001 — Unused definition
+  W002 — Unsatisfied requirement
+  W003 — Unverified requirement")
+
+(defconst sysml2--flymake-cli-only-codes
+  '("W004" "W005" "W006" "W007" "W008"
+    "W009" "W010" "W011" "W012" "W013" "W014" "W015" "W016")
   "Diagnostic codes that only the CLI can produce.
-These require cross-file import resolution or type analysis:
+Kept as an explicit allowlist so the buffer never displays a code the
+in-process backend has already produced.  Updated whenever sysml-cli
+adds new check codes:
   W004 — Unresolved type reference
   W005 — Unresolved target reference
-  W006 — Port type mismatch (needs type resolution)
+  W006 — Port type mismatch
   W007 — Empty constraint body
   W008 — Calc missing return
-The in-process backends already handle syntax errors, duplicates,
-unsatisfied/unverified requirements, and unused definitions.")
+  W009 — Port direction mismatch
+  W010 — Import cycle
+  W011 — Multiplicity violation
+  W012 — Missing documentation
+  W013 — Naming convention violation
+  W014 — Orphaned requirement
+  W015 — Self-specialization (infinite recursion)
+  W016 — Unbound port")
+
+(defun sysml2--flymake-keep-cli-diagnostic-p (code)
+  "Return non-nil when a CLI diagnostic with CODE should reach the buffer.
+A diagnostic is kept when it appears in `sysml2--flymake-cli-only-codes'
+and is NOT in `sysml2--flymake-in-process-codes'.  CODE may be nil
+(some CLI errors omit the code field); in that case the diagnostic is
+kept so the user always sees raw CLI errors."
+  (cond
+   ((null code) t)
+   ((member code sysml2--flymake-in-process-codes) nil)
+   (t (member code sysml2--flymake-cli-only-codes))))
 
 (defun sysml2-cli--flymake-backend (report-fn &rest _args)
   "Flymake backend using `sysml lint' for cross-file validation.
@@ -496,9 +527,10 @@ Returns a list of Flymake diagnostics."
                             :object-type 'alist :array-type 'list)))
             (dolist (item (if (listp json-data) json-data nil))
               (let* ((code (alist-get 'code item)))
-                ;; Only keep diagnostics that require cross-file analysis.
-                ;; E001/E002/W001/W002/W003 are already covered in-process.
-                (when (member code sysml2--flymake-cli-only-codes)
+                ;; Drop codes already produced by the in-process backend
+                ;; (see `sysml2--flymake-in-process-codes') to prevent
+                ;; duplicate diagnostics; keep everything else.
+                (when (sysml2--flymake-keep-cli-diagnostic-p code)
                   (let* ((msg (alist-get 'message item))
                          (severity-str (alist-get 'severity item))
                          (span (alist-get 'span item))

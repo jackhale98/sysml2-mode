@@ -300,6 +300,7 @@ Collapses every level, not just top-level."
     (sysml2-outline-refresh)))
 
 ;; --- Public Commands ---
+;;;###autoload
 
 (defun sysml2-outline-refresh ()
   "Refresh the outline side panel from the current source buffer."
@@ -310,6 +311,7 @@ Collapses every level, not just top-level."
     (when (and src (buffer-live-p src))
       (let ((entries (sysml2--outline-scan src)))
         (sysml2--outline-render entries src)))))
+;;;###autoload
 
 (defun sysml2-outline-toggle ()
   "Toggle the SysML2 outline side panel."

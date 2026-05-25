@@ -19,6 +19,8 @@ Provides syntax highlighting, indentation, completion, navigation, diagram gener
 ## Table of Contents
 
 - [Installation](#installation)
+- [First-Run Health Check](#first-run-health-check)
+- [Menu Bar and Transient Pickers](#menu-bar-and-transient-pickers)
 - [Features](#features)
 - [Diagram Generation](#diagram-generation)
 - [Model Scaffolding](#model-scaffolding)
@@ -88,6 +90,31 @@ Add to `~/.config/doom/config.el`:
 ```
 
 Then run `doom sync`.
+
+### First-Run Health Check
+
+After installing, run `M-x sysml2-doctor` to probe every external tool the
+mode can leverage — `sysml` CLI, tree-sitter grammar, LSP server, D2,
+PlantUML, GraphViz, Pandoc, and the resolved SysML stdlib path. The
+doctor buffer shows one line per check with `[ok]`, `[warn]` (optional,
+not installed), or `[FAIL]` (required, missing) plus an install hint.
+Re-run it any time something stops working to quickly separate
+"the mode is broken" from "I haven't installed that tool yet."
+
+### Menu Bar and Transient Pickers
+
+Every major feature is exposed on a `SysML2` menu-bar item (no
+external dependencies) for mouse-driven discovery, and three
+keyboard-driven transient pickers replace minibuffer-prompt sub-menus:
+
+| Picker | Binding | Covers |
+|--------|---------|--------|
+| Diagrams      | `C-c C-d RET` | tree, IBD, state, action, requirement, use case, package, view, preview, export, open in playground |
+| Scaffold      | `C-c m RET`   | model skeleton, package, part def, port def, requirement, state, action, calc, enum, use case |
+| CLI / Refactor| `C-c C-t RET` | check, list, show, trace, deps, stats, coverage, find, doc, analyze, rollup, interfaces, allocation, diff, index, rename, add, remove |
+
+Vanilla-Emacs users with `which-key` installed also see prefix labels
+("diagram", "scaffold", "cli-analyze", …) when they hold a `C-c` prefix.
 
 ## Features
 
@@ -184,6 +211,14 @@ Three layers of diagnostics, from zero-dependency to deep cross-file analysis:
 12. **Port type mismatches** (W006) — connected ports with incompatible types
 13. **Empty constraints** (W007) — constraint defs with body but no expression
 14. **Missing returns** (W008) — calc defs with body but no return
+15. **Port direction mismatches** (W009) — `in`/`out` incompatibility
+16. **Import cycles** (W010) — recursive import chains
+17. **Multiplicity violations** (W011) — bounds violations
+18. **Missing documentation** (W012) — public top-level defs without `doc /* ... */`
+19. **Naming conventions** (W013) — definitions not in PascalCase, usages not in camelCase
+20. **Orphaned requirements** (W014) — requirement defs that are never satisfied, verified, or specialized
+21. **Self-specialization** (W015) — `part def X :> X` infinite-recursion typos
+22. **Unbound ports** (W016) — port usages declared inside a part but never connected
 
 ### Project Detection
 
@@ -207,6 +242,12 @@ When the [`sysml` tree-sitter grammar](https://github.com/jackhale98/tree-sitter
 - **Completion** — context-aware CAPF using parse tree queries
 - **Flymake** — tree-sitter ERROR node reporting
 - **Goto-definition / Rename** — parse-tree-based search
+- **Structural movement** (Emacs 30+) — `treesit-thing-settings` for `forward-sexp`, `forward-sentence`, `forward-list` driven by AST node types
+- **Outline** (Emacs 30+) — `treesit-outline-predicate` recognises every definition node as an outline heading
+
+Canonical tree-sitter query files for downstream editors (Helix,
+Neovim, Zed) live in [`tree-sitter-sysml/queries/`](tree-sitter-sysml/queries/):
+`highlights.scm`, `indents.scm`, `folds.scm`, `locals.scm`, `tags.scm`.
 
 Install the grammar:
 
@@ -562,7 +603,7 @@ sysml lint model.sysml -I shared-library/
 
 ## CLI Analysis
 
-When the `sysml` CLI is installed, additional analysis commands are available for cross-file validation and project-level queries:
+When the `sysml` CLI is installed, additional analysis and refactoring commands are available for cross-file validation, project-level queries, and code transformation. Refactoring commands always show a JSON-driven preview and prompt for confirmation before touching disk.
 
 | Binding | Command | Description |
 |---------|---------|-------------|
@@ -574,6 +615,21 @@ When the `sysml` CLI is installed, additional analysis commands are available fo
 | `C-c C-t a` | `sysml2-cli-stats` | Aggregate model statistics |
 | `C-c C-t d` | `sysml2-cli-deps` | Forward/reverse dependency analysis |
 | `C-c C-t v` | `sysml2-cli-coverage` | Model completeness and quality score |
+| `C-c C-t f` | `sysml2-cli-find` | Search elements by name pattern |
+| `C-c C-t g` | `sysml2-cli-doc` | Generate Markdown documentation |
+| `C-c C-t n` | `sysml2-cli-analyze` | List analysis cases in the model |
+| `C-c C-t r` | `sysml2-cli-rollup` | Attribute rollup (mass/cost/power/…) |
+| `C-c C-t i` | `sysml2-cli-interfaces` | Port-interface analysis (unconnected ports with `C-u`) |
+| `C-c C-t o` | `sysml2-cli-allocation` | Logical-to-physical allocation matrix |
+| `C-c C-t D` | `sysml2-cli-diff` | Semantic diff between two SysML files |
+| `C-c C-t X` | `sysml2-cli-index` | Build / show project index (`C-u` for stats) |
+| `C-c C-t R` | `sysml2-cli-rename` | Refactor: rename element (`C-u` for project-wide) |
+| `C-c C-t A` | `sysml2-cli-add` | Refactor: add an element from a template |
+| `C-c C-t K` | `sysml2-cli-remove` | Refactor: remove an element |
+
+All commands automatically forward `-I PROJECT-ROOT` and `--stdlib-path` to the CLI when a project root is detected, so cross-file resolution Just Works without per-buffer configuration.
+
+A transient picker is available at `C-c C-t RET` for keyboard browsing.
 
 ## Formatting
 
@@ -585,6 +641,11 @@ Re-indent the buffer or region using the tree-sitter indentation engine (no exte
 | `C-c C-= r` | `sysml2-format-region` | Re-indent selected region |
 
 Enable `sysml2-format-on-save-mode` to auto-format before every save.
+
+For a CI-style "would the canonical formatter change anything?" gate that
+does NOT modify the buffer, run `M-x sysml2-format-check-via-cli` (uses
+`sysml fmt --check -f json`), or set the defcustom
+`sysml2-format-check-on-save` to `t` to warn automatically on every save.
 
 ## Systems Modeling API
 
@@ -602,9 +663,25 @@ REST client for the [Systems Modeling API](https://www.omg.org/spec/SystemsModel
 
 ## LSP Support
 
-Integrates with both [eglot](https://github.com/joaotavora/eglot) (built into Emacs 29+) and [lsp-mode](https://github.com/emacs-lsp/lsp-mode). Provides cross-file go-to-definition, find-references, completion, and diagnostics from the language server.
+Integrates with both [eglot](https://github.com/joaotavora/eglot) (built into Emacs 29+) and [lsp-mode](https://github.com/emacs-lsp/lsp-mode). Provides cross-file go-to-definition, find-references, completion, hover, inlay hints, semantic tokens, code actions, type hierarchy, code lenses, document links, and diagnostics from the language server.
 
-Two servers are supported:
+The default server is **`sysml-lsp`** (Rust, from the same workspace as
+the CLI) which advertises 19 capabilities including codeLens
+(satisfy/verify/usage counts above each definition) and documentLink
+(clickable imports and super-types). Three additional servers are
+recognised:
+
+### sysml-lsp (default, recommended)
+
+```elisp
+(setq sysml2-lsp-server 'sysml-lsp)   ;; default
+```
+
+Built from <https://github.com/jackhale98/sysml-cli> (same workspace as
+the `sysml` CLI). Install with
+`cargo install --path crates/sysml-lsp`. Advertises 19 capabilities
+including codeLens (satisfy/verify/usage counts above each definition)
+and documentLink (clickable imports and super-types).
 
 ### SysIDE (Sensmetry)
 
@@ -750,6 +827,22 @@ Plus `gd` for goto-definition in normal state. Neither evil nor general.el is a 
 | `C-c C-t a` | `sysml2-cli-stats` |
 | `C-c C-t d` | `sysml2-cli-deps` |
 | `C-c C-t v` | `sysml2-cli-coverage` |
+| `C-c C-t f` | `sysml2-cli-find` |
+| `C-c C-t g` | `sysml2-cli-doc` |
+| `C-c C-t n` | `sysml2-cli-analyze` |
+| `C-c C-t r` | `sysml2-cli-rollup` |
+| `C-c C-t i` | `sysml2-cli-interfaces` |
+| `C-c C-t o` | `sysml2-cli-allocation` |
+| `C-c C-t D` | `sysml2-cli-diff` |
+| `C-c C-t X` | `sysml2-cli-index` |
+| `C-c C-t R` | `sysml2-cli-rename` |
+| `C-c C-t A` | `sysml2-cli-add` |
+| `C-c C-t K` | `sysml2-cli-remove` |
+| `C-c C-t RET` | `sysml2-transient-analyze` (picker) |
+| **REPL** | |
+| `C-c C-x r` | `sysml2-repl` (comint inferior `sysml repl`) |
+| **Health Check** | |
+| `M-x sysml2-doctor` | Probe sysml CLI, grammar, LSP, D2, PlantUML, Pandoc |
 | **Inspect / Report** | |
 | `C-c C-i s` | `sysml2-report-summary` |
 | `C-c C-i t` | `sysml2-report-traceability` |
@@ -777,7 +870,8 @@ Key variables:
 | `sysml2-d2-executable-path` | `nil` | Path to D2 binary (nil = search exec-path) |
 | `sysml2-d2-theme` | `nil` | D2 theme number (nil = default) |
 | `sysml2-d2-layout-engine` | `nil` | D2 layout: nil (dagre), `elk`, or `tala` |
-| `sysml2-lsp-server` | `'pilot` | LSP server (`pilot`, `syside`, `syson`, `none`) |
+| `sysml2-lsp-server` | `'sysml-lsp` | LSP server (`sysml-lsp`, `pilot`, `syside`, `syson`, `none`) |
+| `sysml2-format-check-on-save` | `nil` | When non-nil, run `sysml fmt --check -f json` on save and report drift |
 | `sysml2-plantuml-exec-mode` | `'executable` | PlantUML invocation mode |
 | `sysml2-diagram-output-format` | `"svg"` | Diagram output format |
 | `sysml2-cli-executable` | `"sysml"` | Path to sysml CLI binary |
@@ -809,32 +903,38 @@ sysml2-fmi.el           FMU inspector, interface extraction, Modelica gen
 sysml2-cosim.el         SSP generation, simulation, results, verification
 sysml2-simulate.el      Native simulation via sysml CLI (constraints, state machines, actions)
 sysml2-format.el        In-process formatting (tree-sitter indent-region)
-sysml2-cli-commands.el  CLI analysis wrappers (lint, check, list, show, trace, stats, deps, coverage)
+sysml2-cli-commands.el  CLI analysis + refactor wrappers (lint, check, list, show, trace, stats, deps, coverage, find, doc, analyze, rollup, interfaces, allocation, diff, index, rename, add, remove)
+sysml2-doctor.el        Health check probe for CLI, grammar, LSP, D2, PlantUML, Pandoc, stdlib
+sysml2-menu.el          Easy-menu bar + which-key prefix labels
+sysml2-repl.el          comint-mode inferior `sysml repl' session
+sysml2-transient.el     transient.el pickers for diagrams, scaffold, analyze
 sysml2-outline.el       Outline side panel
 sysml2-eldoc.el         Definition/documentation at point (ElDoc)
 sysml2-evil.el          Optional evil-mode keybindings
-sysml2-ts.el            Tree-sitter grammar integration
+sysml2-ts.el            Tree-sitter grammar integration (font-lock, indent, imenu, thing-settings, outline)
 sysml2-mode.el          Entry point, syntax table, keymap, mode definition
 ```
 
+Canonical tree-sitter query files (consumed by other editors) live in
+`tree-sitter-sysml/queries/`: `highlights.scm`, `indents.scm`,
+`folds.scm`, `locals.scm`, `tags.scm`.
+
 ## Testing
 
-250 ERT tests across 16 test files:
+359 ERT tests across 26 test files (`make test`).
 
 ```bash
 make test
-# or manually:
-emacs --batch -L . -L test -l sysml2-mode \
-  -l test/test-helper.el -l test/test-lang.el \
-  -l test/test-font-lock.el -l test/test-indent.el \
-  -l test/test-completion.el -l test/test-navigation.el \
-  -l test/test-plantuml.el -l test/test-diagram.el \
-  -l test/test-project.el -l test/test-flymake.el \
-  -l test/test-outline.el -l test/test-fmi.el \
-  -l test/test-cosim.el -l test/test-evil.el \
-  -l test/test-api.el -l test/test-ts.el \
-  -f ert-run-tests-batch-and-exit
 ```
+
+Test files cover the language layer, font-lock, indentation,
+completion, navigation, project detection, flymake (in-process and CLI
+codes), tree-sitter parsing/imenu/structural movement, outline, FMI,
+co-simulation, evil-mode wiring, REST API, org-babel, the menu bar +
+which-key registration, `sysml2-doctor`, autoload coverage, the
+canonical `.scm` query files, REPL prompt-regex detection, transient
+pickers, all CLI command wrappers (including rename / add / remove
+preview-then-apply flows), and `sysml2-format-check-via-cli`.
 
 ## License
 

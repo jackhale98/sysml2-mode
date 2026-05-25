@@ -291,6 +291,7 @@ Returns a completion table based on the context at point."
   "Read a definition type with PROMPT, allowing empty for none."
   (let ((defs (sysml2--buffer-definition-names)))
     (completing-read prompt defs nil nil)))
+;;;###autoload
 
 (defun sysml2-connect ()
   "Insert a connection usage by selecting source and target interactively.
@@ -310,6 +311,7 @@ them for completion.  Generates valid SysML v2 connection syntax."
         (insert " : " conn-type))
       (insert "\n    connect " source " to " target ";")
       (sysml2--indent-inserted-region start (point)))))
+;;;###autoload
 
 (defun sysml2-insert-binding ()
   "Insert a binding connector by selecting source and target interactively."
@@ -321,6 +323,7 @@ them for completion.  Generates valid SysML v2 connection syntax."
     (let ((start (point)))
       (insert "\nbind " source " = " target ";")
       (sysml2--indent-inserted-region start (point)))))
+;;;###autoload
 
 (defun sysml2-insert-flow ()
   "Insert a flow connection by selecting source and target interactively."
@@ -338,6 +341,7 @@ them for completion.  Generates valid SysML v2 connection syntax."
         (insert " of " item-type))
       (insert "\n    from " source " to " target ";")
       (sysml2--indent-inserted-region start (point)))))
+;;;###autoload
 
 (defun sysml2-insert-interface ()
   "Insert an interface usage by selecting endpoints interactively."
@@ -355,6 +359,7 @@ them for completion.  Generates valid SysML v2 connection syntax."
         (insert " : " iface-type))
       (insert "\n    connect " source " to " target ";")
       (sysml2--indent-inserted-region start (point)))))
+;;;###autoload
 
 (defun sysml2-insert-allocation ()
   "Insert an allocation usage by selecting source and target interactively."
@@ -372,6 +377,7 @@ them for completion.  Generates valid SysML v2 connection syntax."
       (insert "\nallocation " alloc-name
               "\n    allocate " source " to " target ";")
       (sysml2--indent-inserted-region start (point)))))
+;;;###autoload
 
 (defun sysml2-insert-satisfy ()
   "Insert a satisfy requirement statement interactively."
@@ -401,6 +407,7 @@ Scans for `requirement def NAME' patterns and returns a list of NAME strings."
         (unless (sysml2--in-comment-or-string-p)
           (push (match-string-no-properties 1) names))))
     (delete-dups (nreverse names))))
+;;;###autoload
 
 (defun sysml2-insert-verify ()
   "Insert a verification definition interactively.
@@ -427,6 +434,7 @@ and subject type, then generates a verification def block."
       (insert "\n}")
       (insert "\n}")
       (sysml2--indent-inserted-region start (point)))))
+;;;###autoload
 
 (defun sysml2-insert-subject ()
   "Insert a subject declaration interactively.
@@ -442,6 +450,8 @@ Prompts for subject name and type, then inserts at current indentation."
     (insert ";")))
 
 ;; --- Model Scaffolding Commands ---
+;;;###autoload
+;;;###autoload
 
 (defun sysml2-scaffold-package ()
   "Scaffold a new SysML v2 package with optional imports."
@@ -459,6 +469,7 @@ Prompts for subject name and type, then inserts at current indentation."
     (let ((pos (point)))
       (insert "\n" indent "}")
       (goto-char pos))))
+;;;###autoload
 
 (defun sysml2-scaffold-part-def ()
   "Scaffold a new part definition with optional attributes and ports."
@@ -487,6 +498,7 @@ Prompts for subject name and type, then inserts at current indentation."
     (let ((pos (point)))
       (insert "\n" indent "}")
       (goto-char pos))))
+;;;###autoload
 
 (defun sysml2-scaffold-port-def ()
   "Scaffold a new port definition with items."
@@ -504,6 +516,7 @@ Prompts for subject name and type, then inserts at current indentation."
     (let ((pos (point)))
       (insert "\n" indent "}")
       (goto-char pos))))
+;;;###autoload
 
 (defun sysml2-scaffold-requirement-def ()
   "Scaffold a new requirement definition with doc, subject, and constraint."
@@ -530,6 +543,7 @@ Prompts for subject name and type, then inserts at current indentation."
       (insert "\n" inner "}")
       (insert "\n" indent "}")
       (goto-char pos))))
+;;;###autoload
 
 (defun sysml2-scaffold-state-def ()
   "Scaffold a new state machine definition with states and transitions."
@@ -556,6 +570,7 @@ Prompts for subject name and type, then inserts at current indentation."
           (insert "\n" inner "    then " s ";"))
         (setq prev s)))
     (insert "\n" indent "}")))
+;;;###autoload
 
 (defun sysml2-scaffold-action-def ()
   "Scaffold a new action definition with sub-actions and succession."
@@ -588,6 +603,7 @@ Prompts for subject name and type, then inserts at current indentation."
           (insert "\n" inner "first " prev " then " a ";")
           (setq prev a))))
     (insert "\n" indent "}")))
+;;;###autoload
 
 (defun sysml2-scaffold-enum-def ()
   "Scaffold a new enumeration definition with literals."
@@ -602,6 +618,7 @@ Prompts for subject name and type, then inserts at current indentation."
     (dolist (lit literals)
       (insert "\n" inner "enum " lit ";"))
     (insert "\n" indent "}")))
+;;;###autoload
 
 (defun sysml2-scaffold-use-case-def ()
   "Scaffold a new use case definition with subject and actors."
@@ -627,6 +644,7 @@ Prompts for subject name and type, then inserts at current indentation."
     (let ((pos (point)))
       (insert "\n" indent "}")
       (goto-char pos))))
+;;;###autoload
 
 (defun sysml2-scaffold-calc-def ()
   "Scaffold a new calc definition with in parameters and return value."
@@ -686,6 +704,7 @@ Presents a menu of available scaffolding commands."
   "Re-indent the region from START to END using the buffer's indent function."
   (when (and start end (> end start))
     (indent-region start end)))
+;;;###autoload
 
 (defun sysml2-scaffold-model ()
   "Scaffold a complete SysML v2 model package interactively.

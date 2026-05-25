@@ -88,6 +88,7 @@ Checks in order:
    (t nil)))
 
 ;; --- Interactive commands ---
+;;;###autoload
 
 (defun sysml2-lsp-ensure ()
   "Start or connect to the SysML v2 LSP server.
@@ -104,6 +105,7 @@ server can be found."
       (lsp-deferred))
      (t
       (message "sysml2-mode: Install eglot or lsp-mode for LSP support.")))))
+;;;###autoload
 
 (defun sysml2-lsp-restart ()
   "Restart the current SysML v2 LSP session."

@@ -57,6 +57,7 @@
 (declare-function sysml2-ts--collect-usage-names "sysml2-ts")
 (declare-function sysml2-ts--search-definition-in-buffer "sysml2-ts")
 (declare-function sysml2-ts--rename-symbol "sysml2-ts")
+(declare-function sysml2-ts--outline-predicate "sysml2-ts")
 (declare-function sysml2-completion-at-point "sysml2-completion")
 (declare-function hs-minor-mode "hideshow")
 (defvar treesit-language-source-alist)
@@ -664,6 +665,73 @@ preserve positions.  Prompts for the new name interactively."
       "block_comment" "doc_comment")
     "Tree-sitter node types that can be folded.")
 
+  ;; --- Structural movement (treesit-thing-settings, Emacs 30+) ---
+
+  (defvar sysml2-ts--sexp-node-regexp
+    (regexp-opt
+     (append sysml2-ts--definition-node-types
+             '("part_usage" "action_usage" "state_usage" "port_usage"
+               "item_usage" "connection_usage" "requirement_usage"
+               "constraint_usage" "calc_usage" "use_case_usage"
+               "package_declaration"
+               "string_literal" "number_literal"
+               "qualified_name" "identifier")))
+    "Regexp matching nodes recognised as a single sexp by tree-sitter.")
+
+  (defvar sysml2-ts--list-node-regexp
+    (regexp-opt
+     '("package_body" "definition_body" "enumeration_body"
+       "state_body" "requirement_body" "constraint_body"
+       "paren_expression" "invocation_expression"
+       "metadata_annotation_list"))
+    "Regexp matching list-like (braced/parenthesised) nodes.")
+
+  (defvar sysml2-ts--sentence-node-regexp
+    (regexp-opt
+     '("import_statement" "alias_declaration" "comment_declaration"
+       "doc_declaration" "transition_statement" "succession_statement"
+       "satisfy_statement" "verify_statement" "assert_statement"
+       "bind_statement" "perform_statement" "exhibit_statement"
+       "include_statement"))
+    "Regexp matching statement-level (sentence-like) nodes.")
+
+  (defvar sysml2-ts--text-node-regexp
+    (regexp-opt '("line_comment" "block_comment" "doc_comment"
+                  "string_literal"))
+    "Regexp matching text-content nodes (where prose movement applies).")
+
+  (defvar sysml2-ts--thing-settings
+    `((sysml
+       (sexp     ,sysml2-ts--sexp-node-regexp)
+       (list     ,sysml2-ts--list-node-regexp)
+       (sentence ,sysml2-ts--sentence-node-regexp)
+       (text     ,sysml2-ts--text-node-regexp)
+       (comment  ,(regexp-opt '("line_comment" "block_comment" "doc_comment")))))
+    "Tree-sitter THING settings for SysML v2 structural movement.
+Used by `forward-sexp', `forward-sentence', `forward-list', and
+`treesit-end-of-thing'.")
+
+  ;; --- Outline integration (Emacs 30+) ---
+
+  (defvar sysml2-ts--outline-node-types
+    '("package_declaration"
+      "part_definition" "action_definition" "state_definition"
+      "port_definition" "connection_definition" "flow_definition"
+      "item_definition" "requirement_definition" "constraint_definition"
+      "view_definition" "viewpoint_definition" "rendering_definition"
+      "concern_definition" "use_case_definition"
+      "analysis_case_definition" "verification_case_definition"
+      "allocation_definition" "interface_definition"
+      "enumeration_definition" "occurrence_definition"
+      "metadata_definition" "calc_definition")
+    "Tree-sitter node types treated as outline headings.")
+
+  (defun sysml2-ts--outline-predicate (node)
+    "Return non-nil when NODE is an outline heading.
+For use as `treesit-outline-predicate' (Emacs 30+)."
+    (and node
+         (member (treesit-node-type node) sysml2-ts--outline-node-types)))
+
   (defun sysml2-ts--hs-forward-sexp (&optional _arg)
     "Move forward over a foldable block using tree-sitter.
 For use as `hs-forward-sexp-func' in `hs-minor-mode'."
@@ -716,6 +784,14 @@ the tree-sitter incremental parser for better accuracy.
 
     ;; Imenu
     (setq-local treesit-simple-imenu-settings sysml2-ts--imenu-settings)
+
+    ;; Structural movement (Emacs 30+; treesit-thing-settings)
+    (when (boundp 'treesit-thing-settings)
+      (setq-local treesit-thing-settings sysml2-ts--thing-settings))
+
+    ;; Outline integration (Emacs 30+)
+    (when (boundp 'treesit-outline-predicate)
+      (setq-local treesit-outline-predicate #'sysml2-ts--outline-predicate))
 
     ;; Which-function
     (add-hook 'which-func-functions #'sysml2-ts--which-function nil t)

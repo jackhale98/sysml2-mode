@@ -97,6 +97,7 @@ response synchronously."
             (kill-buffer resp-buf)))))))
 
 ;; --- Public API Functions ---
+;;;###autoload
 
 (defun sysml2-api-list-projects (&optional callback)
   "List projects from the Systems Modeling API.
@@ -108,6 +109,7 @@ If CALLBACK is non-nil, request is async."
           (message "API error: %s" (plist-get response :error))
         (sysml2--api-display-projects (plist-get response :body)))
       response)))
+;;;###autoload
 
 (defun sysml2-api-get-elements (project-id &optional branch-id callback)
   "Get elements for PROJECT-ID, optionally from BRANCH-ID.
@@ -125,6 +127,7 @@ If CALLBACK is non-nil, request is async."
           (message "API error: %s" (plist-get response :error))
         (sysml2--api-display-elements (plist-get response :body)))
       response)))
+;;;###autoload
 
 (defun sysml2-api-push-model (project-id &optional file-or-buffer callback)
   "Push model to PROJECT-ID from FILE-OR-BUFFER.
@@ -143,6 +146,7 @@ If CALLBACK is non-nil, request is async."
          (body `((source . ,content)))
          (path (format "/projects/%s/commits" project-id)))
     (sysml2--api-request "POST" path body callback)))
+;;;###autoload
 
 (defun sysml2-api-pull-model (project-id output-dir &optional callback)
   "Pull model from PROJECT-ID and write files to OUTPUT-DIR.
@@ -168,6 +172,7 @@ If CALLBACK is non-nil, request is async."
                 (with-temp-file file
                   (insert (json-encode elem))))))))
       response)))
+;;;###autoload
 
 (defun sysml2-api-query (project-id query-string &optional callback)
   "Execute QUERY-STRING against PROJECT-ID.
