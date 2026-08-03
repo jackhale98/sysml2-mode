@@ -52,13 +52,15 @@
       (re-search-forward pattern nil t))))
 
 (ert-deftest sysml2-queries-highlights-cover-definitions ()
-  "highlights.scm must mark part/action/state definitions."
+  "highlights.scm must mark definition nodes.
+The grammar uses a unified `definition' node for all `<kw> def'
+forms; state and enum definitions have their own node types."
   (should (sysml2-test--query-contains
-           "highlights.scm" "part_definition"))
+           "highlights.scm" "(definition"))
   (should (sysml2-test--query-contains
-           "highlights.scm" "action_definition"))
+           "highlights.scm" "state_definition"))
   (should (sysml2-test--query-contains
-           "highlights.scm" "state_definition")))
+           "highlights.scm" "enumeration_definition")))
 
 (ert-deftest sysml2-queries-highlights-cover-keywords ()
   "highlights.scm must include keyword captures."
@@ -90,7 +92,8 @@
 (ert-deftest sysml2-queries-tags-cover-definitions ()
   "tags.scm should mark definitions for ctags-style indexing."
   (should (sysml2-test--query-contains "tags.scm" "@definition"))
-  (should (sysml2-test--query-contains "tags.scm" "part_definition")))
+  (should (sysml2-test--query-contains "tags.scm" "(definition"))
+  (should (sysml2-test--query-contains "tags.scm" "package_declaration")))
 
 (ert-deftest sysml2-queries-readme-exists ()
   "A README in queries/ should document the format and version."

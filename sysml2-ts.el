@@ -50,6 +50,8 @@
 (declare-function treesit-node-end "treesit")
 (declare-function treesit-query-capture "treesit")
 (declare-function sysml2-ts--defun-name "sysml2-ts")
+(declare-function sysml2-ts--def-kind "sysml2-ts")
+(declare-function sysml2-ts--def-kind-pred "sysml2-ts")
 (declare-function sysml2-ts--which-function "sysml2-ts")
 (declare-function sysml2-ts--completion-at-point "sysml2-ts")
 (declare-function sysml2-ts--parent-context "sysml2-ts")
@@ -115,6 +117,8 @@
         "event" "return" "redefines" "subsets" "via"
         "conjugates" "references" "chains" "inverse"
         "library" "standard"
+        "when" "at" "locale" "terminate" "allocate" "verify"
+        "bind" "binding" "succession" "message" "dependency"
         ;; Visibility
         "public" "private" "protected"
         ;; Modifiers
@@ -126,48 +130,14 @@
      :language 'sysml
      :feature 'definition
      :override t
-     '((part_definition name: (identifier) @sysml2-definition-name-face)
-       (action_definition name: (identifier) @sysml2-definition-name-face)
+     ;; The grammar uses a unified `definition' node for all `<kw> def'
+     ;; forms; only state/enum/generic defs and packages have their own
+     ;; node types.
+     '((definition name: (identifier) @sysml2-definition-name-face)
        (state_definition name: (identifier) @sysml2-definition-name-face)
-       (port_definition name: (identifier) @sysml2-definition-name-face)
-       (connection_definition name: (identifier) @sysml2-definition-name-face)
-       (flow_definition name: (identifier) @sysml2-definition-name-face)
-       (attribute_definition name: (identifier) @sysml2-definition-name-face)
-       (item_definition name: (identifier) @sysml2-definition-name-face)
-       (requirement_definition name: (identifier) @sysml2-definition-name-face)
-       (constraint_definition name: (identifier) @sysml2-definition-name-face)
-       (view_definition name: (identifier) @sysml2-definition-name-face)
-       (viewpoint_definition name: (identifier) @sysml2-definition-name-face)
-       (rendering_definition name: (identifier) @sysml2-definition-name-face)
-       (concern_definition name: (identifier) @sysml2-definition-name-face)
-       (use_case_definition name: (identifier) @sysml2-definition-name-face)
-       (analysis_case_definition name: (identifier) @sysml2-definition-name-face)
-       (verification_case_definition name: (identifier) @sysml2-definition-name-face)
-       (allocation_definition name: (identifier) @sysml2-definition-name-face)
-       (interface_definition name: (identifier) @sysml2-definition-name-face)
        (enumeration_definition name: (identifier) @sysml2-definition-name-face)
-       (individual_definition name: (identifier) @sysml2-definition-name-face)
-       (occurrence_definition name: (identifier) @sysml2-definition-name-face)
-       (metadata_definition name: (identifier) @sysml2-definition-name-face)
-       (calc_definition name: (identifier) @sysml2-definition-name-face)
-       ;; KerML definitions
-       (case_definition name: (identifier) @sysml2-definition-name-face)
-       (class_definition name: (identifier) @sysml2-definition-name-face)
-       (struct_definition name: (identifier) @sysml2-definition-name-face)
-       (assoc_definition name: (identifier) @sysml2-definition-name-face)
-       (behavior_definition name: (identifier) @sysml2-definition-name-face)
-       (datatype_definition name: (identifier) @sysml2-definition-name-face)
-       (feature_definition name: (identifier) @sysml2-definition-name-face)
-       (function_definition name: (identifier) @sysml2-definition-name-face)
-       (predicate_definition name: (identifier) @sysml2-definition-name-face)
-       (connector_definition name: (identifier) @sysml2-definition-name-face)
-       (interaction_definition name: (identifier) @sysml2-definition-name-face)
-       (type_definition name: (identifier) @sysml2-definition-name-face)
-       (namespace_definition name: (identifier) @sysml2-definition-name-face)
-       (classifier_definition name: (identifier) @sysml2-definition-name-face)
-       (metaclass_definition name: (identifier) @sysml2-definition-name-face)
-       (expr_definition name: (identifier) @sysml2-definition-name-face)
-       (step_definition name: (identifier) @sysml2-definition-name-face)
+       (generic_definition name: (identifier) @sysml2-definition-name-face)
+       (namespace_declaration name: (identifier) @sysml2-definition-name-face)
        (package_declaration name: (identifier) @sysml2-definition-name-face))
 
      :language 'sysml
@@ -186,34 +156,25 @@
      '(["~" "::" "==" "!=" "<=" ">="
         "+" "-" "*" "/" "%" "**" "=" ":="
         "not" "or" "and" "xor" "implies"
-        "hastype" "istype" "as" "@"] @font-lock-operator-face)
+        "hastype" "istype" "as" "@" "@@" "meta"] @font-lock-operator-face)
 
      :language 'sysml
      :feature 'variable
-     '((part_usage name: (identifier) @font-lock-variable-name-face)
-       (attribute_usage name: (identifier) @font-lock-variable-name-face)
-       (port_usage name: (identifier) @font-lock-variable-name-face)
+     ;; Unified `usage' node covers part/attribute/port/item/... usages.
+     '((usage name: (identifier) @font-lock-variable-name-face)
        (action_usage name: (identifier) @font-lock-variable-name-face)
        (state_usage name: (identifier) @font-lock-variable-name-face)
-       (item_usage name: (identifier) @font-lock-variable-name-face)
        (connection_usage name: (identifier) @font-lock-variable-name-face)
+       (interface_usage name: (identifier) @font-lock-variable-name-face)
        (constraint_usage name: (identifier) @font-lock-variable-name-face)
        (requirement_usage name: (identifier) @font-lock-variable-name-face)
-       (snapshot_usage name: (identifier) @font-lock-variable-name-face)
-       (timeslice_usage name: (identifier) @font-lock-variable-name-face)
-       (calc_usage name: (identifier) @font-lock-variable-name-face)
-       (view_usage name: (identifier) @font-lock-variable-name-face)
-       (viewpoint_usage name: (identifier) @font-lock-variable-name-face)
-       (rendering_usage name: (identifier) @font-lock-variable-name-face)
-       (concern_usage name: (identifier) @font-lock-variable-name-face)
-       (use_case_usage name: (identifier) @font-lock-variable-name-face)
-       (analysis_usage name: (identifier) @font-lock-variable-name-face)
-       (verification_usage name: (identifier) @font-lock-variable-name-face)
+       (allocation_usage name: (identifier) @font-lock-variable-name-face)
+       (flow_usage name: (identifier) @font-lock-variable-name-face)
        (metadata_usage name: (identifier) @font-lock-variable-name-face)
-       (classifier_usage name: (identifier) @font-lock-variable-name-face)
-       (metaclass_usage name: (identifier) @font-lock-variable-name-face)
-       (expr_usage name: (identifier) @font-lock-variable-name-face)
-       (step_usage name: (identifier) @font-lock-variable-name-face)))
+       (binding_usage name: (identifier) @font-lock-variable-name-face)
+       (succession_usage name: (identifier) @font-lock-variable-name-face)
+       (feature_usage name: (identifier) @font-lock-variable-name-face)
+       (kerml_usage name: (identifier) @font-lock-variable-name-face)))
     "Tree-sitter font-lock settings for SysML v2.")
 
   ;; --- Indentation rules ---
@@ -266,10 +227,7 @@
        ((parent-is "assign_action") parent-bol ,sysml2-indent-offset)
 
        ;; Fork/join/merge/decide nodes
-       ((parent-is "fork_node") parent-bol ,sysml2-indent-offset)
-       ((parent-is "join_node") parent-bol ,sysml2-indent-offset)
-       ((parent-is "merge_node") parent-bol ,sysml2-indent-offset)
-       ((parent-is "decide_node") parent-bol ,sysml2-indent-offset)
+       ((parent-is "control_node") parent-bol ,sysml2-indent-offset)
 
        ;; State entry/do/exit actions
        ((parent-is "entry_action") parent-bol ,sysml2-indent-offset)
@@ -290,34 +248,18 @@
        ((parent-is "invocation_expression") parent-bol ,sysml2-indent-offset)
 
        ;; ── Usage types with potential multi-line content ──
+       ((parent-is "usage") parent-bol ,sysml2-indent-offset)
        ((parent-is "action_usage") parent-bol ,sysml2-indent-offset)
        ((parent-is "state_usage") parent-bol ,sysml2-indent-offset)
-       ((parent-is "part_usage") parent-bol ,sysml2-indent-offset)
-       ((parent-is "port_usage") parent-bol ,sysml2-indent-offset)
        ((parent-is "requirement_usage") parent-bol ,sysml2-indent-offset)
        ((parent-is "constraint_usage") parent-bol ,sysml2-indent-offset)
-       ((parent-is "calc_usage") parent-bol ,sysml2-indent-offset)
-       ((parent-is "use_case_usage") parent-bol ,sysml2-indent-offset)
-       ((parent-is "analysis_usage") parent-bol ,sysml2-indent-offset)
-       ((parent-is "verification_usage") parent-bol ,sysml2-indent-offset)
-       ((parent-is "view_usage") parent-bol ,sysml2-indent-offset)
-       ((parent-is "concern_usage") parent-bol ,sysml2-indent-offset)
-       ((parent-is "item_usage") parent-bol ,sysml2-indent-offset)
-       ((parent-is "attribute_usage") parent-bol ,sysml2-indent-offset)
-       ((parent-is "occurrence_usage") parent-bol ,sysml2-indent-offset)
-       ((parent-is "snapshot_usage") parent-bol ,sysml2-indent-offset)
-       ((parent-is "timeslice_usage") parent-bol ,sysml2-indent-offset)
-       ((parent-is "ref_usage") parent-bol ,sysml2-indent-offset)
+       ((parent-is "feature_usage") parent-bol ,sysml2-indent-offset)
 
        ;; ── Definitions with multi-line headers ──
        ;; (rare, but e.g. `part def Vehicle :> Base` spanning lines)
-       ((parent-is "part_definition") parent-bol ,sysml2-indent-offset)
-       ((parent-is "action_definition") parent-bol ,sysml2-indent-offset)
+       ((parent-is "definition") parent-bol ,sysml2-indent-offset)
        ((parent-is "state_definition") parent-bol ,sysml2-indent-offset)
-       ((parent-is "requirement_definition") parent-bol ,sysml2-indent-offset)
-       ((parent-is "use_case_definition") parent-bol ,sysml2-indent-offset)
-       ((parent-is "verification_case_definition") parent-bol ,sysml2-indent-offset)
-       ((parent-is "analysis_case_definition") parent-bol ,sysml2-indent-offset)
+       ((parent-is "enumeration_definition") parent-bol ,sysml2-indent-offset)
 
        ;; ── Catch-all: same indentation as parent ──
        ;; This avoids spurious indentation for nodes we haven't matched.
@@ -328,57 +270,51 @@
   ;; --- Navigation ---
 
   (defvar sysml2-ts--defun-type-regexp
-    (regexp-opt '("package_declaration"
-                  "part_definition" "action_definition"
-                  "state_definition" "port_definition"
-                  "connection_definition" "flow_definition"
-                  "attribute_definition"
-                  "item_definition" "requirement_definition"
-                  "constraint_definition" "view_definition"
-                  "viewpoint_definition" "rendering_definition"
-                  "concern_definition" "use_case_definition"
-                  "analysis_case_definition" "verification_case_definition"
-                  "allocation_definition" "interface_definition"
-                  "enumeration_definition" "individual_definition"
-                  "occurrence_definition"
-                  "metadata_definition" "calc_definition"
-                  "classifier_definition" "metaclass_definition"
-                  "expr_definition" "step_definition"))
+    (regexp-opt '("package_declaration" "namespace_declaration"
+                  "definition" "state_definition"
+                  "enumeration_definition" "generic_definition"))
     "Regexp matching tree-sitter node types that are defun-like.")
+
+  (defun sysml2-ts--def-kind (node)
+    "Return the leading keyword of a unified `definition' NODE, or nil.
+For `part def X' this returns \"part\".  Multi-word keywords
+return the first token (e.g. \"use\" for `use case def')."
+    (let ((child (treesit-node-child node 0)))
+      (when child (treesit-node-type child))))
+
+  (defun sysml2-ts--def-kind-pred (kind)
+    "Return a predicate matching `definition' nodes whose keyword is KIND."
+    (lambda (node)
+      (equal (sysml2-ts--def-kind node) kind)))
 
   ;; --- Imenu ---
 
   (defvar sysml2-ts--imenu-settings
-    '(("Package" "\\`package_declaration\\'" nil nil)
-      ("Part" "\\`part_definition\\'" nil nil)
-      ("Action" "\\`action_definition\\'" nil nil)
+    `(("Package" "\\`package_declaration\\'" nil nil)
+      ("Part" "\\`definition\\'" ,(sysml2-ts--def-kind-pred "part") nil)
+      ("Action" "\\`definition\\'" ,(sysml2-ts--def-kind-pred "action") nil)
       ("State" "\\`state_definition\\'" nil nil)
-      ("Port" "\\`port_definition\\'" nil nil)
-      ("Connection" "\\`connection_definition\\'" nil nil)
-      ("Flow" "\\`flow_definition\\'" nil nil)
-      ("Attribute" "\\`attribute_definition\\'" nil nil)
-      ("Item" "\\`item_definition\\'" nil nil)
-      ("Requirement" "\\`requirement_definition\\'" nil nil)
-      ("Constraint" "\\`constraint_definition\\'" nil nil)
-      ("View" "\\`view_definition\\'" nil nil)
-      ("Viewpoint" "\\`viewpoint_definition\\'" nil nil)
-      ("Rendering" "\\`rendering_definition\\'" nil nil)
-      ("Concern" "\\`concern_definition\\'" nil nil)
-      ("Use Case" "\\`use_case_definition\\'" nil nil)
-      ("Analysis" "\\`analysis_case_definition\\'" nil nil)
-      ("Verification" "\\`verification_case_definition\\'" nil nil)
-      ("Allocation" "\\`allocation_definition\\'" nil nil)
-      ("Interface" "\\`interface_definition\\'" nil nil)
+      ("Port" "\\`definition\\'" ,(sysml2-ts--def-kind-pred "port") nil)
+      ("Connection" "\\`definition\\'" ,(sysml2-ts--def-kind-pred "connection") nil)
+      ("Flow" "\\`definition\\'" ,(sysml2-ts--def-kind-pred "flow") nil)
+      ("Attribute" "\\`definition\\'" ,(sysml2-ts--def-kind-pred "attribute") nil)
+      ("Item" "\\`definition\\'" ,(sysml2-ts--def-kind-pred "item") nil)
+      ("Requirement" "\\`definition\\'" ,(sysml2-ts--def-kind-pred "requirement") nil)
+      ("Constraint" "\\`definition\\'" ,(sysml2-ts--def-kind-pred "constraint") nil)
+      ("View" "\\`definition\\'" ,(sysml2-ts--def-kind-pred "view") nil)
+      ("Viewpoint" "\\`definition\\'" ,(sysml2-ts--def-kind-pred "viewpoint") nil)
+      ("Concern" "\\`definition\\'" ,(sysml2-ts--def-kind-pred "concern") nil)
+      ("Use Case" "\\`definition\\'" ,(sysml2-ts--def-kind-pred "use") nil)
+      ("Analysis" "\\`definition\\'" ,(sysml2-ts--def-kind-pred "analysis") nil)
+      ("Verification" "\\`definition\\'" ,(sysml2-ts--def-kind-pred "verification") nil)
+      ("Allocation" "\\`definition\\'" ,(sysml2-ts--def-kind-pred "allocation") nil)
+      ("Interface" "\\`definition\\'" ,(sysml2-ts--def-kind-pred "interface") nil)
       ("Enumeration" "\\`enumeration_definition\\'" nil nil)
-      ("Individual" "\\`individual_definition\\'" nil nil)
-      ("Occurrence" "\\`occurrence_definition\\'" nil nil)
-      ("Metadata" "\\`metadata_definition\\'" nil nil)
-      ("Calculation" "\\`calc_definition\\'" nil nil)
-      ("Classifier" "\\`classifier_definition\\'" nil nil)
-      ("Metaclass" "\\`metaclass_definition\\'" nil nil)
-      ("Expression" "\\`expr_definition\\'" nil nil)
-      ("Step" "\\`step_definition\\'" nil nil))
-    "Imenu category settings for tree-sitter SysML v2 mode.")
+      ("Occurrence" "\\`definition\\'" ,(sysml2-ts--def-kind-pred "occurrence") nil)
+      ("Metadata" "\\`definition\\'" ,(sysml2-ts--def-kind-pred "metadata") nil)
+      ("Calculation" "\\`definition\\'" ,(sysml2-ts--def-kind-pred "calc") nil))
+    "Imenu category settings for tree-sitter SysML v2 mode.
+The unified `definition' node is categorized by its leading keyword.")
 
   ;; --- Which-function support ---
 
@@ -401,32 +337,16 @@ and returns its name field."
   ;; --- Tree-sitter completion support ---
 
   (defvar sysml2-ts--definition-node-types
-    '("part_definition" "action_definition" "state_definition"
-      "port_definition" "connection_definition" "flow_definition"
-      "attribute_definition" "item_definition" "requirement_definition"
-      "constraint_definition" "view_definition" "viewpoint_definition"
-      "rendering_definition" "concern_definition" "use_case_definition"
-      "analysis_case_definition" "verification_case_definition"
-      "allocation_definition" "interface_definition"
-      "enumeration_definition" "individual_definition"
-      "occurrence_definition" "metadata_definition" "calc_definition"
-      "case_definition" "class_definition" "struct_definition"
-      "assoc_definition" "behavior_definition" "datatype_definition"
-      "feature_definition" "function_definition" "predicate_definition"
-      "connector_definition" "interaction_definition" "type_definition"
-      "namespace_definition" "classifier_definition"
-      "metaclass_definition" "expr_definition" "step_definition")
+    '("definition" "state_definition" "enumeration_definition"
+      "generic_definition")
     "Tree-sitter node types that represent definitions.")
 
   (defvar sysml2-ts--usage-node-types
-    '("part_usage" "action_usage" "state_usage" "port_usage"
-      "connection_usage" "attribute_usage" "item_usage"
-      "requirement_usage" "constraint_usage" "view_usage"
-      "viewpoint_usage" "rendering_usage" "concern_usage"
-      "use_case_usage" "analysis_usage" "verification_usage"
-      "snapshot_usage" "timeslice_usage" "calc_usage"
-      "metadata_usage" "classifier_usage" "metaclass_usage"
-      "expr_usage" "step_usage")
+    '("usage" "action_usage" "state_usage" "connection_usage"
+      "interface_usage" "constraint_usage" "requirement_usage"
+      "allocation_usage" "flow_usage" "metadata_usage"
+      "binding_usage" "succession_usage" "feature_usage"
+      "kerml_usage")
     "Tree-sitter node types that represent usages.")
 
   (defvar sysml2-ts--body-node-types
@@ -670,10 +590,8 @@ preserve positions.  Prompts for the new name interactively."
   (defvar sysml2-ts--sexp-node-regexp
     (regexp-opt
      (append sysml2-ts--definition-node-types
-             '("part_usage" "action_usage" "state_usage" "port_usage"
-               "item_usage" "connection_usage" "requirement_usage"
-               "constraint_usage" "calc_usage" "use_case_usage"
-               "package_declaration"
+             sysml2-ts--usage-node-types
+             '("package_declaration"
                "string_literal" "number_literal"
                "qualified_name" "identifier")))
     "Regexp matching nodes recognised as a single sexp by tree-sitter.")
@@ -688,8 +606,8 @@ preserve positions.  Prompts for the new name interactively."
 
   (defvar sysml2-ts--sentence-node-regexp
     (regexp-opt
-     '("import_statement" "alias_declaration" "comment_declaration"
-       "doc_declaration" "transition_statement" "succession_statement"
+     '("import_statement" "alias_declaration" "comment_element"
+       "doc_comment" "transition_statement" "succession_statement"
        "satisfy_statement" "verify_statement" "assert_statement"
        "bind_statement" "perform_statement" "exhibit_statement"
        "include_statement"))
@@ -714,16 +632,9 @@ Used by `forward-sexp', `forward-sentence', `forward-list', and
   ;; --- Outline integration (Emacs 30+) ---
 
   (defvar sysml2-ts--outline-node-types
-    '("package_declaration"
-      "part_definition" "action_definition" "state_definition"
-      "port_definition" "connection_definition" "flow_definition"
-      "item_definition" "requirement_definition" "constraint_definition"
-      "view_definition" "viewpoint_definition" "rendering_definition"
-      "concern_definition" "use_case_definition"
-      "analysis_case_definition" "verification_case_definition"
-      "allocation_definition" "interface_definition"
-      "enumeration_definition" "occurrence_definition"
-      "metadata_definition" "calc_definition")
+    '("package_declaration" "namespace_declaration"
+      "definition" "state_definition"
+      "enumeration_definition" "generic_definition")
     "Tree-sitter node types treated as outline headings.")
 
   (defun sysml2-ts--outline-predicate (node)
