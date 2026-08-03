@@ -42,12 +42,14 @@
           (regexp-opt sysml2-visibility-keywords t)
           "\\s-+\\)?"
           "\\(?:" (regexp-opt sysml2-definition-keywords t) "\\)"
-          "\\s-+\\(" sysml2--identifier-regexp "\\)")
+          "\\s-+\\(?:<[^>\n]*>\\s-+\\)?"
+          "\\(" sysml2--identifier-regexp "\\)")
   "Regexp for matching definition declarations for imenu.
 Captures the definition name in the last group.")
 
 (defconst sysml2--imenu-package-re
-  (concat "^\\s-*\\bpackage\\s-+\\(" sysml2--identifier-regexp "\\)")
+  (concat "^\\s-*\\bpackage\\s-+\\(?:<[^>\n]*>\\s-+\\)?"
+          "\\(" sysml2--identifier-regexp "\\)")
   "Regexp for matching package declarations for imenu.")
 
 (defconst sysml2--imenu-category-alist
@@ -159,6 +161,26 @@ Returns the imenu category name or nil."
   (let ((state (syntax-ppss)))
     (or (nth 3 state) (nth 4 state))))
 
+(defun sysml2--name-at-point ()
+  "Return the SysML name at point, handling quoted unrestricted names.
+For `'Air Frame'` with point anywhere inside, returns the full quoted
+name including quotes.  Falls back to `thing-at-point' symbol."
+  (or
+   ;; Inside a quoted name on this line?
+   (save-excursion
+     (let ((pt (point))
+           (bol (line-beginning-position))
+           (eol (line-end-position))
+           (found nil))
+       (goto-char bol)
+       (while (and (not found)
+                   (re-search-forward "'[^'\n]+'" eol t))
+         (when (and (<= (match-beginning 0) pt)
+                    (< pt (match-end 0)))
+           (setq found (match-string-no-properties 0))))
+       found))
+   (thing-at-point 'symbol t)))
+
 ;; --- Outline ---
 
 (defun sysml2-outline-level ()
@@ -175,7 +197,8 @@ Based on indentation: level = indentation / `sysml2-indent-offset' + 1."
           "\\(?:package\\|"
           (regexp-opt sysml2-definition-keywords t)
           "\\)"
-          "\\s-+\\(" sysml2--identifier-regexp "\\)")
+          "\\s-+\\(?:<[^>\n]*>\\s-+\\)?"
+          "\\(" sysml2--identifier-regexp "\\)")
   "Regexp matching definition or package declarations for navigation.")
 
 (defun sysml2-which-function ()
@@ -324,7 +347,7 @@ with `completing-read' to select one.
 Pushes the current position onto the mark ring for easy return
 with \\[pop-global-mark]."
   (interactive)
-  (let ((sym (thing-at-point 'symbol t)))
+  (let ((sym (sysml2--name-at-point)))
     (unless sym
       (user-error "No identifier at point"))
     ;; 1. Search the current buffer first (tree-sitter when available)
@@ -376,7 +399,7 @@ identifier matching instead of regex."
   (interactive)
   (if (derived-mode-p 'sysml2-ts-mode)
       (sysml2-ts--rename-symbol)
-    (let ((old-name (thing-at-point 'symbol t)))
+    (let ((old-name (sysml2--name-at-point)))
       (unless old-name
         (user-error "No symbol at point"))
       (let ((new-name (read-string
@@ -447,7 +470,7 @@ Displays results in a dedicated buffer with navigation.
 Each result shows the line number, context, and the role of the
 reference (definition, type reference, usage, etc.)."
   (interactive)
-  (let ((sym (thing-at-point 'symbol t)))
+  (let ((sym (sysml2--name-at-point)))
     (unless sym
       (user-error "No identifier at point"))
     (let ((re (concat "\\_<" (regexp-quote sym) "\\_>"))

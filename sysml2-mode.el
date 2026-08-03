@@ -118,7 +118,11 @@
     (modify-syntax-entry ?\n ">" table)
     ;; Strings
     (modify-syntax-entry ?\" "\"" table)
-    (modify-syntax-entry ?\' "\"" table)
+    ;; Single quote delimits unrestricted names ('Air Frame'), not
+    ;; strings — SysML v2 strings use double quotes only. Treating it
+    ;; as punctuation keeps quoted names visible to font-lock and the
+    ;; regex extraction layers.
+    (modify-syntax-entry ?\' "." table)
     ;; Paired delimiters
     (modify-syntax-entry ?\( "()" table)
     (modify-syntax-entry ?\) ")(" table)

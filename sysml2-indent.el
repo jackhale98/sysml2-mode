@@ -30,18 +30,52 @@
   (let ((state (syntax-ppss)))
     (or (nth 3 state) (nth 4 state))))
 
+(defun sysml2--line-entirely-in-comment-p ()
+  "Return non-nil when the current line lies entirely inside a block comment.
+True when the line both starts and ends inside a comment (interior
+lines of a multi-line `/* ... */').  A line containing the closing
+`*/' ends outside the comment and is NOT considered interior."
+  (and (nth 4 (syntax-ppss (line-beginning-position)))
+       (nth 4 (syntax-ppss (line-end-position)))))
+
 (defun sysml2--previous-non-blank-line-indent ()
   "Return the indentation and content info of the previous non-blank line.
 Returns a plist with :indent, :ends-with-open-brace, :ends-with-open-paren,
-:ends-with-semicolon, :ends-with-comma, :is-continuation."
+:ends-with-open-bracket, :ends-with-semicolon, :ends-with-comma,
+:ends-with-close-brace, :ends-with-close-comment, and :is-doc-line."
   (save-excursion
     (forward-line -1)
     (while (and (not (bobp))
                 (or (looking-at-p "^\\s-*$")
-                    (looking-at-p "^\\s-*//")))
+                    (looking-at-p "^\\s-*//")
+                    ;; Interior lines of block comments carry no
+                    ;; structural information — skip them.
+                    (sysml2--line-entirely-in-comment-p)))
       (forward-line -1))
     (let* ((indent (current-indentation))
            (line-end (line-end-position))
+           (closes-comment
+            (save-excursion
+              (goto-char line-end)
+              (skip-chars-backward " \t" (line-beginning-position))
+              (and (>= (- (point) (line-beginning-position)) 2)
+                   (string= (buffer-substring-no-properties (- (point) 2) (point))
+                            "*/"))))
+           ;; When the line closes a block comment, statements continue at
+           ;; the level of the line that OPENED the comment (usually the
+           ;; `doc` or `/*` line), not at the `*/' line's own column.
+           (indent
+            (if closes-comment
+                (save-excursion
+                  (goto-char line-end)
+                  (skip-chars-backward " \t" (line-beginning-position))
+                  (let ((state (syntax-ppss (max (line-beginning-position)
+                                                 (- (point) 2)))))
+                    (if (nth 8 state)
+                        (progn (goto-char (nth 8 state))
+                               (current-indentation))
+                      indent)))
+              indent))
            (trimmed-end
             (save-excursion
               (goto-char line-end)
@@ -60,7 +94,10 @@ Returns a plist with :indent, :ends-with-open-brace, :ends-with-open-paren,
             :ends-with-open-paren (eq last-char ?\()
             :ends-with-open-bracket (eq last-char ?\[)
             :ends-with-semicolon (eq last-char ?\;)
-            :ends-with-comma (eq last-char ?,)))))
+            :ends-with-comma (eq last-char ?,)
+            :ends-with-close-brace (eq last-char ?})
+            :ends-with-close-comment closes-comment
+            :is-doc-line (looking-at-p "^\\s-*doc\\s-*$")))))
 
 (defun sysml2--matching-brace-indent (open-char close-char)
   "Find the indentation of the line containing the matching OPEN-CHAR.
@@ -151,6 +188,21 @@ Returns the target indentation column."
 
          ;; Previous line ends with semicolon: same level
          ((plist-get prev :ends-with-semicolon)
+          (plist-get prev :indent))
+
+         ;; Previous line ends with }: a completed block — siblings
+         ;; continue at the same level as the closing brace's line.
+         ((plist-get prev :ends-with-close-brace)
+          (plist-get prev :indent))
+
+         ;; Previous line ends a block comment (`*/`): the comment is a
+         ;; complete statement — continue at the same level.
+         ((plist-get prev :ends-with-close-comment)
+          (plist-get prev :indent))
+
+         ;; Previous line is a bare `doc` keyword: its /* ... */ comment
+         ;; aligns at the same column (book style).
+         ((plist-get prev :is-doc-line)
           (plist-get prev :indent))
 
          ;; Previous line ends with comma (multi-line list): same level

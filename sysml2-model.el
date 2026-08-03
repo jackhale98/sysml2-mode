@@ -688,7 +688,9 @@ Returns list of plists (:name :type :doc :children)."
       (let ((results nil)
             (seen (make-hash-table :test 'equal))
             (re (concat "\\brequirement[ \t]+"
-                        "\\(?:<'\\([^']+\\)'>[ \t]+\\)?"
+                        ;; Optional <ID> short name: both <REQ23> (book
+                        ;; style) and <'quoted id'> forms.
+                        "\\(?:<[ \t]*'?\\([^'>\n]+?\\)'?[ \t]*>[ \t]+\\)?"
                         "\\(" sysml2--identifier-regexp "\\)")))
         (while (re-search-forward re nil t)
           (let ((match-start (match-beginning 0))
@@ -1169,6 +1171,7 @@ Returns plist (:packages :imports)."
             (imports nil))
         (while (re-search-forward
                 (concat "^\\(\\s-*\\)\\bpackage[ \t]+"
+                        "\\(?:<[^>\n]*>[ \t]+\\)?"
                         "\\(" sysml2--identifier-regexp "\\)")
                 nil t)
           (let ((indent (length (match-string-no-properties 1)))

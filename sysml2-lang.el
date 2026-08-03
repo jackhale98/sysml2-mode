@@ -86,21 +86,22 @@
 (defconst sysml2-structural-keywords
   '("package" "import" "alias" "comment" "doc" "about" "rep"
     "language" "library" "standard library" "filter"
-    "defined" "verify" "via" "allocate")
+    "defined" "verify" "via" "allocate" "locale" "render")
   "Package and organizational keywords.")
 
 (defconst sysml2-behavioral-keywords
   '("entry" "exit" "do" "first" "then" "accept" "send" "assign"
     "if" "else" "while" "for" "loop" "merge" "decide" "join"
     "fork" "transition" "trigger" "guard" "effect"
-    "after" "event" "message" "parallel" "terminate" "until" "when")
+    "after" "event" "message" "parallel" "terminate" "until" "when"
+    "at")
   "Behavioral and control flow keywords.")
 
 (defconst sysml2-relationship-keywords
   '("specialization" "subset" "redefines" "references" "chains"
     "conjugates" "inverse" "featured" "typing" "satisfy"
     "assert" "assume" "require" "subject" "objective"
-    "stakeholder" "actor" "bind" "connect" "to" "from"
+    "stakeholder" "actor" "frame" "bind" "connect" "to" "from"
     "end" "all" "default"
     "by" "conjugation" "crosses" "differences" "disjoining"
     "featuring" "intersects" "inverting" "member" "multiplicity"
@@ -336,12 +337,22 @@ Match BEFORE single-word keywords to prevent partial matches.")
 ;; === Definition Name Pattern ===
 
 (defconst sysml2--identifier-regexp
-  "[A-Za-z_][A-Za-z0-9_]*"
-  "Regexp matching a SysML v2 identifier.")
+  "\\(?:'[^'\n]+'\\|[A-Za-z_][A-Za-z0-9_]*\\)"
+  "Regexp matching a SysML v2 identifier.
+Covers both basic names and quoted unrestricted names like
+`'Air Frame'` (the book's house style).  Contains no capture groups.")
 
 (defconst sysml2--qualified-name-regexp
-  "[A-Za-z_][A-Za-z0-9_:.*]*"
-  "Regexp matching a SysML v2 qualified name (with :: separators).")
+  (concat sysml2--identifier-regexp
+          "\\(?:\\(?:::\\|\\.\\)\\(?:" sysml2--identifier-regexp "\\|\\*\\*?\\)\\)*")
+  "Regexp matching a SysML v2 qualified name or feature chain.
+Segments may be quoted unrestricted names; `::*'/`::**' wildcards are
+accepted as trailing segments.  Contains no capture groups.")
+
+(defconst sysml2--short-name-regexp
+  "<[ \t]*'?\\([^'>\n]+?\\)'?[ \t]*>"
+  "Regexp matching a `<shortName>` id tag (e.g. `<REQ23>` or `<'R 1'>`).
+Group 1 captures the name without quotes.")
 
 (provide 'sysml2-lang)
 ;;; sysml2-lang.el ends here
