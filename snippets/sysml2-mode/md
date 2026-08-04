@@ -1,0 +1,7 @@
+# -*- mode: snippet; require-final-newline: nil -*-
+# name: Metadata Definition
+# key: md
+# --
+metadata def ${1:Name} {
+    attribute ${2:key} : ${3:String};
+}

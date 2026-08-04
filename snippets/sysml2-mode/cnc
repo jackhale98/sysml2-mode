@@ -1,0 +1,9 @@
+# -*- mode: snippet; require-final-newline: nil -*-
+# name: Concern Definition
+# key: cnc
+# --
+concern def ${1:Name} {
+    doc /* ${2:description} */
+    stakeholder ${3:name} : ${4:Type};
+    require constraint { ${5:expression} }
+}

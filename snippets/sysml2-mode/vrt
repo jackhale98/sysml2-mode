@@ -1,0 +1,5 @@
+# -*- mode: snippet; require-final-newline: nil -*-
+# name: Variant Usage
+# key: vrt
+# --
+variant ${1:part} ${2:name} : ${3:Type};

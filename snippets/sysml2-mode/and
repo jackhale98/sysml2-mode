@@ -1,0 +1,10 @@
+# -*- mode: snippet; require-final-newline: nil -*-
+# name: Analysis Definition
+# key: and
+# --
+analysis def ${1:Name} {
+    subject ${2:subject} : ${3:Type};
+    in attribute ${4:input} :> ${5:ISQ::speed};
+    return ${6:result} :> ${7:ISQ::speed};
+    $0
+}

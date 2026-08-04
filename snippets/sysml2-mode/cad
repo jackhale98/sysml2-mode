@@ -1,0 +1,8 @@
+# -*- mode: snippet; require-final-newline: nil -*-
+# name: Calc Definition
+# key: cad
+# --
+calc def ${1:Name} {
+    in ${2:x} : ${3:Real};
+    ${4:expression}
+}

@@ -1,0 +1,7 @@
+# -*- mode: snippet; require-final-newline: nil -*-
+# name: Metadata Annotation
+# key: meta
+# --
+@${1:Type} {
+    ${2:key} = ${3:value};
+}

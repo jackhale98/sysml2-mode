@@ -1,0 +1,5 @@
+# -*- mode: snippet; require-final-newline: nil -*-
+# name: Exhibit State
+# key: exs
+# --
+exhibit state ${1:name} : ${2:StateDef};

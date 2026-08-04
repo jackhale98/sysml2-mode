@@ -7,6 +7,19 @@ the *SysML v2 Book* (Weilkiens, 2026-05) is fixed. See
 [REVIEW-2026-07.md](REVIEW-2026-07.md) for the full findings.
 
 ### Added
+- **Model extraction** (post-0.4.0 additions): multi-line
+  `connect`/`flow` relations, `flow a.b to c.d` shorthand, typed
+  flows, a message extractor (Ch 29), a metadata extractor with
+  values and targets (Ch 36), variant part capture (Ch 35), all
+  satisfy forms (`satisfy X;`, typed, `not satisfy`), and a
+  semicolon-body guard so `part def X;` no longer absorbs the next
+  block.
+- **17 new snippets** for the book's idioms: `cad` (calc def), `itd`/
+  `it` (item), `od` (occurrence), `var`/`vrt` (variation/variant),
+  `md`/`meta` (metadata def/annotation), `cnc` (concern), `vfd`
+  (verification with objective), `and` (analysis), `msg` (message),
+  `trn` (transition), `als` (alias), `ifd` (interface def), `pfa`
+  (perform), `exs` (exhibit state).
 - **Quoted unrestricted names** (`'Air Frame'`, `package <DSPA> 'Drone
   System Product Architecture'`) are first-class throughout: font-lock,
   imenu, which-function, goto-definition, references, rename, and all

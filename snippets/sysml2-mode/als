@@ -1,0 +1,5 @@
+# -*- mode: snippet; require-final-newline: nil -*-
+# name: Alias
+# key: als
+# --
+alias ${1:name} for ${2:QualifiedName};

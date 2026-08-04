@@ -1,0 +1,5 @@
+# -*- mode: snippet; require-final-newline: nil -*-
+# name: Item Usage
+# key: it
+# --
+item ${1:name} : ${2:Type};

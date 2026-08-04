@@ -1,0 +1,5 @@
+# -*- mode: snippet; require-final-newline: nil -*-
+# name: Perform Action
+# key: pfa
+# --
+perform action ${1:name};

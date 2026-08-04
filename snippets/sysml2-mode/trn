@@ -1,0 +1,8 @@
+# -*- mode: snippet; require-final-newline: nil -*-
+# name: Transition
+# key: trn
+# --
+transition ${1:name}
+    first ${2:source}
+    accept ${3:Trigger}
+    then ${4:target};

@@ -1,0 +1,7 @@
+# -*- mode: snippet; require-final-newline: nil -*-
+# name: Item Definition
+# key: itd
+# --
+item def ${1:Name} {
+    $0
+}

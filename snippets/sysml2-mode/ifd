@@ -1,0 +1,8 @@
+# -*- mode: snippet; require-final-newline: nil -*-
+# name: Interface Definition
+# key: ifd
+# --
+interface def ${1:Name} {
+    end ${2:a} : ${3:TypeA};
+    end ${4:b} : ${5:TypeB};
+}

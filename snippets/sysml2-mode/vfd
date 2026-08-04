@@ -1,0 +1,11 @@
+# -*- mode: snippet; require-final-newline: nil -*-
+# name: Verification Definition
+# key: vfd
+# --
+verification def ${1:Name} {
+    subject ${2:subject} : ${3:Type};
+    objective {
+        verify ${4:requirement};
+    }
+    $0
+}

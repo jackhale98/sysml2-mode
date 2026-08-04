@@ -1,0 +1,5 @@
+# -*- mode: snippet; require-final-newline: nil -*-
+# name: Message
+# key: msg
+# --
+message ${1:name} of ${2:Item} from ${3:source} to ${4:target};

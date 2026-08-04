@@ -1,0 +1,8 @@
+# -*- mode: snippet; require-final-newline: nil -*-
+# name: Variation Definition
+# key: var
+# --
+variation ${1:part} def ${2:Choice} {
+    variant $1 ${3:optionA};
+    variant $1 ${4:optionB};
+}
