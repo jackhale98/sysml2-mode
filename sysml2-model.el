@@ -100,7 +100,10 @@ Returns list of plists (:name :super :kind :attributes)."
                 (attrs nil))
             (save-excursion
               (goto-char match-end)
-              (when (re-search-forward "{" (line-end-position 2) t)
+              ;; A `;` before the `{` means this def has no body — don't
+              ;; absorb the NEXT definition's block (review finding).
+              (when (and (re-search-forward "[;{]" (line-end-position 2) t)
+                         (eq (char-before) ?{))
                 (let ((brace-start (1- (point)))
                       (body-end nil))
                   (goto-char brace-start)
@@ -137,7 +140,10 @@ Returns list of plists (:name :super :kind :literals)."
                 (literals nil))
             (save-excursion
               (goto-char match-end)
-              (when (re-search-forward "{" (line-end-position 2) t)
+              ;; A `;` before the `{` means this def has no body — don't
+              ;; absorb the NEXT definition's block (review finding).
+              (when (and (re-search-forward "[;{]" (line-end-position 2) t)
+                         (eq (char-before) ?{))
                 (let ((brace-start (1- (point)))
                       (body-end nil))
                   (goto-char brace-start)
@@ -188,7 +194,10 @@ Returns list of plists (:name :super :abstract :attributes :parts)."
                  (parts nil))
             (save-excursion
               (goto-char match-end)
-              (when (re-search-forward "{" (line-end-position 2) t)
+              ;; A `;` before the `{` means this def has no body — don't
+              ;; absorb the NEXT definition's block (review finding).
+              (when (and (re-search-forward "[;{]" (line-end-position 2) t)
+                         (eq (char-before) ?{))
                 (let ((brace-start (1- (point)))
                       (body-end nil))
                   (goto-char brace-start)
@@ -232,26 +241,37 @@ Returns list of plists (:name :super :abstract :attributes :parts)."
 
 (defun sysml2--model-extract-part-usages (&optional beg end)
   "Extract part usages within region BEG..END.
-Returns list of (:name :type :multiplicity)."
+Returns list of (:name :type :multiplicity :variant).
+Variant choices (`variant part x [: T]`) are included even without a
+type annotation (Ch 35)."
   (let ((beg (or beg (point-min)))
         (end (or end (point-max)))
         (results nil))
     (save-excursion
       (goto-char beg)
       (while (re-search-forward
-              (concat "\\bpart[ \t]+"
+              (concat "\\(?:\\(variant\\)[ \t]+\\)?"
+                      "\\bpart[ \t]+"
                       "\\(" sysml2--identifier-regexp "\\)"
-                      "[ \t]*:[ \t>]*"
-                      "\\(" sysml2--qualified-name-regexp "\\)"
+                      "\\(?:[ \t]*:[ \t>]*"
+                      "\\(" sysml2--qualified-name-regexp "\\)\\)?"
                       "\\(?:[ \t]*\\[\\([^]]+\\)\\]\\)?")
               end t)
-        (save-excursion
-          (goto-char (match-beginning 0))
-          (unless (looking-at "\\bpart[ \t]+def\\b")
-            (push (list :name (match-string-no-properties 1)
-                        :type (match-string-no-properties 2)
-                        :multiplicity (match-string-no-properties 3))
-                  results)))))
+        (let ((variant (match-string-no-properties 1))
+              (name (match-string-no-properties 2))
+              (type (match-string-no-properties 3))
+              (mult (match-string-no-properties 4)))
+          (save-excursion
+            (goto-char (match-beginning 0))
+            (unless (or (looking-at ".*\\bpart[ \t]+def\\b")
+                        ;; Untyped matches require a body or `;` next —
+                        ;; and only variants are interesting untyped.
+                        (and (null type) (null variant)))
+              (push (list :name name
+                          :type type
+                          :multiplicity mult
+                          :variant (when variant t))
+                    results))))))
     (nreverse results)))
 
 (defun sysml2--model-extract-port-usages (&optional beg end)
@@ -294,10 +314,10 @@ Returns list of (:name :source :target)."
               (concat "\\bconnection[ \t]+"
                       "\\(" sysml2--identifier-regexp "\\)"
                       "\\(?:[ \t]*:[ \t]*" sysml2--qualified-name-regexp "\\)?"
-                      "[ \t\n]*connect[ \t]+"
-                      "\\([A-Za-z_][A-Za-z0-9_.]*\\)"
-                      "[ \t]+to[ \t]+"
-                      "\\([A-Za-z_][A-Za-z0-9_.]*\\)")
+                      "[ \t\n]*connect[ \t\n]+"
+                      "\\([A-Za-z_'][A-Za-z0-9_.']*\\)"
+                      "[ \t\n]+to[ \t\n]+"
+                      "\\([A-Za-z_'][A-Za-z0-9_.']*\\)")
               end t)
         (save-excursion
           (goto-char (match-beginning 0))
@@ -309,13 +329,13 @@ Returns list of (:name :source :target)."
       ;; Standalone: connect [MULT] SOURCE to [MULT] TARGET
       (goto-char beg)
       (while (re-search-forward
-              (concat "\\bconnect[ \t]+"
-                      "\\(?:\\[[^]]*\\][ \t]*\\)?"
-                      "\\([A-Za-z_][A-Za-z0-9_.]*\\)"
+              (concat "\\bconnect[ \t\n]+"
+                      "\\(?:\\[[^]]*\\][ \t\n]*\\)?"
+                      "\\([A-Za-z_'][A-Za-z0-9_.']*\\)"
                       "\\(?:[ \t]*::>[^\n]*?\\)?"
-                      "[ \t]+to[ \t]+"
-                      "\\(?:\\[[^]]*\\][ \t]*\\)?"
-                      "\\([A-Za-z_][A-Za-z0-9_.]*\\)")
+                      "[ \t\n]+to[ \t\n]+"
+                      "\\(?:\\[[^]]*\\][ \t\n]*\\)?"
+                      "\\([A-Za-z_'][A-Za-z0-9_.']*\\)")
               end t)
         (save-excursion
           (goto-char (match-beginning 0))
@@ -341,20 +361,30 @@ Returns list of (:name :type :source :target)."
     (save-excursion
       (goto-char beg)
       (while (re-search-forward
-              (concat "\\bflow[ \t]+"
-                      "\\(?:\\(" sysml2--identifier-regexp "\\)[ \t]+\\)?"
-                      "\\(?:of[ \t]+\\(" sysml2--qualified-name-regexp "\\)[ \t]+\\)?"
-                      "from[ \t]+\\([A-Za-z_][A-Za-z0-9_.]*\\)"
-                      "[ \t]+to[ \t]+"
-                      "\\([A-Za-z_][A-Za-z0-9_.]*\\)")
+              (concat "\\bflow[ \t\n]+"
+                      ;; optional name (not `of`/`from`)
+                      "\\(?:\\(" sysml2--identifier-regexp "\\)[ \t\n]+\\)?"
+                      ;; optional `: Type`
+                      "\\(?:[ \t]*:[ \t]*" sysml2--qualified-name-regexp "[ \t\n]+\\)?"
+                      "\\(?:of[ \t\n]+\\(" sysml2--qualified-name-regexp "\\)[ \t\n]+\\)?"
+                      ;; `from` is optional: `flow a.b to c.d;` shorthand
+                      "\\(?:from[ \t\n]+\\)?"
+                      "\\([A-Za-z_'][A-Za-z0-9_.']*\\)"
+                      "[ \t\n]+to[ \t\n]+"
+                      "\\([A-Za-z_'][A-Za-z0-9_.']*\\)")
               end t)
         (unless (let ((ppss (syntax-ppss)))
                   (or (nth 3 ppss) (nth 4 ppss)))
-          (push (list :name (or (match-string-no-properties 1) "")
-                      :type (match-string-no-properties 2)
-                      :source (match-string-no-properties 3)
-                      :target (match-string-no-properties 4))
-                results))))
+          (let ((name (or (match-string-no-properties 1) "")))
+            ;; The optional name group can swallow the `from`/`of` keyword
+            ;; in shorthand forms — normalize those to anonymous.
+            (when (member name '("from" "of"))
+              (setq name ""))
+            (push (list :name name
+                        :type (match-string-no-properties 2)
+                        :source (match-string-no-properties 3)
+                        :target (match-string-no-properties 4))
+                  results)))))
     (nreverse results)))
 
 (defun sysml2--model-extract-bindings (&optional beg end)
@@ -655,7 +685,10 @@ Returns list of (:name :doc :subject)."
                 (doc nil) (subject nil))
             (save-excursion
               (goto-char match-end)
-              (when (re-search-forward "{" (line-end-position 2) t)
+              ;; A `;` before the `{` means this def has no body — don't
+              ;; absorb the NEXT definition's block (review finding).
+              (when (and (re-search-forward "[;{]" (line-end-position 2) t)
+                         (eq (char-before) ?{))
                 (let ((brace-start (1- (point)))
                       (body-end nil))
                   (goto-char brace-start)
@@ -904,15 +937,22 @@ Returns list of (:requirement :by)."
       (goto-char (point-min))
       (let ((results nil))
         (while (re-search-forward
-                (concat "\\bsatisfy[ \t]+"
-                        "\\(?:requirement[ \t]+\\)?"
+                (concat "\\(?:\\(not\\)[ \t]+\\)?"
+                        "\\bsatisfy[ \t]+"
+                        "\\(?:requirement[ \t]*\\)?"
+                        ;; typed form: `satisfy requirement : Type;`
+                        "\\(?::[ \t]*\\)?"
                         "\\(" sysml2--qualified-name-regexp "\\)"
-                        "[ \t]+by[ \t]+"
-                        "\\(" sysml2--qualified-name-regexp "\\)")
+                        ;; `by <subject>` is optional (Ch 32 forms)
+                        "\\(?:[ \t\n]+by[ \t\n]+"
+                        "\\(" sysml2--qualified-name-regexp "\\)\\)?")
                 nil t)
-          (push (list :requirement (match-string-no-properties 1)
-                      :by (match-string-no-properties 2))
-                results))
+          (unless (let ((ppss (syntax-ppss)))
+                    (or (nth 3 ppss) (nth 4 ppss)))
+            (push (list :requirement (match-string-no-properties 2)
+                        :by (match-string-no-properties 3)
+                        :negated (when (match-string-no-properties 1) t))
+                  results)))
         (nreverse results)))))
 
 (defun sysml2--model-extract-verifications (&optional buffer)
@@ -924,8 +964,10 @@ blocks for `verify [requirement] NAME' statements."
       (goto-char (point-min))
       (let ((results nil)
             (verif-re (concat "\\bverification[ \t]+"
+                              "\\(?:def[ \t]+\\)?"
                               "\\(" sysml2--identifier-regexp "\\)"))
-            (verify-re (concat "\\bverify[ \t]+\\(?:requirement[ \t]+\\)?"
+            (verify-re (concat "\\bverify[ \t]+\\(?:requirement[ \t]*\\)?"
+                               "\\(?::[ \t]*\\)?"
                                "\\(" sysml2--qualified-name-regexp "\\)")))
         ;; Find verification usages with bodies
         (while (re-search-forward verif-re nil t)
@@ -946,6 +988,97 @@ blocks for `verify [requirement] NAME' statements."
                     (push (list :requirement (match-string-no-properties 1)
                                 :by verif-name)
                           results)))))))
+        (nreverse results)))))
+
+(defun sysml2--model-extract-messages (&optional buffer)
+  "Extract message usages from BUFFER (Ch 29 Messages).
+Returns list of (:name :type :item :source :target).
+Handles `message m : T of Item from a.b to c.d;`,
+`message of Item from a to b;`, and multi-line forms."
+  (with-current-buffer (or buffer (current-buffer))
+    (save-excursion
+      (goto-char (point-min))
+      (let ((results nil)
+            (re (concat "\\bmessage[ \t\n]+"
+                        ;; optional name (not `of`/`from`)
+                        "\\(?:\\(" sysml2--identifier-regexp "\\)[ \t\n]+\\)?"
+                        ;; optional `: Type`
+                        "\\(?:[ \t]*:[ \t]*"
+                        "\\(" sysml2--qualified-name-regexp "\\)[ \t\n]+\\)?"
+                        ;; optional `of Item`
+                        "\\(?:of[ \t\n]+"
+                        "\\(" sysml2--qualified-name-regexp "\\)[ \t\n]+\\)?"
+                        "from[ \t\n]+"
+                        "\\(" sysml2--qualified-name-regexp "\\)"
+                        "[ \t\n]+to[ \t\n]+"
+                        "\\(" sysml2--qualified-name-regexp "\\)")))
+        (while (re-search-forward re nil t)
+          (unless (let ((ppss (syntax-ppss)))
+                    (or (nth 3 ppss) (nth 4 ppss)))
+            (let ((name (or (match-string-no-properties 1) "")))
+              (when (member name '("of" "from"))
+                (setq name ""))
+              (push (list :name name
+                          :type (match-string-no-properties 2)
+                          :item (match-string-no-properties 3)
+                          :source (match-string-no-properties 4)
+                          :target (match-string-no-properties 5))
+                    results))))
+        (nreverse results)))))
+
+(defun sysml2--model-extract-metadata (&optional buffer)
+  "Extract metadata annotations (`@Type { k = v; }`) from BUFFER (Ch 36).
+Returns list of (:type :values :target) where :values is an alist of
+\=(KEY . VALUE) strings and :target is the name of the enclosing
+definition, if any."
+  (with-current-buffer (or buffer (current-buffer))
+    (save-excursion
+      (goto-char (point-min))
+      (let ((results nil)
+            (re (concat "@\\(" sysml2--qualified-name-regexp "\\)"
+                        "[ \t\n]*\\({\\)?")))
+        (while (re-search-forward re nil t)
+          (unless (let ((ppss (syntax-ppss)))
+                    (or (nth 3 ppss) (nth 4 ppss)))
+            (let ((ann-start (match-beginning 0))
+                  (meta-type (match-string-no-properties 1))
+                  (has-body (match-string-no-properties 2))
+                  (values nil)
+                  (target nil))
+              ;; Body values: k = v; pairs up to the matching brace
+              (when has-body
+                (let ((body-start (point)) (body-end nil))
+                  (save-excursion
+                    (goto-char (1- (point)))
+                    (condition-case nil
+                        (progn (forward-sexp 1) (setq body-end (point)))
+                      (scan-error (setq body-end (point-max)))))
+                  (save-excursion
+                    (goto-char body-start)
+                    (while (re-search-forward
+                            (concat "\\([A-Za-z_][A-Za-z0-9_]*\\)"
+                                    "[ \t]*=[ \t]*\\([^;\n]+\\)")
+                            (1- body-end) t)
+                      (push (cons (match-string-no-properties 1)
+                                  (string-trim (match-string-no-properties 2)))
+                            values)))))
+              ;; Enclosing definition = target
+              (save-excursion
+                (goto-char ann-start)
+                (let ((open (nth 1 (syntax-ppss))))
+                  (when open
+                    (goto-char open)
+                    (beginning-of-line)
+                    (when (re-search-forward
+                           (concat "\\b\\(?:def\\|package\\)[ \t]+"
+                                   "\\(?:<[^>\n]*>[ \t]+\\)?"
+                                   "\\(" sysml2--identifier-regexp "\\)")
+                           open t)
+                      (setq target (match-string-no-properties 1))))))
+              (push (list :type meta-type
+                          :values (nreverse values)
+                          :target target)
+                    results))))
         (nreverse results)))))
 
 (defun sysml2--model-extract-allocations (&optional buffer)

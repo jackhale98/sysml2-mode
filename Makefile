@@ -12,7 +12,7 @@ TEST_FILES := test/test-helper.el test/test-lang.el test/test-font-lock.el \
 	test/test-autoload.el test/test-cli-commands.el test/test-queries.el \
 	test/test-ts-structure.el test/test-repl.el test/test-transient.el \
 	test/test-flymake-codes.el test/test-cli-refactor.el \
-	test/test-format-check.el
+	test/test-format-check.el test/test-model.el
 
 .PHONY: all test compile clean lint tree-sitter-test
 
