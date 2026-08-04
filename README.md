@@ -4,6 +4,8 @@ An Emacs major mode for editing [SysML v2](https://www.omgsysml.org/SysML-2.htm)
 
 Provides syntax highlighting, indentation, completion, navigation, diagram generation, native simulation, FMI/FMU integration, co-simulation orchestration, and LSP support.
 
+Follows the book's house style: quoted unrestricted names (`package <DSPA> 'Drone System Product Architecture'`) and `<ID>` requirement short names (`requirement <REQ23> observeArea`) are first-class in highlighting, navigation, imenu, and model extraction.
+
 **Requires:** Emacs 29.1+ | **Platforms:** Linux, macOS, Windows
 
 ## Documentation
@@ -15,6 +17,7 @@ Provides syntax highlighting, indentation, completion, navigation, diagram gener
 | **[FMI Integration Guide](examples/fmi-integration.md)** | Complete workflow for SysML v2 + Modelica/FMI co-simulation (8-step process from model to results) |
 | **[Literate SysML Guide](examples/literate-sysml.md)** | Org-babel literate programming: tangle, noweb, inline validation, simulation, and diagrams |
 | **[Changelog](CHANGELOG.md)** | Release history and version notes |
+| **[Book Review Findings](REVIEW-2026-07.md)** | Systematic review of the toolchain against the *SysML v2 Book* (Weilkiens 2026-05) — the working backlog |
 
 ## Table of Contents
 

@@ -1,5 +1,38 @@
 # Changelog
 
+## 0.4.0 — 2026-08-04
+
+Book-review release: every P0 finding from the systematic review against
+the *SysML v2 Book* (Weilkiens, 2026-05) is fixed. See
+[REVIEW-2026-07.md](REVIEW-2026-07.md) for the full findings.
+
+### Added
+- **Quoted unrestricted names** (`'Air Frame'`, `package <DSPA> 'Drone
+  System Product Architecture'`) are first-class throughout: font-lock,
+  imenu, which-function, goto-definition, references, rename, and all
+  model extraction. `'` is punctuation now, not a string delimiter —
+  SysML v2 strings are double-quoted only.
+- **`<ID>` short-name tags**: requirement extraction accepts both
+  `<REQ23>` (book style) and `<'quoted id'>` forms; imenu and defun
+  navigation tolerate short-name tags on any definition.
+- Keywords: `frame`, `render`, `at`, `locale`.
+- `sysml2--short-name-regexp` shared constant.
+
+### Fixed
+- **Indent staircase**: lines after a closed `}` block were treated as
+  continuations and drifted +4 each (staircased 87 of 169 book listings
+  on re-indent). Lines after `}` and `*/` now continue at the correct
+  level; block-comment interiors are skipped; a bare `doc` keyword's
+  comment aligns at the same column.
+- goto-definition no longer jumps confidently to the wrong definition
+  when point is inside a quoted name.
+- Tree-sitter integration (`sysml2-ts.el`) updated to the current
+  grammar's unified `definition`/`usage` node architecture — font-lock,
+  imenu (categorized by leading keyword), defun navigation, outline,
+  and completion all work against the modern grammar; query files
+  (`tags.scm`, `locals.scm`, `highlights.scm`) rewritten to match.
+
+
 ## 0.3.0 — 2026-03-15
 
 ### Added
