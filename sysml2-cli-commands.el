@@ -2,7 +2,7 @@
 
 ;; Copyright (C) 2026 sysml2-mode contributors
 ;; Author: sysml2-mode contributors
-;; Version: 0.4.0
+;; Version: 0.5.0
 ;; Package-Requires: ((emacs "29.1"))
 ;; Keywords: languages, systems-engineering, sysml
 ;; URL: https://github.com/jackhale98/sysml2-mode
@@ -141,13 +141,9 @@ Returns the output string."
 ;;;###autoload
 (defun sysml2-cli-lint ()
   "Run `sysml check' on the current file.
-Displays syntax and structural validation results.
-\(In CLI v0.5+, `lint' is an alias for `check'.)"
+The CLI's `lint' command was removed in 0.7.0; this is `check'."
   (interactive)
-  (let ((file (sysml2-cli--ensure-file)))
-    (sysml2-cli--run
-     (sysml2-cli--with-project-flags (list "check" file))
-     (format "Check: %s" (file-name-nondirectory file)))))
+  (sysml2-cli-check))
 
 ;;;###autoload
 (defun sysml2-cli-check ()
@@ -207,12 +203,14 @@ Shows requirements traceability matrix."
 
 ;;;###autoload
 (defun sysml2-cli-stats ()
-  "Run `sysml stats' on the current file.
-Shows aggregate model statistics."
+  "Render the `ModelStats' view for the current file.
+The CLI's `stats' command became a model-defined view (0.7.0); the
+StandardViews library must be on the include path (projects created
+with `sysml init' and a libraries/ directory have it automatically)."
   (interactive)
   (let ((file (sysml2-cli--ensure-file)))
     (sysml2-cli--run
-     (sysml2-cli--with-project-flags (list "stats" file))
+     (sysml2-cli--with-project-flags (list "view" "ModelStats" file))
      (format "Stats: %s" (file-name-nondirectory file)))))
 
 ;;;###autoload
@@ -239,13 +237,15 @@ Shows model completeness and quality score."
 
 ;;;###autoload
 (defun sysml2-cli-find (pattern)
-  "Run `sysml find' to search elements matching PATTERN.
-Searches across all project files by name or regex."
+  "Search elements whose name contains PATTERN via `sysml list -n'.
+The CLI's `find' command folded into `list' (0.7.0); use
+\[universal-argument] to search documentation text instead (--doc)."
   (interactive "sSearch pattern: ")
-  (let ((file (sysml2-cli--ensure-file)))
+  (let ((file (sysml2-cli--ensure-file))
+        (flag (if current-prefix-arg "--doc" "-n")))
     (sysml2-cli--run
-     (sysml2-cli--with-project-flags (list "find" file)
-                                     (list "--pattern" pattern))
+     (sysml2-cli--with-project-flags (list "list" file)
+                                     (list flag pattern))
      (format "Find: %s" pattern))))
 
 ;;;###autoload
@@ -268,11 +268,53 @@ Lists analysis cases defined in the model."
      (sysml2-cli--with-project-flags (list "analyze" "list" file))
      (format "Analyze: %s" (file-name-nondirectory file)))))
 
+;;;###autoload
+(defun sysml2-cli-view (&optional view-name)
+  "Render the model-defined view VIEW-NAME via `sysml view'.
+Views are `view def's carrying a @TableRendering annotation (see the
+Reporting domain library) — FmeaWorksheet, RiskMatrix, StackupSummary,
+PortTable, and any view your project defines.  Called with no name
+\(or interactively with empty input), lists the available views."
+  (interactive
+   (list (read-string "View name (empty to list): ")))
+  (let* ((file (sysml2-cli--ensure-file))
+         (args (if (and view-name (not (string-empty-p view-name)))
+                   (list "view" view-name file)
+                 (list "view" file))))
+    (sysml2-cli--run
+     (sysml2-cli--with-project-flags args)
+     (if (and view-name (not (string-empty-p view-name)))
+         (format "View: %s" view-name)
+       "Views"))))
+
+;;;###autoload
+(defun sysml2-cli-analyze-run (case-name &optional method)
+  "Run analysis CASE-NAME via `sysml analyze run -n CASE-NAME'.
+Uncertainty analysis cases (types specializing
+Uncertainty::UncertaintyAnalysis, e.g. tolerance stackups) run
+worst-case, RSS, and Monte Carlo propagation.  With a prefix arg,
+prompt for METHOD (worst-case, rss, monte-carlo, or all)."
+  (interactive
+   (list (read-string "Analysis case name: "
+                      (thing-at-point 'symbol t))
+         (when current-prefix-arg
+           (completing-read "Method: "
+                            '("all" "worst-case" "rss" "monte-carlo")
+                            nil t "all"))))
+  (let* ((file (sysml2-cli--ensure-file))
+         (extra (append (list "-n" case-name)
+                        (when (and method (not (equal method "all")))
+                          (list "--method" method)))))
+    (sysml2-cli--run
+     (sysml2-cli--with-project-flags (list "analyze" "run" file) extra)
+     (format "Analyze: %s" case-name))))
+
 ;; --- Newly wired commands ------------------------------------------
 
 (defconst sysml2-cli--rollup-subcommands
-  '("compute" "budget" "sensitivity" "sweep" "what-if" "query")
-  "Known `sysml rollup' subcommands.")
+  '("compute" "budget" "sensitivity" "sweep" "what-if")
+  "Known `sysml rollup' subcommands.
+\(`query' was removed in CLI 0.7.0 — use `sysml list -k attributes'.)")
 
 ;;;###autoload
 (defun sysml2-cli-rollup (subcommand root attr)
@@ -282,13 +324,12 @@ SUBCOMMAND defaults to \"compute\" — also: budget, sensitivity,
 sweep, what-if, query.  ROOT names the root part definition.
 ATTR is the attribute to roll up (mass, cost, power, …).
 
-Interactively prompts for each argument; with prefix arg, defaults
-SUBCOMMAND to \"query\" for cross-cutting attribute search."
+Interactively prompts for each argument."
   (interactive
    (let ((sub (completing-read
                "Rollup subcommand: "
                sysml2-cli--rollup-subcommands nil t
-               (if current-prefix-arg "query" "compute"))))
+               "compute")))
      (list sub
            (read-string "Root part def: " (thing-at-point 'symbol t))
            (read-string "Attribute (e.g. mass, cost): " "mass"))))
@@ -302,13 +343,17 @@ SUBCOMMAND to \"query\" for cross-cutting attribute search."
 
 ;;;###autoload
 (defun sysml2-cli-interfaces (&optional unconnected-only)
-  "Run `sysml interfaces' on the current file.
-With prefix arg or UNCONNECTED-ONLY non-nil, pass `--unconnected'."
+  "Render the `PortTable' view for the current file.
+The CLI's `interfaces' command became a model-defined view (0.7.0).
+Unconnected ports are reported by `sysml check' as W016, so
+UNCONNECTED-ONLY (prefix arg) runs check instead."
   (interactive "P")
   (let* ((file (sysml2-cli--ensure-file))
-         (extra (when unconnected-only (list "--unconnected")))
+         (extra nil)
          (args (sysml2-cli--with-project-flags
-                (list "interfaces" file) extra)))
+                (if unconnected-only
+                    (list "check" file)
+                  (list "view" "PortTable" file)) extra)))
     (sysml2-cli--run
      args
      (format "Interfaces%s: %s"

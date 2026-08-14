@@ -73,9 +73,11 @@
    ("t" "Traceability"       sysml2-cli-trace)
    ("d" "Dependencies"       sysml2-cli-deps)]
   ["Project"
-   ("a" "Stats"              sysml2-cli-stats)
+   ("a" "Stats (view)"       sysml2-cli-stats)
+   ("V" "Render view"        sysml2-cli-view)
+   ("u" "Analyze case (run)" sysml2-cli-analyze-run)
    ("r" "Rollup"             sysml2-cli-rollup)
-   ("i" "Interfaces"         sysml2-cli-interfaces)
+   ("i" "Port table (view)"  sysml2-cli-interfaces)
    ("o" "Allocations"        sysml2-cli-allocation)
    ("D" "Diff two files"     sysml2-cli-diff)
    ("X" "Build / show index" sysml2-cli-index)]

@@ -114,7 +114,7 @@ keyboard-driven transient pickers replace minibuffer-prompt sub-menus:
 |--------|---------|--------|
 | Diagrams      | `C-c C-d RET` | tree, IBD, state, action, requirement, use case, package, view, preview, export, open in playground |
 | Scaffold      | `C-c m RET`   | model skeleton, package, part def, port def, requirement, state, action, calc, enum, use case |
-| CLI / Refactor| `C-c C-t RET` | check, list, show, trace, deps, stats, coverage, find, doc, analyze, rollup, interfaces, allocation, diff, index, rename, add, remove |
+| CLI / Refactor| `C-c C-t RET` | check, list, show, trace, deps, coverage, doc, analyze (incl. uncertainty cases), rollup, view (model-defined reports), allocation, diff, index, rename, add, remove |
 
 Vanilla-Emacs users with `which-key` installed also see prefix labels
 ("diagram", "scaffold", "cli-analyze", …) when they hold a `C-c` prefix.
@@ -615,10 +615,10 @@ When the `sysml` CLI is installed, additional analysis and refactoring commands 
 | `C-c C-t s` | `sysml2-cli-list` | List model elements (with kind filter) |
 | `C-c C-t w` | `sysml2-cli-show` | Show element details |
 | `C-c C-t t` | `sysml2-cli-trace` | Requirements traceability matrix |
-| `C-c C-t a` | `sysml2-cli-stats` | Aggregate model statistics |
+| `C-c C-t a` | `sysml2-cli-stats` | Model statistics (renders the ModelStats view) |
 | `C-c C-t d` | `sysml2-cli-deps` | Forward/reverse dependency analysis |
 | `C-c C-t v` | `sysml2-cli-coverage` | Model completeness and quality score |
-| `C-c C-t f` | `sysml2-cli-find` | Search elements by name pattern |
+| `C-c C-t f` | `sysml2-cli-find` | Search elements by name (prefix arg: by doc text) |
 | `C-c C-t g` | `sysml2-cli-doc` | Generate Markdown documentation |
 | `C-c C-t n` | `sysml2-cli-analyze` | List analysis cases in the model |
 | `C-c C-t r` | `sysml2-cli-rollup` | Attribute rollup (mass/cost/power/…) |

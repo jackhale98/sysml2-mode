@@ -73,13 +73,13 @@
     (should (member "/tmp/lib/" args))))
 
 (ert-deftest sysml2-cli-stats-omits-flags-when-unavailable ()
-  "stats does not pass -I when neither root nor library is found."
+  "stats renders the ModelStats view; no -I without a project."
   (let ((args
          (cl-letf (((symbol-function 'sysml2-project-root) (lambda (&rest _) nil))
                    ((symbol-function 'sysml2-project-library-path) (lambda (&rest _) nil))
                    ((symbol-function 'sysml2-cli--ensure-file) (lambda () "/tmp/x.sysml")))
            (sysml2-test--with-captured-args (sysml2-cli-stats)))))
-    (should (equal (car args) "stats"))
+    (should (equal (cl-subseq args 0 2) '("view" "ModelStats")))
     (should-not (member "-I" args))
     (should-not (member "--stdlib-path" args))))
 
@@ -109,15 +109,51 @@
   (should (commandp 'sysml2-cli-interfaces)))
 
 (ert-deftest sysml2-cli-interfaces-args ()
-  "interfaces forwards file and --unconnected flag."
+  "interfaces renders PortTable; unconnected mode runs check (W016)."
+  (let ((args
+         (cl-letf (((symbol-function 'sysml2-project-root) (lambda (&rest _) nil))
+                   ((symbol-function 'sysml2-project-library-path) (lambda (&rest _) nil))
+                   ((symbol-function 'sysml2-cli--ensure-file) (lambda () "/tmp/x.sysml")))
+           (sysml2-test--with-captured-args (sysml2-cli-interfaces)))))
+    (should (equal (cl-subseq args 0 2) '("view" "PortTable")))
+    (should (member "/tmp/x.sysml" args)))
   (let ((args
          (cl-letf (((symbol-function 'sysml2-project-root) (lambda (&rest _) nil))
                    ((symbol-function 'sysml2-project-library-path) (lambda (&rest _) nil))
                    ((symbol-function 'sysml2-cli--ensure-file) (lambda () "/tmp/x.sysml")))
            (sysml2-test--with-captured-args (sysml2-cli-interfaces t)))))
-    (should (equal (car args) "interfaces"))
-    (should (member "/tmp/x.sysml" args))
-    (should (member "--unconnected" args))))
+    (should (equal (car args) "check"))))
+
+(ert-deftest sysml2-cli-view-args ()
+  "view renders a named view; empty name lists views."
+  (let ((args
+         (cl-letf (((symbol-function 'sysml2-project-root) (lambda (&rest _) nil))
+                   ((symbol-function 'sysml2-project-library-path) (lambda (&rest _) nil))
+                   ((symbol-function 'sysml2-cli--ensure-file) (lambda () "/tmp/x.sysml")))
+           (sysml2-test--with-captured-args (sysml2-cli-view "FmeaWorksheet")))))
+    (should (equal (cl-subseq args 0 2) '("view" "FmeaWorksheet")))
+    (should (member "/tmp/x.sysml" args)))
+  (let ((args
+         (cl-letf (((symbol-function 'sysml2-project-root) (lambda (&rest _) nil))
+                   ((symbol-function 'sysml2-project-library-path) (lambda (&rest _) nil))
+                   ((symbol-function 'sysml2-cli--ensure-file) (lambda () "/tmp/x.sysml")))
+           (sysml2-test--with-captured-args (sysml2-cli-view "")))))
+    (should (equal (car args) "view"))
+    (should (member "/tmp/x.sysml" args))))
+
+(ert-deftest sysml2-cli-analyze-run-args ()
+  "analyze-run passes -n and optional --method."
+  (let ((args
+         (cl-letf (((symbol-function 'sysml2-project-root) (lambda (&rest _) nil))
+                   ((symbol-function 'sysml2-project-library-path) (lambda (&rest _) nil))
+                   ((symbol-function 'sysml2-cli--ensure-file) (lambda () "/tmp/x.sysml")))
+           (sysml2-test--with-captured-args
+             (sysml2-cli-analyze-run "gapAnalysis" "monte-carlo")))))
+    (should (equal (cl-subseq args 0 2) '("analyze" "run")))
+    (should (member "-n" args))
+    (should (member "gapAnalysis" args))
+    (should (member "--method" args))
+    (should (member "monte-carlo" args))))
 
 (ert-deftest sysml2-cli-allocation-defined ()
   "`sysml2-cli-allocation' must be an interactive command."

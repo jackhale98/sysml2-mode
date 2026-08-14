@@ -1,5 +1,26 @@
 # Changelog
 
+## 0.5.0 — 2026-08-14
+
+Catch-up with sysml-cli 0.7.0's lean surface, plus its new primitives.
+
+- `sysml2-cli-view` renders any model-defined view (FmeaWorksheet,
+  StackupSummary, PortTable, or your own `view def`s); empty name lists
+  available views
+- `sysml2-cli-analyze-run` runs analysis cases by name — uncertainty
+  cases (tolerance stackups) get worst-case/RSS/Monte Carlo, with a
+  prefix-arg method prompt
+- Repairs for commands the CLI removed: `stats` renders the ModelStats
+  view, `interfaces` renders PortTable (prefix arg runs `check`, where
+  W016 reports unconnected ports), `find` maps to `list -n` (prefix
+  arg: `--doc`), rollup's `query` subcommand dropped
+- W017 value-constraint diagnostics arrive through the existing flymake
+  JSON backend automatically — no configuration needed
+- Library vocabulary intentionally NOT hard-coded: tree-sitter queries
+  highlight by grammatical category, and sysml-lsp completes imported
+  names from the actual include path — any library lights up, not just
+  ours
+
 ## 0.4.0 — 2026-08-04
 
 Book-review release: every P0 finding from the systematic review against
