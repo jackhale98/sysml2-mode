@@ -260,13 +260,14 @@ Generates Markdown documentation from the model."
 
 ;;;###autoload
 (defun sysml2-cli-analyze ()
-  "Run `sysml analyze list' on the current file.
-Lists analysis cases defined in the model."
+  "List analysis cases in the current file via `sysml list -k analyses'.
+The CLI\='s `analyze list\=' subcommand folded into `list\=' (0.9);
+run a case with `sysml2-cli-analyze-run\='."
   (interactive)
   (let ((file (sysml2-cli--ensure-file)))
     (sysml2-cli--run
-     (sysml2-cli--with-project-flags (list "analyze" "list" file))
-     (format "Analyze: %s" (file-name-nondirectory file)))))
+     (sysml2-cli--with-project-flags (list "list" "-k" "analyses" file))
+     (format "Analyses: %s" (file-name-nondirectory file)))))
 
 ;;;###autoload
 (defun sysml2-cli-view (&optional view-name)

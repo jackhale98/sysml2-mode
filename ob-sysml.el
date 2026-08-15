@@ -221,8 +221,11 @@ The :includes parameter adds additional -I paths."
                    (list "check" tmp))
                   ("list"
                    (list "list" tmp))
+                  ;; `stats' became the model-defined ModelStats view
+                  ;; (sysml-cli 0.7); needs the Reporting library on the
+                  ;; include path (:includes).
                   ("stats"
-                   (list "stats" tmp))
+                   (list "view" "ModelStats" tmp))
                   ("doc"
                    (list "doc" tmp))
                   ("show"

@@ -317,28 +317,13 @@ Returns list of plists with `:name', `:direction', `:type'."
 
 (defun sysml2--fmi-extract-part-interface (part-def-name &optional buffer)
   "Extract FMI interface contract for PART-DEF-NAME from BUFFER.
-When the sysml CLI is available, uses tree-sitter AST extraction.
-Otherwise falls back to regex-based extraction.
-Returns list of plists with `:name', `:direction', `:sysml-type',
-`:fmi-type', `:causality', `:variability', `:source-port'."
-  (let ((file (buffer-file-name (or buffer (current-buffer)))))
-    (if (and file (sysml2--cli-available-p))
-        ;; Tree-sitter backend via sysml CLI
-        (let* ((result (sysml2--cli-call-json
-                        "export" "interfaces" file
-                        "--part" part-def-name))
-               (items (plist-get result :items)))
-          (mapcar (lambda (item)
-                    (list :name (plist-get item :name)
-                          :direction (plist-get item :direction)
-                          :sysml-type (plist-get item :sysml_type)
-                          :fmi-type (plist-get item :fmi_type)
-                          :causality (plist-get item :causality)
-                          :variability (plist-get item :variability)
-                          :source-port (plist-get item :source_port)))
-                  items))
-      ;; Regex fallback
-      (sysml2--fmi-extract-part-interface--regex part-def-name buffer))))
+Regex-based extraction; the CLI\='s `export interfaces\=' subcommand was
+removed in sysml-cli 0.7 (its FMI typing now lives in `export modelica\='
+and `export ssp\=' directly), so the in-process extractor is the one
+path.
+Returns list of plists with `:name\=', `:direction\=', `:sysml-type\=',
+`:fmi-type\=', `:causality\=', `:variability\=', `:source-port\='."
+  (sysml2--fmi-extract-part-interface--regex part-def-name buffer))
 
 (defun sysml2--fmi-extract-part-interface--regex (part-def-name &optional buffer)
   "Regex-based FMI interface extraction (fallback when sysml CLI unavailable)."
