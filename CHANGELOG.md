@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.5.1 — 2026-08-15
 
 - Removed `sysml2-cli-index` (`C-c C-t X`): sysml-cli deleted the
   `index` command and its cache (no reader existed; parsing is fast
