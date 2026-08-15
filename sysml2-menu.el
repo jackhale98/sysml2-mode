@@ -65,7 +65,6 @@
      ["Interfaces"            sysml2-cli-interfaces t]
      ["Allocations"           sysml2-cli-allocation t]
      ["Project Diff"          sysml2-cli-diff t]
-     ["Build Index"           sysml2-cli-index t]
      "--"
      ["Refactor: Rename"      sysml2-cli-rename t]
      ["Refactor: Add Element" sysml2-cli-add t]

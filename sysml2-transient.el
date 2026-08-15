@@ -79,8 +79,7 @@
    ("r" "Rollup"             sysml2-cli-rollup)
    ("i" "Port table (view)"  sysml2-cli-interfaces)
    ("o" "Allocations"        sysml2-cli-allocation)
-   ("D" "Diff two files"     sysml2-cli-diff)
-   ("X" "Build / show index" sysml2-cli-index)]
+   ("D" "Diff two files"     sysml2-cli-diff)]
   ["Refactor"
    ("R" "Rename (project)"   sysml2-cli-rename)
    ("A" "Add element"        sysml2-cli-add)

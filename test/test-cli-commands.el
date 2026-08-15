@@ -185,26 +185,7 @@
     (should (member "/tmp/a.sysml" args))
     (should (member "/tmp/b.sysml" args))))
 
-(ert-deftest sysml2-cli-index-defined ()
-  "`sysml2-cli-index' must be an interactive command."
-  (should (commandp 'sysml2-cli-index)))
 
-(ert-deftest sysml2-cli-index-args-stats ()
-  "index --stats produces `index --stats'."
-  (let ((args
-         (cl-letf (((symbol-function 'sysml2-project-root) (lambda (&rest _) "/tmp/p/"))
-                   ((symbol-function 'sysml2-project-library-path) (lambda (&rest _) nil)))
-           (sysml2-test--with-captured-args (sysml2-cli-index t)))))
-    (should (equal (car args) "index"))
-    (should (member "--stats" args))))
-
-(ert-deftest sysml2-cli-index-no-file-arg ()
-  "index runs without a file argument (uses project root)."
-  (let ((args
-         (cl-letf (((symbol-function 'sysml2-project-root) (lambda (&rest _) "/tmp/p/"))
-                   ((symbol-function 'sysml2-project-library-path) (lambda (&rest _) nil)))
-           (sysml2-test--with-captured-args (sysml2-cli-index nil)))))
-    (should-not (cl-find-if (lambda (s) (string-suffix-p ".sysml" s)) args))))
 
 (provide 'test-cli-commands)
 ;;; test-cli-commands.el ends here

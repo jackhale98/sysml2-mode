@@ -625,7 +625,6 @@ When the `sysml` CLI is installed, additional analysis and refactoring commands 
 | `C-c C-t i` | `sysml2-cli-interfaces` | Port-interface analysis (unconnected ports with `C-u`) |
 | `C-c C-t o` | `sysml2-cli-allocation` | Logical-to-physical allocation matrix |
 | `C-c C-t D` | `sysml2-cli-diff` | Semantic diff between two SysML files |
-| `C-c C-t X` | `sysml2-cli-index` | Build / show project index (`C-u` for stats) |
 | `C-c C-t R` | `sysml2-cli-rename` | Refactor: rename element (`C-u` for project-wide) |
 | `C-c C-t A` | `sysml2-cli-add` | Refactor: add an element from a template |
 | `C-c C-t K` | `sysml2-cli-remove` | Refactor: remove an element |
@@ -837,7 +836,6 @@ Plus `gd` for goto-definition in normal state. Neither evil nor general.el is a 
 | `C-c C-t i` | `sysml2-cli-interfaces` |
 | `C-c C-t o` | `sysml2-cli-allocation` |
 | `C-c C-t D` | `sysml2-cli-diff` |
-| `C-c C-t X` | `sysml2-cli-index` |
 | `C-c C-t R` | `sysml2-cli-rename` |
 | `C-c C-t A` | `sysml2-cli-add` |
 | `C-c C-t K` | `sysml2-cli-remove` |

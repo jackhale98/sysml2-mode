@@ -586,17 +586,6 @@ Performs a dry-run preview first, then prompts for confirmation."
        parsed)
       (message "Remove cancelled")))))
 
-;;;###autoload
-(defun sysml2-cli-index (&optional stats-only)
-  "Run `sysml index' to (re)build the project index.
-With prefix arg or STATS-ONLY non-nil, pass `--stats' to print the
-current index summary instead of rebuilding."
-  (interactive "P")
-  (let* ((extra (if stats-only (list "--stats") (list "--full")))
-         (args (sysml2-cli--with-project-flags (list "index") extra)))
-    (sysml2-cli--run
-     args
-     (if stats-only "Index Stats" "Index Rebuild"))))
 
 (provide 'sysml2-cli-commands)
 ;;; sysml2-cli-commands.el ends here
