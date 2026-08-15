@@ -205,7 +205,7 @@ Shows requirements traceability matrix."
 (defun sysml2-cli-stats ()
   "Render the `ModelStats' view for the current file.
 The CLI's `stats' command became a model-defined view (0.7.0); the
-StandardViews library must be on the include path (projects created
+Reporting library must be on the include path (projects created
 with `sysml init' and a libraries/ directory have it automatically)."
   (interactive)
   (let ((file (sysml2-cli--ensure-file)))
