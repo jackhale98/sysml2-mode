@@ -114,7 +114,7 @@ keyboard-driven transient pickers replace minibuffer-prompt sub-menus:
 |--------|---------|--------|
 | Diagrams      | `C-c C-d RET` | tree, IBD, state, action, requirement, use case, package, view, preview, export, open in playground |
 | Scaffold      | `C-c m RET`   | model skeleton, package, part def, port def, requirement, state, action, calc, enum, use case |
-| CLI / Refactor| `C-c C-t RET` | check, list, show, trace, deps, coverage, doc, analyze (incl. uncertainty cases), rollup, view (model-defined reports), allocation, diff, index, rename, add, remove |
+| CLI / Refactor| `C-c C-t RET` | check, list, show, trace, deps, coverage, doc, analyze (incl. uncertainty cases), rollup, view (model-defined reports), allocation, diff, rename, add, remove |
 
 Vanilla-Emacs users with `which-key` installed also see prefix labels
 ("diagram", "scaffold", "cli-analyze", …) when they hold a `C-c` prefix.
@@ -904,7 +904,7 @@ sysml2-fmi.el           FMU inspector, interface extraction, Modelica gen
 sysml2-cosim.el         SSP generation, simulation, results, verification
 sysml2-simulate.el      Native simulation via sysml CLI (constraints, state machines, actions)
 sysml2-format.el        In-process formatting (tree-sitter indent-region)
-sysml2-cli-commands.el  CLI analysis + refactor wrappers (lint, check, list, show, trace, stats, deps, coverage, find, doc, analyze, rollup, interfaces, allocation, diff, index, rename, add, remove)
+sysml2-cli-commands.el  CLI analysis + refactor wrappers (check, list, show, trace, stats, deps, coverage, find, doc, analyze, rollup, interfaces, allocation, diff, rename, add, remove)
 sysml2-doctor.el        Health check probe for CLI, grammar, LSP, D2, PlantUML, Pandoc, stdlib
 sysml2-menu.el          Easy-menu bar + which-key prefix labels
 sysml2-repl.el          comint-mode inferior `sysml repl' session
