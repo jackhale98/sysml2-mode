@@ -1,5 +1,28 @@
 # Changelog
 
+## Unreleased
+
+- W017 value-constraint diagnostics now actually reach the buffer: the
+  Flymake CLI allowlist stopped at W016, silently discarding them (the
+  0.5.0 changelog claimed they arrived automatically — it was wrong)
+- `sysml2-cli-analyze` works again via `sysml list -k analyses`
+  (sysml-cli gained the kind; `analyze list` was removed);
+  `sysml2-cli-view` and `sysml2-cli-analyze-run` gained keybindings
+  (`C-c C-t V` / `C-c C-t u`) and menu entries, and the API server
+  commands joined the menu
+- Fixed kind lists offered by `sysml2-cli-list` / `sysml2-cli-add` to
+  the CLI's actual vocabulary (four candidates could never succeed)
+- ob-sysml `:cmd stats` renders the ModelStats view; FMI extraction no
+  longer tries the removed `export interfaces` (regex extractor is the
+  one path); flymake docstrings/process names say `check`, not `lint`
+- README corrections from a full docs audit: counts (49 snippets, 58
+  stdlib packages, 40 imenu categories, 50 indent rules, 216 keywords,
+  17 LSP capabilities, 365 tests), org-babel example needed
+  `:cmd diagram`, SysON setup needs `sysml2-lsp-server-path`, W017 in
+  the diagnostics list, completion contexts, previously undocumented
+  bindings (`M-?`, `C-c C-d b`, `C-c m M`) and defcustoms;
+  `sysml2-mode-version` now reports 0.5.1
+
 ## 0.5.1 — 2026-08-15
 
 - Removed `sysml2-cli-index` (`C-c C-t X`): sysml-cli deleted the

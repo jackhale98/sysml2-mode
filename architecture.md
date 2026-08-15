@@ -864,7 +864,7 @@ package ${1:Name} {
     (define-key map (kbd "C-c C-d o") #'sysml2-diagram-open-plantuml)
     ;; Navigation
     (define-key map (kbd "C-c C-n d") #'sysml2-goto-definition)
-    (define-key map (kbd "C-c C-n r") #'sysml2-find-references)
+    (define-key map (kbd "M-?") #'sysml2-find-references)
     (define-key map (kbd "C-c C-n o") #'sysml2-show-outline)
     ;; API
     (define-key map (kbd "C-c C-a p") #'sysml2-api-push-model)

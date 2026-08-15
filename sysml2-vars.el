@@ -31,6 +31,14 @@
 ;;   `sysml2-plantuml-exec-mode' -- PlantUML execution mode
 ;;   `sysml2-plantuml-server-url' -- PlantUML server URL
 ;;   `sysml2-diagram-output-format' -- Diagram output format
+;;   `sysml2-diagram-backend' -- Diagram backend (native / plantuml)
+;;   `sysml2-d2-executable-path' -- D2 binary path
+;;   `sysml2-d2-theme' -- D2 theme id
+;;   `sysml2-d2-layout-engine' -- D2 layout engine
+;;   `sysml2-diagram-page-size' -- Diagram page size
+;;   `sysml2-diagram-direction' -- Diagram layout direction
+;;   `sysml2-cli-executable' -- sysml CLI binary name/path
+;;   `sysml2-report-pandoc-executable' -- Pandoc binary for report export
 ;;   `sysml2-diagram-auto-preview' -- Auto-preview on save
 ;;   `sysml2-diagram-preview-window' -- Preview window placement
 ;;   `sysml2-lsp-server' -- LSP server selection

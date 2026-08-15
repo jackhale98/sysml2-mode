@@ -59,7 +59,9 @@
      ["Coverage"              sysml2-cli-coverage t]
      ["Find"                  sysml2-cli-find t]
      ["Generate Doc"          sysml2-cli-doc t]
-     ["Analyze"               sysml2-cli-analyze t]
+     ["Analyze (list cases)"  sysml2-cli-analyze t]
+     ["Analyze: Run Case"     sysml2-cli-analyze-run t]
+     ["Render View"           sysml2-cli-view t]
      "--"
      ["Rollup"                sysml2-cli-rollup t]
      ["Interfaces"            sysml2-cli-interfaces t]
@@ -69,6 +71,9 @@
      ["Refactor: Rename"      sysml2-cli-rename t]
      ["Refactor: Add Element" sysml2-cli-add t]
      ["Refactor: Remove"      sysml2-cli-remove t])
+    ("API Server"
+     ["List Projects"         sysml2-api-list-projects t]
+     ["Query Elements"        sysml2-api-query t])
     ("Scaffold"
      ["Menu"                  sysml2-scaffold t]
      ["Model Skeleton"        sysml2-scaffold-model t]

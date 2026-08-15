@@ -123,7 +123,7 @@ Vanilla-Emacs users with `which-key` installed also see prefix labels
 
 ### Syntax Highlighting
 
-Three font-lock levels with 120+ keywords across 10 categories:
+Three font-lock levels with 216 keywords across 9 categories:
 
 - **Level 1:** Keywords only (multi-word matched before single-word)
 - **Level 2:** + definition names, usage names, type references
@@ -153,24 +153,28 @@ Context-aware `completion-at-point` with annotation hints:
 
 | Context | Candidates |
 |---------|-----------|
-| Line start | Definition and usage keywords |
-| After `import` | Standard library packages (35), `*` |
+| Line start | Definition, usage, structural, and behavioral keywords |
+| After `import` | Standard library packages (58), `*` |
 | After `:` (type position) | Buffer definitions, standard library |
 | After `:>` (specialization) | Buffer definitions, standard library |
 | After `:>>` (redefinition) | Buffer definitions |
+| After `connect` / `to` | Part and port names |
+| After `satisfy`/`verify` ... `by` | Buffer definitions and usages |
 | After `in`/`out`/`inout` | Usage keywords |
-| After `#` | Metadata keywords |
+| After `#` | `Metadata` |
+| Inside a definition body | Usage keywords and members |
 
 ### Navigation
 
-- **Imenu** (`C-c C-n o`): Hierarchical index organized by definition category (22 categories)
+- **Imenu** (`C-c C-n o`): Hierarchical index organized by definition category (40 categories, SysML v2 + KerML)
 - **which-function-mode**: Shows enclosing definition/package in mode line
 - **beginning/end-of-defun**: `C-M-a` / `C-M-e` navigate between definitions
+- **Find references** (`M-?`): All references to the symbol at point
 - **Outline side panel** (`C-c C-n t`): Tree view in a left side window
 
 ### Snippets
 
-32 yasnippet templates for common patterns (requires [yasnippet](https://github.com/joaotavora/yasnippet)):
+49 yasnippet templates for common patterns (requires [yasnippet](https://github.com/joaotavora/yasnippet)):
 
 | Key | Expansion |
 |-----|-----------|
@@ -222,6 +226,7 @@ Three layers of diagnostics, from zero-dependency to deep cross-file analysis:
 20. **Orphaned requirements** (W014) — requirement defs that are never satisfied, verified, or specialized
 21. **Self-specialization** (W015) — `part def X :> X` infinite-recursion typos
 22. **Unbound ports** (W016) — port usages declared inside a part but never connected
+23. **Value-constraint violations** (W017) — model-declared `assert constraint`s evaluated against concrete values (e.g. an `@Fmea` severity of 12 fails FmeaRating's 1–10 range)
 
 ### Project Detection
 
@@ -237,8 +242,8 @@ Standard library path is auto-resolved from project root or a custom path.
 
 When the [`sysml` tree-sitter grammar](https://github.com/jackhale98/tree-sitter-sysml) is installed, `sysml2-mode` automatically remaps to `sysml2-ts-mode` for:
 
-- **Font-lock** — node-type-aware highlighting (7 feature groups)
-- **Indentation** — 65+ parent-type-based indent rules covering all body types, control flow, fork/join/merge/decide, metadata, and multi-line expressions
+- **Font-lock** — node-type-aware highlighting (8 features across 3 levels)
+- **Indentation** — 50 parent-type-based indent rules covering all body types, control flow, fork/join/merge/decide, metadata, and multi-line expressions
 - **Formatting** — `C-c C-= =` re-indents the buffer using tree-sitter rules (no external tool needed)
 - **Imenu** — 28 definition categories from parse tree
 - **Which-function** — accurate enclosing definition via `treesit-parent-until`
@@ -275,6 +280,7 @@ Generate diagrams from SysML v2 models with a dual-backend architecture. Seven d
 | `C-c C-d u` | `sysml2-diagram-use-case` | Use Case |
 | `C-c C-d k` | `sysml2-diagram-package` | Package |
 | `C-c C-d p` | `sysml2-diagram-preview` | Auto-detect at point |
+| `C-c C-d b` | `sysml2-diagram-preview-buffer` | Whole-buffer diagram |
 | `C-c C-d v` | `sysml2-diagram-view` | Generate from view def filter |
 | `C-c C-d e` | `sysml2-diagram-export` | Export to file |
 | `C-c C-d o` | `sysml2-diagram-open-plantuml` | View diagram source |
@@ -340,7 +346,7 @@ Set `sysml2-diagram-backend` to `plantuml` to use [PlantUML](https://plantuml.co
 Execute SysML blocks in org-mode:
 
 ```org
-#+BEGIN_SRC sysml :diagram-type tree :file vehicle.svg
+#+BEGIN_SRC sysml :cmd diagram :diagram-type tree :file vehicle.svg
 package Vehicle {
     part def Engine { }
     part def Body { }
@@ -355,6 +361,7 @@ Interactive commands to bootstrap common SysML v2 model structures. Each command
 | Binding | Command | Scaffolds |
 |---------|---------|-----------|
 | `C-c m m` | `sysml2-scaffold` | Menu of all scaffolding commands |
+| `C-c m M` | `sysml2-scaffold-model` | Whole-model skeleton (package + parts + requirements) |
 | `C-c m p` | `sysml2-scaffold-package` | Package with optional imports |
 | `C-c m d` | `sysml2-scaffold-part-def` | Part def with attributes, ports, specialization |
 | `C-c m o` | `sysml2-scaffold-port-def` | Port def with directional items |
@@ -601,7 +608,7 @@ When models span multiple files with `import` statements, use `-I` to include ad
 
 ```sh
 sysml simulate list model.sysml -I lib/
-sysml lint model.sysml -I shared-library/
+sysml check model.sysml -I shared-library/
 ```
 
 ## CLI Analysis
@@ -610,7 +617,7 @@ When the `sysml` CLI is installed, additional analysis and refactoring commands 
 
 | Binding | Command | Description |
 |---------|---------|-------------|
-| `C-c C-t l` | `sysml2-cli-lint` | Run lint checks (syntax, duplicates, references) |
+| `C-c C-t l` | `sysml2-cli-lint` | Alias for `sysml2-cli-check` (the CLI's `lint` command was removed) |
 | `C-c C-t c` | `sysml2-cli-check` | Comprehensive checks + project integrity |
 | `C-c C-t s` | `sysml2-cli-list` | List model elements (with kind filter) |
 | `C-c C-t w` | `sysml2-cli-show` | Show element details |
@@ -618,16 +625,18 @@ When the `sysml` CLI is installed, additional analysis and refactoring commands 
 | `C-c C-t a` | `sysml2-cli-stats` | Model statistics (renders the ModelStats view) |
 | `C-c C-t d` | `sysml2-cli-deps` | Forward/reverse dependency analysis |
 | `C-c C-t v` | `sysml2-cli-coverage` | Model completeness and quality score |
-| `C-c C-t f` | `sysml2-cli-find` | Search elements by name (prefix arg: by doc text) |
+| `C-c C-t f` | `sysml2-cli-find` | Search names via `sysml list -n` (prefix arg: `--doc` text search) |
 | `C-c C-t g` | `sysml2-cli-doc` | Generate Markdown documentation |
-| `C-c C-t n` | `sysml2-cli-analyze` | List analysis cases in the model |
+| `C-c C-t n` | `sysml2-cli-analyze` | List analysis cases (`sysml list -k analyses`) |
 | `C-c C-t r` | `sysml2-cli-rollup` | Attribute rollup (mass/cost/power/…) |
-| `C-c C-t i` | `sysml2-cli-interfaces` | Port-interface analysis (unconnected ports with `C-u`) |
+| `C-c C-t i` | `sysml2-cli-interfaces` | Render the PortTable view (`C-u`: unconnected ports via `check`/W016) |
 | `C-c C-t o` | `sysml2-cli-allocation` | Logical-to-physical allocation matrix |
 | `C-c C-t D` | `sysml2-cli-diff` | Semantic diff between two SysML files |
 | `C-c C-t R` | `sysml2-cli-rename` | Refactor: rename element (`C-u` for project-wide) |
 | `C-c C-t A` | `sysml2-cli-add` | Refactor: add an element from a template |
 | `C-c C-t K` | `sysml2-cli-remove` | Refactor: remove an element |
+| `C-c C-t V` | `sysml2-cli-view` | Render a model-defined view (empty name lists views) |
+| `C-c C-t u` | `sysml2-cli-analyze-run` | Run an analysis case (prefix arg: choose uncertainty method) |
 
 All commands automatically forward `-I PROJECT-ROOT` and `--stdlib-path` to the CLI when a project root is detected, so cross-file resolution Just Works without per-buffer configuration.
 
@@ -668,7 +677,7 @@ REST client for the [Systems Modeling API](https://www.omg.org/spec/SystemsModel
 Integrates with both [eglot](https://github.com/joaotavora/eglot) (built into Emacs 29+) and [lsp-mode](https://github.com/emacs-lsp/lsp-mode). Provides cross-file go-to-definition, find-references, completion, hover, inlay hints, semantic tokens, code actions, type hierarchy, code lenses, document links, and diagnostics from the language server.
 
 The default server is **`sysml-lsp`** (Rust, from the same workspace as
-the CLI) which advertises 19 capabilities including codeLens
+the CLI) which advertises 17 capabilities including codeLens
 (satisfy/verify/usage counts above each definition) and documentLink
 (clickable imports and super-types). Three additional servers are
 recognised:
@@ -681,7 +690,7 @@ recognised:
 
 Built from <https://github.com/jackhale98/sysml-cli> (same workspace as
 the `sysml` CLI). Install with
-`cargo install --path crates/sysml-lsp`. Advertises 19 capabilities
+`cargo install --path crates/sysml-lsp`. Advertises 17 capabilities
 including codeLens (satisfy/verify/usage counts above each definition)
 and documentLink (clickable imports and super-types).
 
@@ -699,8 +708,12 @@ and documentLink (clickable imports and super-types).
 [SysON](https://github.com/eclipse-syson/syson) is Eclipse's actively maintained SysML v2 tooling with LSP support.
 
 ```elisp
-(setq sysml2-lsp-server 'syson)
+(setq sysml2-lsp-server 'syson
+      sysml2-lsp-server-path "/path/to/syson-language-server.jar")
 ```
+
+(The `syson` backend runs the jar with `java -jar`, so both variables
+are required.)
 
 With eglot (recommended, built into Emacs 29+):
 
@@ -753,6 +766,7 @@ Plus `gd` for goto-definition in normal state. Neither evil nor general.el is a 
 |---------|---------|
 | **Navigation** | |
 | `M-.` | `sysml2-goto-definition` |
+| `M-?` | `sysml2-find-references` |
 | `C-c C-r` | `sysml2-rename-symbol` |
 | `C-c C-n o` | `imenu` |
 | `C-c C-n t` | `sysml2-outline-toggle` |
@@ -839,6 +853,8 @@ Plus `gd` for goto-definition in normal state. Neither evil nor general.el is a 
 | `C-c C-t R` | `sysml2-cli-rename` |
 | `C-c C-t A` | `sysml2-cli-add` |
 | `C-c C-t K` | `sysml2-cli-remove` |
+| `C-c C-t V` | `sysml2-cli-view` |
+| `C-c C-t u` | `sysml2-cli-analyze-run` |
 | `C-c C-t RET` | `sysml2-transient-analyze` (picker) |
 | **REPL** | |
 | `C-c C-x r` | `sysml2-repl` (comint inferior `sysml repl`) |
@@ -880,6 +896,21 @@ Key variables:
 | `sysml2-cosim-stop-time` | `10.0` | Default simulation stop time |
 | `sysml2-fmi-type-mapping-alist` | `nil` | User SysML-to-FMI type overrides |
 
+Additional customization (see `M-x customize-group RET sysml2 RET` for
+the full set of 39 options): indentation (`sysml2-indent-tabs-mode`),
+library discovery (`sysml2-standard-library-path`,
+`sysml2-auto-detect-library`), diagram presentation
+(`sysml2-diagram-auto-preview`, `sysml2-diagram-page-size`,
+`sysml2-diagram-direction`, `sysml2-diagram-preview-window`,
+`sysml2-graphviz-dot-path`, `sysml2-plantuml-executable-path`), FMI
+(`sysml2-fmi-openmodelica-path`, `sysml2-fmi-fmpy-executable`,
+`sysml2-fmi-default-fmi-version`, `sysml2-fmi-modelica-output-dir`),
+co-simulation (`sysml2-cosim-omsimulator-path`,
+`sysml2-cosim-gnuplot-path`, `sysml2-cosim-step-size`,
+`sysml2-cosim-output-dir`, `sysml2-cosim-results-format`), native
+simulation (`sysml2-simulate-executable`), and report export
+(`sysml2-report-pandoc-executable`).
+
 ## Module Architecture
 
 ```
@@ -897,7 +928,8 @@ sysml2-model.el         Shared model extraction (parts, ports, reqs, analyses, c
 sysml2-svg.el           Direct SVG generation (tree, requirement diagrams)
 sysml2-d2.el            D2 language generation (IBD, state, action, etc.)
 sysml2-plantuml.el      SysML-to-PlantUML transformation (legacy backend)
-sysml2-diagram.el       Diagram dispatch, preview, export, org-babel
+sysml2-diagram.el       Diagram dispatch, preview, export
+ob-sysml.el             Org-babel: execute SysML blocks (diagrams + CLI commands)
 sysml2-report.el        Model summary, traceability (IDs, derivations, refinements), analyses, constraints, allocations, Markdown/Pandoc export
 sysml2-api.el           Systems Modeling API REST client
 sysml2-fmi.el           FMU inspector, interface extraction, Modelica gen
@@ -922,7 +954,7 @@ Canonical tree-sitter query files (consumed by other editors) live in
 
 ## Testing
 
-359 ERT tests across 26 test files (`make test`).
+365 ERT tests across 28 test files (`make test`).
 
 ```bash
 make test

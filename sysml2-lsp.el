@@ -98,7 +98,7 @@ server can be found."
   (let ((server (sysml2--resolve-lsp-server)))
     (cond
      ((null server)
-      (message "sysml2-mode: No LSP server found. Set `sysml2-lsp-server-path' or install syside-lsp."))
+      (message "sysml2-mode: No LSP server found. Install the sysml-lsp binary (see README) or set `sysml2-lsp-server-path'."))
      ((featurep 'eglot)
       (eglot-ensure))
      ((featurep 'lsp-mode)

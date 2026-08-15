@@ -413,7 +413,7 @@ Calls REPORT-FN with collected diagnostics from all in-process checks."
 ;; --- External CLI Flymake backend ---
 
 (defvar-local sysml2--flymake-cli-process nil
-  "Current `sysml lint' process for Flymake.")
+  "Current `sysml check' process for Flymake.")
 
 (defconst sysml2--flymake-in-process-codes
   '("E001" "E002" "W001" "W002" "W003")
@@ -427,7 +427,7 @@ These are filtered out of CLI output to avoid duplicate diagnostics:
 
 (defconst sysml2--flymake-cli-only-codes
   '("W004" "W005" "W006" "W007" "W008"
-    "W009" "W010" "W011" "W012" "W013" "W014" "W015" "W016")
+    "W009" "W010" "W011" "W012" "W013" "W014" "W015" "W016" "W017")
   "Diagnostic codes that only the CLI can produce.
 Kept as an explicit allowlist so the buffer never displays a code the
 in-process backend has already produced.  Updated whenever sysml-cli
@@ -444,7 +444,8 @@ adds new check codes:
   W013 — Naming convention violation
   W014 — Orphaned requirement
   W015 — Self-specialization (infinite recursion)
-  W016 — Unbound port")
+  W016 — Unbound port
+  W017 — Value-constraint violation")
 
 (defun sysml2--flymake-keep-cli-diagnostic-p (code)
   "Return non-nil when a CLI diagnostic with CODE should reach the buffer.
@@ -458,9 +459,9 @@ kept so the user always sees raw CLI errors."
    (t (member code sysml2--flymake-cli-only-codes))))
 
 (defun sysml2-cli--flymake-backend (report-fn &rest _args)
-  "Flymake backend using `sysml lint' for cross-file validation.
-Runs `sysml lint -f json' asynchronously and filters results to only
-report diagnostics that require cross-file analysis (W004-W008).
+  "Flymake backend using `sysml check' for cross-file validation.
+Runs `sysml check -f json' asynchronously and filters results to only
+report diagnostics that require cross-file or whole-model analysis (W004-W017).
 Syntax errors, duplicates, and requirement checks are already
 handled by the in-process and tree-sitter backends.
 
@@ -495,8 +496,8 @@ Calls REPORT-FN with the collected diagnostics."
           (setq args (append args (list "-I" project-root))))
         (when stdlib-path
           (setq args (append args (list "--stdlib-path" stdlib-path))))
-        (let* ((output-buf (generate-new-buffer " *sysml-lint*"))
-               (proc (apply #'start-process "sysml-lint" output-buf
+        (let* ((output-buf (generate-new-buffer " *sysml-check*"))
+               (proc (apply #'start-process "sysml-check" output-buf
                              exe args)))
           (setq sysml2--flymake-cli-process proc)
           (set-process-sentinel
@@ -572,7 +573,7 @@ Returns a list of Flymake diagnostics."
 (defun sysml2-flymake-setup ()
   "Set up the Flymake backend for the current SysML v2 buffer.
 Registers the in-process regexp-based backend unconditionally,
-the tree-sitter backend when available, and the external `sysml lint'
+the tree-sitter backend when available, and the external `sysml check'
 backend when the CLI is installed."
   (add-hook 'flymake-diagnostic-functions #'sysml2--flymake-backend nil t)
   (when (and (fboundp 'treesit-available-p)

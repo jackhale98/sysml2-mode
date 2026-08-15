@@ -28,12 +28,12 @@
 ;;; Public API:
 ;;
 ;; Functions:
-;;   `sysml2-cli-lint'     -- Run lint/check on current file
+;;   `sysml2-cli-lint'     -- Alias for check (CLI lint was removed) on current file
 ;;   `sysml2-cli-check'    -- Run comprehensive checks (same as lint)
 ;;   `sysml2-cli-list'     -- List model elements
 ;;   `sysml2-cli-show'     -- Show element details
 ;;   `sysml2-cli-trace'    -- Requirements traceability
-;;   `sysml2-cli-stats'    -- Aggregate statistics
+;;   `sysml2-cli-stats'    -- ModelStats view (CLI stats was removed)
 ;;   `sysml2-cli-deps'     -- Dependency analysis
 ;;   `sysml2-cli-coverage' -- Model coverage analysis
 ;;   `sysml2-cli-find'     -- Search elements by name pattern
@@ -164,10 +164,10 @@ Optional KIND filters by element type (e.g. \"part-def\", \"port-def\")."
                         "Filter by kind (empty for all): "
                         '("" "part-def" "port-def" "action-def"
                           "state-def" "constraint-def" "calc-def"
-                          "requirement" "enum-def" "item-def"
-                          "connection" "flow" "allocation"
-                          "use-case-def" "verification-def"
-                          "view-def" "viewpoint-def" "package")
+                          "requirements" "enum-def" "item-def"
+                          "connections" "flows" "allocations"
+                          "analyses" "use-cases" "verifications"
+                          "views" "viewpoints" "packages")
                         nil nil)))
            (unless (string-empty-p choice) choice))))
   (let* ((file (sysml2-cli--ensure-file))
@@ -322,7 +322,7 @@ prompt for METHOD (worst-case, rss, monte-carlo, or all)."
   "Run `sysml rollup SUBCOMMAND' on the current file.
 
 SUBCOMMAND defaults to \"compute\" — also: budget, sensitivity,
-sweep, what-if, query.  ROOT names the root part definition.
+sweep, what-if.  ROOT names the root part definition.
 ATTR is the attribute to roll up (mass, cost, power, …).
 
 Interactively prompts for each argument."
@@ -507,18 +507,18 @@ first, then prompts for confirmation before applying."
 ;;;###autoload
 (defun sysml2-cli-add (kind name)
   "Insert a new SysML element of KIND named NAME via `sysml add'.
-KIND is a CLI-recognised template name such as `part-def', `port-def',
-`requirement-def', `state-def', etc.  Performs a dry-run preview first,
-then prompts for confirmation."
+KIND is a CLI-recognised template name (see `sysml add --help' KINDS),
+such as `part-def', `port-def', `requirement', or `state-def'.
+Performs a dry-run preview first, then prompts for confirmation."
   (interactive
    (let* ((kind-choice (completing-read
                         "Element kind: "
                         '("part-def" "port-def" "action-def" "state-def"
-                          "requirement-def" "constraint-def" "calc-def"
-                          "enum-def" "item-def" "use-case-def"
-                          "interface-def" "verification-case-def"
-                          "analysis-case-def" "allocation-def"
-                          "package" "import")
+                          "requirement" "constraint-def" "calc-def"
+                          "enum-def" "item-def" "attribute-def"
+                          "use-case" "interface-def" "connection-def"
+                          "flow-def" "allocation-def" "verification-def"
+                          "view-def" "viewpoint-def" "package" "import")
                         nil nil))
           (name (read-string (format "Name for %s: " kind-choice))))
      (list kind-choice name)))

@@ -23,10 +23,10 @@
 ;;   parts/ports with type annotations, dot-path resolution
 ;; - Outline side panel with jump-to-definition (C-c C-n t)
 ;; - Navigation: imenu, which-function, beginning/end-of-defun
-;; - PlantUML diagram generation (7 types: tree, IBD, state, action,
+;; - Diagram generation: native SVG/D2, PlantUML legacy (7 types: tree, IBD, state, action,
 ;;   requirement, use-case, package)
-;; - LSP support (eglot + lsp-mode; pilot, syson servers)
-;; - YASnippet snippets (32 templates)
+;; - LSP support (eglot + lsp-mode; sysml-lsp default; pilot, syson, syside)
+;; - YASnippet snippets (49 templates)
 ;; - Org-Babel integration
 ;; - FMI 3.0 / co-simulation integration
 ;; - Evil mode / Doom Emacs support (SPC m prefix)
@@ -191,6 +191,8 @@
 (declare-function sysml2-cli-rename "sysml2-cli-commands")
 (declare-function sysml2-cli-add "sysml2-cli-commands")
 (declare-function sysml2-cli-remove "sysml2-cli-commands")
+(declare-function sysml2-cli-view "sysml2-cli-commands")
+(declare-function sysml2-cli-analyze-run "sysml2-cli-commands")
 (declare-function sysml2-scaffold "sysml2-completion")
 (declare-function sysml2-scaffold-model "sysml2-completion")
 (declare-function sysml2-scaffold-package "sysml2-completion")
@@ -302,6 +304,8 @@
     (define-key map (kbd "C-c C-t R") #'sysml2-cli-rename)
     (define-key map (kbd "C-c C-t A") #'sysml2-cli-add)
     (define-key map (kbd "C-c C-t K") #'sysml2-cli-remove)
+    (define-key map (kbd "C-c C-t V") #'sysml2-cli-view)
+    (define-key map (kbd "C-c C-t u") #'sysml2-cli-analyze-run)
     ;; Inspect / Report
     (define-key map (kbd "C-c C-i s") #'sysml2-report-summary)
     (define-key map (kbd "C-c C-i t") #'sysml2-report-traceability)
