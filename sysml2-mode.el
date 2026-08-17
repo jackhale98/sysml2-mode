@@ -2,7 +2,7 @@
 
 ;; Copyright (C) 2026 sysml2-mode contributors
 ;; Author: sysml2-mode contributors
-;; Version: 0.5.1
+;; Version: 0.5.2
 ;; Package-Requires: ((emacs "29.1"))
 ;; Keywords: languages, systems-engineering, sysml
 ;; URL: https://github.com/jackhale98/sysml2-mode
@@ -99,7 +99,7 @@
 
 ;; --- Version ---
 
-(defconst sysml2-mode-version "0.5.0"
+(defconst sysml2-mode-version "0.5.2"
   "Version of sysml2-mode.")
 
 (defun sysml2-version ()

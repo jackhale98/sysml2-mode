@@ -1,6 +1,8 @@
 # Changelog
 
-## Unreleased
+## 0.5.2 — 2026-08-17
+
+Pairs with sysml-cli 0.9.0.
 
 - W017 value-constraint diagnostics now actually reach the buffer: the
   Flymake CLI allowlist stopped at W016, silently discarding them (the
