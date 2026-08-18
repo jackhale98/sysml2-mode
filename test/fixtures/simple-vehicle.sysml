@@ -2,8 +2,8 @@
 // Tests: font-lock, indentation, completion, navigation
 
 package VehicleModel {
-    import ISQ::*;
-    import SI::*;
+    private import ISQ::*;
+    private import SI::*;
 
     // Attribute definitions
     attribute def MassValue :> ISQ::MassValue;
@@ -17,14 +17,21 @@ package VehicleModel {
         enum electric;
     }
 
+    // Actors
+    part def Driver;
+
+    // Transition trigger signals
+    attribute def StartCmd;
+    attribute def StopCmd;
+
     // Port definitions
     port def FuelPort {
-        in item fuelIn : FuelType;
+        in attribute fuelIn : FuelType;
     }
 
     port def ElectricalPort {
-        in item powerIn : ScalarValues::Real;
-        out item powerOut : ScalarValues::Real;
+        in attribute powerIn : ScalarValues::Real;
+        out attribute powerOut : ScalarValues::Real;
     }
 
     // Abstract base definition
@@ -113,7 +120,7 @@ package VehicleModel {
 
         transition off_to_starting
             first off
-            accept startCmd
+            accept startCmd : StartCmd
             then starting;
 
         transition starting_to_running
@@ -122,7 +129,7 @@ package VehicleModel {
 
         transition running_to_stopping
             first running
-            accept stopCmd
+            accept stopCmd : StopCmd
             then stopping;
 
         transition stopping_to_off
@@ -151,15 +158,19 @@ package VehicleModel {
     constraint def MassConstraint {
         in massActual : MassValue;
         in massLimit : MassValue;
-        massActual <= massLimit;
+        massActual <= massLimit
     }
 
     // Use case
+    use case def StartVehicle {
+        subject vehicle : Vehicle;
+    }
+
     use case def DriveVehicle {
         subject vehicle : Vehicle;
-        actor driver : ScalarValues::String;
+        actor driver : Driver;
 
-        include use case startEngine : StartEngine;
+        include use case startVehicle : StartVehicle;
     }
 
     // View definition
@@ -168,6 +179,8 @@ package VehicleModel {
     }
 
     // Satisfy relationship
-    satisfy requirement VehicleMassReq by Vehicle;
-    satisfy requirement TopSpeedReq by Vehicle;
+    part vehicle : Vehicle;
+
+    satisfy requirement vehicleMassReq : VehicleMassReq by vehicle;
+    satisfy requirement topSpeedReq : TopSpeedReq by vehicle;
 }

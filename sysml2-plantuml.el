@@ -695,11 +695,19 @@ Handles both forms:
                 (concat "\\bsatisfy[ \t]+"
                         "\\(?:requirement[ \t]+\\)?"
                         "\\(" sysml2--qualified-name-regexp "\\)"
+                        ;; Declaring form `satisfy requirement vmr :
+                        ;; VehicleMassReq by v;' — the TYPE names the
+                        ;; requirement. (`::' segments are consumed by
+                        ;; the qualified-name regexp, so a lone `:' can
+                        ;; only be a type annotation.)
+                        "\\(?:[ \t]*:[ \t]*"
+                        "\\(" sysml2--qualified-name-regexp "\\)\\)?"
                         "[ \t]+by[ \t]+"
                         "\\(" sysml2--qualified-name-regexp "\\)")
                 nil t)
-          (push (list :requirement (match-string-no-properties 1)
-                      :by (match-string-no-properties 2))
+          (push (list :requirement (or (match-string-no-properties 2)
+                                       (match-string-no-properties 1))
+                      :by (match-string-no-properties 3))
                 results))
         (nreverse results)))))
 

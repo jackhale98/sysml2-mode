@@ -199,8 +199,11 @@
                #'sysml2-plantuml-requirement-tree)))
     (should (string-match-p "class VehicleMassReq <<requirement>>" puml))
     (should (string-match-p "class TopSpeedReq <<requirement>>" puml))
-    (should (string-match-p "Vehicle \\.\\.> VehicleMassReq : <<satisfy>>" puml))
-    (should (string-match-p "Vehicle \\.\\.> TopSpeedReq : <<satisfy>>" puml))))
+    ;; The fixture satisfies by the part USAGE `vehicle` (conformant:
+    ;; satisfy takes a requirement usage and a subject usage), not by
+    ;; the `Vehicle` definition.
+    (should (string-match-p "vehicle \\.\\.> VehicleMassReq : <<satisfy>>" puml))
+    (should (string-match-p "vehicle \\.\\.> TopSpeedReq : <<satisfy>>" puml))))
 
 ;; --- Annex A Requirement Tests ---
 

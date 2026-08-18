@@ -940,17 +940,25 @@ Returns list of (:requirement :by)."
                 (concat "\\(?:\\(not\\)[ \t]+\\)?"
                         "\\bsatisfy[ \t]+"
                         "\\(?:requirement[ \t]*\\)?"
-                        ;; typed form: `satisfy requirement : Type;`
-                        "\\(?::[ \t]*\\)?"
+                        ;; Reference form: `satisfy vmr by v;' — the
+                        ;; qualified-name regexp consumes `::' segments,
+                        ;; so `satisfy DSRE::uavFlightTime;' is one name.
                         "\\(" sysml2--qualified-name-regexp "\\)"
+                        ;; Declaring form: `satisfy requirement vmr :
+                        ;; VehicleMassReq by v;' — a single `:' can only
+                        ;; be a type annotation here, and the TYPE is
+                        ;; what names the requirement.
+                        "\\(?:[ \t]*:[ \t]*"
+                        "\\(" sysml2--qualified-name-regexp "\\)\\)?"
                         ;; `by <subject>` is optional (Ch 32 forms)
                         "\\(?:[ \t\n]+by[ \t\n]+"
                         "\\(" sysml2--qualified-name-regexp "\\)\\)?")
                 nil t)
           (unless (let ((ppss (syntax-ppss)))
                     (or (nth 3 ppss) (nth 4 ppss)))
-            (push (list :requirement (match-string-no-properties 2)
-                        :by (match-string-no-properties 3)
+            (push (list :requirement (or (match-string-no-properties 3)
+                                         (match-string-no-properties 2))
+                        :by (match-string-no-properties 4)
                         :negated (when (match-string-no-properties 1) t))
                   results)))
         (nreverse results)))))

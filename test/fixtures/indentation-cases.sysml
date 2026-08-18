@@ -27,8 +27,8 @@ requirement def MassReq {
 
 // Case 4: Import statements inside package
 package ImportTest {
-    import ISQ::*;
-    import SI::*;
+    private import ISQ::*;
+    private import SI::*;
 
     part def Foo {
     }
@@ -101,4 +101,4 @@ use case def Operate {
 // Case 13: Top-level (no indent)
 part def TopLevel1;
 part def TopLevel2;
-import Base::*;
+private import Base::*;
