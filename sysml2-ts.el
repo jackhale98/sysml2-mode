@@ -720,6 +720,12 @@ the tree-sitter incremental parser for better accuracy.
                    sysml2-ts--hs-forward-sexp nil))
     (hs-minor-mode 1)
 
+    ;; Inherit from `sysml2-mode-map' if load order left it unset
+    ;; (see the guarded call after this definition).
+    (unless (keymap-parent sysml2-ts-mode-map)
+      (when (boundp 'sysml2-mode-map)
+        (set-keymap-parent sysml2-ts-mode-map sysml2-mode-map)))
+
     ;; Finalize
     (treesit-major-mode-setup))
 
@@ -733,9 +739,12 @@ the tree-sitter incremental parser for better accuracy.
   ;; with nothing under it and rendered "+prefix". Parenting keeps this
   ;; mode's own map active (so those bindings land) while inheriting
   ;; every C-c binding, the menu bar, and the transients from
-  ;; `sysml2-mode-map'. Set at load time so it holds before any buffer
-  ;; enters the mode.
-  (set-keymap-parent sysml2-ts-mode-map sysml2-mode-map)
+  ;; `sysml2-mode-map'. Guarded because during byte-compilation of
+  ;; sysml2-mode.el the `defvar' for `sysml2-mode-map' is only NOTED,
+  ;; never evaluated, so the variable is still void when this file is
+  ;; required; the mode body re-checks at activation time.
+  (when (boundp 'sysml2-mode-map)
+    (set-keymap-parent sysml2-ts-mode-map sysml2-mode-map))
 
   (defun sysml2-ts--defun-name (node)
     "Return the name of the defun NODE for imenu/which-function."
