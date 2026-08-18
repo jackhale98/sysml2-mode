@@ -2,7 +2,7 @@
 
 ;; Copyright (C) 2026 sysml2-mode contributors
 ;; Author: sysml2-mode contributors
-;; Version: 0.5.2
+;; Version: 0.5.3
 ;; Package-Requires: ((emacs "29.1"))
 ;; Keywords: languages, systems-engineering, sysml
 ;; URL: https://github.com/jackhale98/sysml2-mode
@@ -53,9 +53,9 @@
 ;;                :files ("*.el" "snippets")))
 ;;   Add to config.el:
 ;;     (use-package! sysml2-mode
-;;       :init (add-to-list 'auto-mode-alist
-;;                          '("\\.sysml\\'" . sysml2-mode))
-;;       :config (require 'sysml2-evil) (require 'sysml2-ts))
+;;       :mode "\\.sysml\\'")
+;;   sysml2-evil (SPC m keybindings) and sysml2-ts (tree-sitter) are
+;;   already required internally — no :config block needed.
 
 ;;; Code:
 
@@ -86,7 +86,6 @@
 (require 'sysml2-api)
 (require 'sysml2-fmi)
 (require 'sysml2-cosim)
-(require 'sysml2-evil)
 (require 'sysml2-outline)
 (require 'sysml2-report)
 (require 'sysml2-simulate)
@@ -99,7 +98,7 @@
 
 ;; --- Version ---
 
-(defconst sysml2-mode-version "0.5.2"
+(defconst sysml2-mode-version "0.5.3"
   "Version of sysml2-mode.")
 
 (defun sysml2-version ()
@@ -321,6 +320,16 @@
     (define-key map (kbd "C-c C-f l") #'hs-hide-level)
     map)
   "Keymap for `sysml2-mode'.")
+
+;; --- Evil-mode / Doom keybindings (loaded after keymap) ---
+;;
+;; Must load AFTER `sysml2-mode-map' is defvar'd above: its
+;; `with-eval-after-load 'evil' body runs SYNCHRONOUSLY when `evil' is
+;; already loaded (true in Doom Emacs, which loads evil before user
+;; packages), so requiring this earlier hits `sysml2-mode-map' while it
+;; is still void.
+
+(require 'sysml2-evil)
 
 ;; --- Tree-sitter mode (loaded after syntax table and keymap) ---
 

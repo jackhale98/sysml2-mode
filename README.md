@@ -87,10 +87,11 @@ Add to `~/.config/doom/config.el`:
 
 ```elisp
 (use-package! sysml2-mode
-  :config
-  (require 'sysml2-evil)  ;; SPC m keybindings
-  (require 'sysml2-ts))   ;; tree-sitter support
+  :mode "\\.sysml\\'")
 ```
+
+`sysml2-mode.el` already requires `sysml2-evil` (`SPC m` keybindings)
+and `sysml2-ts` (tree-sitter) internally — no `:config` block needed.
 
 Then run `doom sync`.
 

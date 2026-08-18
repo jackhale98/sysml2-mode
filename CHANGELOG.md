@@ -1,5 +1,20 @@
 # Changelog
 
+## 0.5.3 — 2026-08-18
+
+- Fixed a load-order bug that broke every Doom Emacs install: `sysml2-mode.el`
+  required `sysml2-evil` before `sysml2-mode-map` was defvar'd.
+  `sysml2-evil`'s `with-eval-after-load 'evil'` body runs synchronously
+  when `evil` is already loaded — true in Doom, which loads evil before
+  user packages — so the require chain hit `sysml2-mode-map` while it
+  was still void: `void-variable sysml2-mode-map`, both on `doom sync`
+  and on activating the mode in a `.sysml` buffer. `sysml2-evil` now
+  loads after the keymap, alongside `sysml2-ts`/`sysml2-menu`/
+  `sysml2-transient`, which already followed this rule.
+- New regression test spawns a fresh Emacs with a stub `evil` feature
+  pre-loaded before `sysml2-mode`, reproducing Doom's load order
+  exactly, so this cannot silently regress.
+
 ## 0.5.2 — 2026-08-17
 
 Pairs with sysml-cli 0.9.0.
