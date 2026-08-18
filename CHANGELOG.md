@@ -1,5 +1,25 @@
 # Changelog
 
+## 0.5.4 — 2026-08-18
+
+Pairs with sysml-cli 0.9.1.
+
+- **`SPC m` showed a bare "+prefix" in tree-sitter buffers.**
+  `sysml2-ts-mode` replaced its own keymap with `sysml2-mode-map`
+  (`use-local-map`), but evil and general.el attach `SPC m` bindings to
+  a specific keymap object — `sysml2-ts-mode-map` — which was then
+  never active, so Doom's localleader found a prefix with nothing under
+  it. The tree-sitter map now parents `sysml2-mode-map` (inheriting
+  every binding, the menu bar and the transients) while staying its own
+  object, and the evil/general bindings target both maps. This is why
+  the symptom appeared only after installing the grammar.
+- Both satisfy extractors understand the conformant declaring form
+  `satisfy requirement vmr : VehicleMassReq by vehicle;`, taking the
+  TYPE as the requirement, while still handling `satisfy X by Y;` and
+  `satisfy DSRE::uavFlightTime;`.
+- Test fixtures are conformant SysML, verified against the OMG pilot
+  implementation (zero syntax errors).
+
 ## 0.5.3 — 2026-08-18
 
 - Fixed a load-order bug that broke every Doom Emacs install: `sysml2-mode.el`
