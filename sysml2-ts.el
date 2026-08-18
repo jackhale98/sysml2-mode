@@ -720,11 +720,22 @@ the tree-sitter incremental parser for better accuracy.
                    sysml2-ts--hs-forward-sexp nil))
     (hs-minor-mode 1)
 
-    ;; Keymap
-    (use-local-map sysml2-mode-map)
-
     ;; Finalize
     (treesit-major-mode-setup))
+
+  ;; Keymap: inherit, don't replace.
+  ;;
+  ;; This used to be `(use-local-map sysml2-mode-map)' in the mode body,
+  ;; swapping the mode's own map out entirely. Plain key lookups still
+  ;; worked, but evil and general.el attach their state bindings
+  ;; (SPC m ...) to a SPECIFIC keymap object -- `sysml2-ts-mode-map' --
+  ;; which was then never active, so Doom's localleader found a prefix
+  ;; with nothing under it and rendered "+prefix". Parenting keeps this
+  ;; mode's own map active (so those bindings land) while inheriting
+  ;; every C-c binding, the menu bar, and the transients from
+  ;; `sysml2-mode-map'. Set at load time so it holds before any buffer
+  ;; enters the mode.
+  (set-keymap-parent sysml2-ts-mode-map sysml2-mode-map)
 
   (defun sysml2-ts--defun-name (node)
     "Return the name of the defun NODE for imenu/which-function."

@@ -112,12 +112,24 @@
 (declare-function sysml2-cli-analyze "sysml2-cli-commands")
 
 (defvar sysml2-mode-map)
+(defvar sysml2-ts-mode-map)
+
+(defun sysml2-evil--mode-maps ()
+  "Keymaps that should carry the evil/general bindings.
+Includes `sysml2-ts-mode-map' when the tree-sitter mode exists: it is
+a separate keymap object, and evil/general bindings do not reach it
+through keymap inheritance."
+  (append (list 'sysml2-mode-map)
+          (and (boundp 'sysml2-ts-mode-map) (list 'sysml2-ts-mode-map))))
 
 (with-eval-after-load 'evil
 
   ;; Go to definition with gd (standard evil binding)
   (evil-define-key* 'normal sysml2-mode-map
     (kbd "gd") #'sysml2-goto-definition)
+  (when (boundp 'sysml2-ts-mode-map)
+    (evil-define-key* 'normal sysml2-ts-mode-map
+      (kbd "gd") #'sysml2-goto-definition))
 
   ;; Outline panel: evil bindings for navigation
   ;; Deferred until sysml2-outline is loaded, since sysml2-evil may be
@@ -134,7 +146,7 @@
   (with-eval-after-load 'general
     (general-define-key
      :states 'normal
-     :keymaps 'sysml2-mode-map
+     :keymaps (sysml2-evil--mode-maps)
      :prefix "SPC m"
      ;; Navigation
      "n"   '(:ignore t :which-key "navigate")

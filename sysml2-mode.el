@@ -321,19 +321,23 @@
     map)
   "Keymap for `sysml2-mode'.")
 
-;; --- Evil-mode / Doom keybindings (loaded after keymap) ---
-;;
-;; Must load AFTER `sysml2-mode-map' is defvar'd above: its
-;; `with-eval-after-load 'evil' body runs SYNCHRONOUSLY when `evil' is
-;; already loaded (true in Doom Emacs, which loads evil before user
-;; packages), so requiring this earlier hits `sysml2-mode-map' while it
-;; is still void.
-
-(require 'sysml2-evil)
-
 ;; --- Tree-sitter mode (loaded after syntax table and keymap) ---
 
 (require 'sysml2-ts)
+
+;; --- Evil-mode / Doom keybindings ---
+;;
+;; Loaded LAST of the keymap-dependent modules, for two reasons:
+;;   1. `sysml2-mode-map' must already be defvar'd -- this module's
+;;      `with-eval-after-load 'evil' body runs SYNCHRONOUSLY when evil
+;;      is already loaded (true in Doom, which loads evil before user
+;;      packages), so requiring it earlier hit a void variable.
+;;   2. `sysml2-ts-mode-map' must already exist, so the SPC m bindings
+;;      are installed on the tree-sitter mode's map too. Evil/general
+;;      bindings attach to a specific keymap object and do not reach it
+;;      through keymap inheritance.
+
+(require 'sysml2-evil)
 
 ;; --- Menu bar and which-key (loaded after keymap) ---
 

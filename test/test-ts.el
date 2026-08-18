@@ -85,3 +85,31 @@
 
 (provide 'test-ts)
 ;;; test-ts.el ends here
+
+;; --- Keymap wiring (tree-sitter mode) ---
+;;
+;; Regression: `sysml2-ts-mode' used to call `(use-local-map
+;; sysml2-mode-map)', replacing its own map. Plain keys still worked,
+;; but evil/general attach `SPC m' bindings to a SPECIFIC keymap object
+;; -- `sysml2-ts-mode-map' -- which was then never active, so Doom's
+;; localleader showed a bare "+prefix" in tree-sitter buffers.
+
+(ert-deftest sysml2-test-ts-map-inherits-sysml2-mode-map ()
+  "`sysml2-ts-mode-map' must PARENT `sysml2-mode-map', not replace it."
+  (skip-unless (boundp 'sysml2-ts-mode-map))
+  (should (eq (keymap-parent sysml2-ts-mode-map) sysml2-mode-map))
+  ;; Inherited bindings reach through the parent...
+  (should (eq (lookup-key sysml2-ts-mode-map (kbd "C-c C-t RET"))
+              'sysml2-transient-analyze))
+  (should (lookup-key sysml2-ts-mode-map [menu-bar SysML2]))
+  ;; ...and the map is its own object, so evil/general have somewhere
+  ;; to attach state bindings.
+  (should-not (eq sysml2-ts-mode-map sysml2-mode-map)))
+
+(ert-deftest sysml2-test-evil-mode-maps-includes-ts ()
+  "Evil/general bindings must target the tree-sitter map as well."
+  (skip-unless (fboundp 'sysml2-evil--mode-maps))
+  (let ((maps (sysml2-evil--mode-maps)))
+    (should (memq 'sysml2-mode-map maps))
+    (when (boundp 'sysml2-ts-mode-map)
+      (should (memq 'sysml2-ts-mode-map maps)))))
