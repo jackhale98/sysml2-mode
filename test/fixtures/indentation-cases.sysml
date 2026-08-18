@@ -3,6 +3,7 @@
 
 // Case 1: Basic block indentation
 package BasicBlock {
+    private import ScalarValues::*;
     part def Bar {
         attribute x : ScalarValues::Real;
     }

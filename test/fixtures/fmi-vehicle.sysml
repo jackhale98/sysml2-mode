@@ -1,4 +1,5 @@
 package FMIVehicle {
+    private import ScalarValues::*;
     port def FuelPort {
         in item fuelFlow : Real;
     }

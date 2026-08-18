@@ -1,4 +1,5 @@
 package '1a-Parts Tree' {
+    private import ScalarValues::*;
 	private import SI::kg;
 	
 	package Definitions {	

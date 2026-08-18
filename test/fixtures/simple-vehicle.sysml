@@ -2,6 +2,8 @@
 // Tests: font-lock, indentation, completion, navigation
 
 package VehicleModel {
+
+    private import ScalarValues::*;
     private import ISQ::*;
     private import SI::*;
 
