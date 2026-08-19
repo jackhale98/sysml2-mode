@@ -269,15 +269,43 @@ run a case with `sysml2-cli-analyze-run\='."
      (sysml2-cli--with-project-flags (list "list" "-k" "analyses" file))
      (format "Analyses: %s" (file-name-nondirectory file)))))
 
+(defun sysml2-cli--run-quietly (args)
+  "Run the sysml CLI with ARGS and return stdout, displaying nothing.
+Used to populate completion candidates, where a results buffer would
+be noise."
+  (sysml2-cli--check-executable)
+  (with-output-to-string
+    (with-current-buffer standard-output
+      (apply #'call-process (sysml2-cli--resolve-executable) nil
+             (list t nil) nil args))))
+
+(defun sysml2-cli--view-names ()
+  "Names of the views visible from the current file, newest CLI first.
+Asks the CLI rather than scanning the buffer, so views a project
+inherits from a library on the include path are offered too."
+  (let* ((file (sysml2-cli--ensure-file))
+         (out (sysml2-cli--run-quietly
+               (sysml2-cli--with-project-flags
+                (list "view" file) (list "-f" "json"))))
+         (parsed (sysml2-cli--parse-json out)))
+    (delq nil (mapcar (lambda (entry) (alist-get 'name entry)) parsed))))
+
 ;;;###autoload
 (defun sysml2-cli-view (&optional view-name)
   "Render the model-defined view VIEW-NAME via `sysml view'.
 Views are `view def's carrying a @TableRendering annotation (see the
 Reporting domain library) — FmeaWorksheet, RiskMatrix, StackupSummary,
 PortTable, and any view your project defines.  Called with no name
-\(or interactively with empty input), lists the available views."
+\(or interactively with empty input), lists the available views.
+
+Interactively, completion offers the views the CLI can actually see
+from this file, including those defined in libraries on the include
+path."
   (interactive
-   (list (read-string "View name (empty to list): ")))
+   (list (completing-read
+          "View (empty to list all): "
+          (ignore-errors (sysml2-cli--view-names))
+          nil nil)))
   (let* ((file (sysml2-cli--ensure-file))
          (args (if (and view-name (not (string-empty-p view-name)))
                    (list "view" view-name file)

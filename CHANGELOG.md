@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.5.5 — 2026-08-18
+
+- `sysml2-cli-view` (`C-c C-t V`) completes on the views the CLI can
+  actually see from the current file, including ones the project
+  inherits from a library on the include path. It used to prompt with a
+  bare `read-string`, so rendering a view meant already knowing its
+  name — which defeats the point of views being discoverable model
+  content.
+
 ## 0.5.4 — 2026-08-18
 
 Pairs with sysml-cli 0.9.1.
